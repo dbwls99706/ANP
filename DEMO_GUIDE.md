@@ -26,8 +26,8 @@ cargo --version   # cargo 1.75.0 이상이면 OK
 
 ```bash
 # 1. 프로젝트 다운로드
-git clone https://github.com/dbwls99706/ANP_Tool.git
-cd ANP_Tool
+git clone https://github.com/dbwls99706/ANP.git
+cd ANP
 
 # 2. 빌드 (첫 빌드는 1~2분 소요)
 cargo build
