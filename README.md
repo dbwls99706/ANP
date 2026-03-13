@@ -112,8 +112,8 @@ $ curl -X POST http://localhost:3000/agent \
 ### Build & Run
 
 ```bash
-git clone https://github.com/dbwls99706/ANP_Tool.git
-cd ANP_Tool
+git clone https://github.com/dbwls99706/ANP.git
+cd ANP
 cargo build
 
 # Hello world
@@ -305,7 +305,7 @@ No compilation. No source code. Just a graph and a runtime.
 ## Project Structure
 
 ```
-ANP_Tool/
+ANP/
 ├── crates/
 │   ├── anp-core/      # Graph spec, runtime engine, node system, GraphOp editor, execution tracing
 │   ├── anp-nodes/     # 13 built-in node implementations
