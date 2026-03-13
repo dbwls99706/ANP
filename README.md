@@ -24,6 +24,30 @@ ANP:             Prompt → Graph → Run
 
 The key insight: **AI calling AI**. An `llm_call` node lets graphs contain intelligence. A `tool_router` node lets AI choose its own actions. A `memory` node gives graphs persistent state. Programs that think, reason, remember, and act autonomously — all as a graph.
 
+## Demo: Hello World
+
+The simplest ANP graph — read a file and print it to the console:
+
+```
+┌──────────┐  default  ┌──────────┐
+│file_read  ├─────────▶│ console  │
+│ (source)  │          │  (sink)  │
+└──────────┘          └──────────┘
+```
+
+```bash
+$ anp run examples/hello.anp.json
+
+ INFO starting ANP engine name=Hello ANP
+ INFO execution plan created stages=2 entry_nodes=["source"]
+ INFO starting batch execution run_id=fa7dd046-...
+Hello, ANP!
+ INFO batch execution completed elapsed_ms=0 nodes_executed=2 nodes_failed=0
+ INFO ANP engine finished
+```
+
+Two nodes, one edge, zero code. The `file_read` node reads `hello_data.txt`, passes it through the `default` port to the `console` node, which prints it. See [hello.anp.json](examples/hello.anp.json).
+
 ## Demo: AI Chatbot in Zero Lines of Code
 
 This chatbot has **no source code** — it's a graph where AI calls AI:
@@ -63,14 +87,30 @@ $ curl -X POST http://localhost:3000/analyze \
 
 ## Demo: Data Pipeline
 
-Read → Transform → Filter → Template → Output, with no code:
+A 5-stage ETL pipeline — read JSON data, transform fields, filter by score, format with templates, and output:
+
+```
+┌───────────┐     ┌───────────┐     ┌───────────┐     ┌───────────┐     ┌──────────┐
+│ file_read  ├────▶│ transform  ├────▶│  filter    ├────▶│ template   ├────▶│ console  │
+│  (source)  │     │ (mapping)  │     │ (score≥80) │     │ (format)   │     │  (sink)  │
+└───────────┘     └───────────┘     └───────────┘     └───────────┘     └──────────┘
+   source            parse          high_score_filter   format_report      output
+```
 
 ```bash
-$ cargo run -p anp-cli -- run examples/data_pipeline.anp.json
+$ anp run examples/data_pipeline.anp.json
 
+ INFO starting ANP engine name=AI Data Pipeline
+ INFO execution plan created stages=5 entry_nodes=["source"]
+ INFO starting batch execution run_id=9330fcd8-...
 [pipeline] Top performer: Alice (Engineering) — Score: 95
 [pipeline] Top performer: Charlie (Design) — Score: 88
+[pipeline] Top performer: Eve (Engineering) — Score: 91
+ INFO batch execution completed elapsed_ms=0 nodes_executed=5 nodes_failed=0
+ INFO ANP engine finished
 ```
+
+5 nodes execute in sequence: `file_read` loads `sample_data.json`, `transform` maps fields, `filter` keeps only scores ≥ 80, `template` formats each record with `{{name}} ({{department}}) — Score: {{score}}`, and `console` prints with a `[pipeline]` prefix. See [data_pipeline.anp.json](examples/data_pipeline.anp.json).
 
 ## Demo: Autonomous AI Agent
 
