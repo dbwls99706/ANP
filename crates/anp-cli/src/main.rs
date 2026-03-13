@@ -3,10 +3,12 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
 
-use anp_core::graph::spec::NodeKind;
+use anp_core::graph::spec::{AnpGraph, NodeKind};
 use anp_core::graph::{loader, validate};
 use anp_core::node::registry::NodeRegistry;
 use anp_core::runtime::engine::AnpEngine;
+use anp_planner::generator::AnpPlanner;
+use anp_planner::llm::auto_detect_client;
 
 #[derive(Parser)]
 #[command(
@@ -51,6 +53,20 @@ enum Commands {
         /// Project name
         name: String,
     },
+    /// Generate an ANP graph from a natural language prompt using an LLM
+    Prompt {
+        /// The prompt describing the desired application
+        prompt: String,
+        /// Save graph to file instead of printing to stdout
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+        /// Generate and immediately run the graph
+        #[arg(long)]
+        run: bool,
+        /// Show a human-readable explanation of the generated graph
+        #[arg(long)]
+        explain: bool,
+    },
 }
 
 fn create_registry() -> NodeRegistry {
@@ -77,6 +93,12 @@ async fn main() {
         Commands::Explain { graph: path } => cmd_explain(path),
         Commands::Graph { graph: path } => cmd_graph(path),
         Commands::Init { name } => cmd_init(name),
+        Commands::Prompt {
+            prompt,
+            output,
+            run,
+            explain,
+        } => cmd_prompt(prompt, output, run, explain).await,
     }
 }
 
@@ -89,6 +111,113 @@ async fn cmd_run(path: PathBuf) {
         Err(e) => {
             eprintln!("Error: {}", e);
             std::process::exit(1);
+        }
+    }
+}
+
+async fn cmd_prompt(prompt: String, output: Option<PathBuf>, run: bool, explain: bool) {
+    // 1. Detect LLM client
+    let client = match auto_detect_client() {
+        Ok(c) => c,
+        Err(_) => {
+            eprintln!("No LLM API key found.");
+            eprintln!("Set ANTHROPIC_API_KEY or OPENAI_API_KEY environment variable.");
+            eprintln!();
+            eprintln!("Example:");
+            eprintln!("  export ANTHROPIC_API_KEY=sk-ant-...");
+            std::process::exit(1);
+        }
+    };
+
+    // 2. Build registry
+    let registry = create_registry();
+
+    // 3. Create planner
+    let planner = AnpPlanner::new(client, &registry);
+
+    // 4. Generate graph
+    let graph = match planner.generate(&prompt).await {
+        Ok(g) => g,
+        Err(e) => {
+            eprintln!("Error: {}", e);
+            std::process::exit(1);
+        }
+    };
+
+    // 5. Output JSON
+    let json = serde_json::to_string_pretty(&graph).unwrap_or_else(|e| {
+        eprintln!("Error serializing graph: {}", e);
+        std::process::exit(1);
+    });
+
+    match &output {
+        Some(path) => {
+            std::fs::write(path, &json).unwrap_or_else(|e| {
+                eprintln!("Error writing file: {}", e);
+                std::process::exit(1);
+            });
+            println!("Graph saved to {}", path.display());
+        }
+        None => {
+            println!("{}", json);
+        }
+    }
+
+    // 6. Explain
+    if explain {
+        println!();
+        explain_graph(&graph);
+    }
+
+    // 7. Run
+    if run {
+        println!();
+        let engine = AnpEngine::new(registry);
+        match engine.run(&graph).await {
+            Ok(()) => {}
+            Err(e) => {
+                eprintln!("Runtime error: {}", e);
+                std::process::exit(1);
+            }
+        }
+    }
+}
+
+fn explain_graph(graph: &AnpGraph) {
+    println!("This graph defines: {}", graph.metadata.name);
+    if !graph.metadata.description.is_empty() {
+        println!("{}", graph.metadata.description);
+    }
+    println!();
+
+    for node in &graph.nodes {
+        let kind_label = match node.kind {
+            NodeKind::Service => "service",
+            NodeKind::Source => "source",
+            NodeKind::Processor => "process",
+            NodeKind::Sink => "output",
+        };
+        println!("  [{}] {}", kind_label, describe_node(node));
+    }
+
+    if !graph.edges.is_empty() {
+        println!();
+        println!("Data flow:");
+        for edge in &graph.edges {
+            let from_port = if edge.from_port == "default" {
+                String::new()
+            } else {
+                format!(".{}", edge.from_port)
+            };
+            let to_port = if edge.to_port == "default" {
+                String::new()
+            } else {
+                format!(".{}", edge.to_port)
+            };
+            println!(
+                "  {}{} -> {}{}",
+                edge.from_node, from_port, edge.to_node, to_port
+            );
         }
     }
 }

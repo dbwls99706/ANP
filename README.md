@@ -1,11 +1,15 @@
-# ANP — AI-Native Graph Runtime
+# ANP — AI Native Programming
 
-> No source code. Just graphs and a runtime.
+> Generate runnable programs from natural language.
 
 **ANP** is an AI-native runtime where software is defined as executable graphs instead of source code.
 
 ```
 Prompt → LLM Planner → ANP Graph → ANP Runtime → Running Software
+```
+
+```bash
+$ anp prompt "REST API that stores todos" --run
 ```
 
 Other AI coding tools generate source code. ANP generates **executable graphs** — there is no source code, only graph definitions that the runtime executes directly.
@@ -68,7 +72,8 @@ ANP:             Prompt → Graph → Run
 - **Automatic mode detection** — batch or service mode based on graph content
 - **Error port routing** — route errors to fallback pipelines
 - **Built-in graph validation** — cycle detection, port existence, 6 rules total
-- **CLI tools** — run, validate, info, explain, graph (DOT), init
+- **LLM Planner** — `anp prompt "..."` generates graphs from natural language
+- **CLI tools** — run, validate, info, explain, graph (DOT), init, prompt
 - **LLM-ready architecture** — NodeSchema provides JSON Schema for AI planners
 
 ## Quick Start
@@ -98,6 +103,25 @@ cargo run -p anp-cli -- run examples/pipeline.anp.json
 cargo run -p anp-cli -- run examples/simple_api.anp.json
 ```
 
+### Generate from Prompt (v0.2)
+
+```bash
+# Generate a graph from natural language (requires ANTHROPIC_API_KEY or OPENAI_API_KEY)
+export ANTHROPIC_API_KEY=sk-ant-...
+
+# Print generated graph to stdout
+cargo run -p anp-cli -- prompt "REST API that stores user data"
+
+# Save to file
+cargo run -p anp-cli -- prompt "REST API for todos" -o api.anp.json
+
+# Generate and run immediately
+cargo run -p anp-cli -- prompt "read data.txt and print it" --run
+
+# Generate with explanation
+cargo run -p anp-cli -- prompt "data pipeline with filtering" --explain
+```
+
 ### CLI Commands
 
 ```bash
@@ -107,6 +131,7 @@ anp info <graph>       # Display graph structure
 anp explain <graph>    # Human-readable explanation
 anp graph <graph>      # Output GraphViz DOT format
 anp init <name>        # Scaffold a new project
+anp prompt <text>      # Generate graph from natural language
 ```
 
 ### Create a New Project
@@ -212,6 +237,7 @@ ANP_Tool/
 ├── crates/
 │   ├── anp-core/      # Graph spec, runtime engine, node system
 │   ├── anp-nodes/     # Built-in node implementations
+│   ├── anp-planner/   # LLM-powered graph generation
 │   └── anp-cli/       # CLI interface
 ├── examples/          # Example ANP graph files
 └── docs/              # Graph specification
@@ -219,8 +245,8 @@ ANP_Tool/
 
 ## Roadmap
 
-- **v0.1** — Graph spec, runtime engine, basic nodes, CLI ← *current*
-- **v0.2** — LLM Planner (Prompt → ANP Graph generation)
+- **v0.1** — Graph spec, runtime engine, basic nodes, CLI
+- **v0.2** — LLM Planner (Prompt → ANP Graph generation) ← *current*
 - **v0.3** — Web app generation, Control/Event edges
 - **v0.4** — Mobile app generation
 - **v1.0** — Full-stack generation
