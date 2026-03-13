@@ -199,11 +199,15 @@ pub async fn execute_batch(
 ) -> Result<(), ExecutionError> {
     let run_id = uuid::Uuid::new_v4().to_string();
 
-    let source_node = plan
-        .entry_nodes
-        .first()
-        .cloned()
-        .unwrap_or_else(|| "unknown".to_string());
+    let source_node = match plan.entry_nodes.first() {
+        Some(node) => node.clone(),
+        None => {
+            return Err(ExecutionError::NodeFailed {
+                node_id: "runtime".to_string(),
+                message: "no entry nodes found in execution plan".to_string(),
+            });
+        }
+    };
 
     ctx.start_run(run_id.clone(), source_node);
 

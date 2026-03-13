@@ -1,6 +1,34 @@
+use std::path::Path;
+
 use anp_core::graph::spec::NodeKind;
 use anp_core::node::traits::{NodeError, NodeExecutor, NodeOutput, NodeResult};
 use anp_core::runtime::context::ExecutionContext;
+
+/// Validate that a file path is safe (no traversal attacks).
+/// Rejects absolute paths and paths containing `..` components.
+fn validate_path(path: &str) -> Result<(), NodeError> {
+    let p = Path::new(path);
+
+    // Reject absolute paths — all file I/O should be relative to working dir
+    if p.is_absolute() {
+        return Err(NodeError::InvalidConfig(format!(
+            "absolute paths are not allowed: '{}'",
+            path
+        )));
+    }
+
+    // Reject path traversal via ".." components
+    for component in p.components() {
+        if let std::path::Component::ParentDir = component {
+            return Err(NodeError::InvalidConfig(format!(
+                "path traversal ('..') is not allowed: '{}'",
+                path
+            )));
+        }
+    }
+
+    Ok(())
+}
 
 /// FileRead node — reads a file and outputs its content
 pub struct FileReadNode {
@@ -37,6 +65,8 @@ impl NodeExecutor for FileReadNode {
             .and_then(|v| v.as_str())
             .ok_or_else(|| NodeError::InvalidConfig("missing 'path' in config".into()))?
             .to_string();
+
+        validate_path(&self.path)?;
         Ok(())
     }
 
@@ -90,6 +120,8 @@ impl NodeExecutor for FileWriteNode {
             .and_then(|v| v.as_str())
             .ok_or_else(|| NodeError::InvalidConfig("missing 'path' in config".into()))?
             .to_string();
+
+        validate_path(&self.path)?;
         Ok(())
     }
 
@@ -113,5 +145,28 @@ impl NodeExecutor for FileWriteNode {
             "bytes_written": content.len()
         }))
         .with_log(format!("wrote {} bytes to {}", content.len(), self.path)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_path_relative_ok() {
+        assert!(validate_path("data.txt").is_ok());
+        assert!(validate_path("subdir/file.json").is_ok());
+    }
+
+    #[test]
+    fn test_validate_path_rejects_absolute() {
+        assert!(validate_path("/etc/passwd").is_err());
+        assert!(validate_path("/tmp/data.txt").is_err());
+    }
+
+    #[test]
+    fn test_validate_path_rejects_traversal() {
+        assert!(validate_path("../secret.txt").is_err());
+        assert!(validate_path("subdir/../../etc/passwd").is_err());
     }
 }

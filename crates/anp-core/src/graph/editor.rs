@@ -1,3 +1,6 @@
+use std::collections::{HashSet, VecDeque};
+use std::fmt;
+
 use crate::graph::spec::{AnpGraph, Edge, Node};
 use crate::node::registry::NodeRegistry;
 
@@ -48,6 +51,29 @@ pub enum GraphOp {
     },
 }
 
+impl fmt::Display for GraphOp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            GraphOp::AddNode { id, node_type, .. } => {
+                write!(f, "add_node({}, type={})", id, node_type)
+            }
+            GraphOp::RemoveNode { id } => write!(f, "remove_node({})", id),
+            GraphOp::Connect { from_node, to_node, .. } => {
+                write!(f, "connect({} -> {})", from_node, to_node)
+            }
+            GraphOp::Disconnect { from_node, to_node } => {
+                write!(f, "disconnect({} -> {})", from_node, to_node)
+            }
+            GraphOp::UpdateConfig { node_id, key, .. } => {
+                write!(f, "update_config({}.{})", node_id, key)
+            }
+            GraphOp::InsertAfter { target, new_id, node_type } => {
+                write!(f, "insert_after({}, new={}, type={})", target, new_id, node_type)
+            }
+        }
+    }
+}
+
 /// Errors from graph editing operations.
 #[derive(Debug, thiserror::Error)]
 pub enum EditError {
@@ -65,6 +91,9 @@ pub enum EditError {
 
     #[error("cannot connect node '{0}' to itself")]
     SelfLoop(String),
+
+    #[error("connecting '{from}' to '{to}' would create a cycle")]
+    WouldCreateCycle { from: String, to: String },
 }
 
 pub type EditResult<T> = Result<T, EditError>;
@@ -130,9 +159,21 @@ impl<'a> GraphEditor<'a> {
     }
 
     /// Apply a batch of operations in order.
+    /// On failure, the graph is rolled back to its state before the batch.
     pub fn apply_all(&mut self, ops: Vec<GraphOp>) -> EditResult<()> {
+        // Snapshot for rollback on failure
+        let snapshot_nodes = self.graph.nodes.clone();
+        let snapshot_edges = self.graph.edges.clone();
+        let snapshot_counter = self.edge_counter;
+
         for op in ops {
-            self.apply(op)?;
+            if let Err(e) = self.apply(op) {
+                // Rollback
+                self.graph.nodes = snapshot_nodes;
+                self.graph.edges = snapshot_edges;
+                self.edge_counter = snapshot_counter;
+                return Err(e);
+            }
         }
         Ok(())
     }
@@ -221,6 +262,14 @@ impl<'a> GraphEditor<'a> {
             });
         }
 
+        // Check if this edge would create a cycle (BFS: can to_node reach from_node?)
+        if self.would_create_cycle(from_node, to_node) {
+            return Err(EditError::WouldCreateCycle {
+                from: from_node.to_string(),
+                to: to_node.to_string(),
+            });
+        }
+
         self.edge_counter += 1;
         let edge = Edge {
             id: format!("e{}", self.edge_counter),
@@ -235,15 +284,9 @@ impl<'a> GraphEditor<'a> {
     }
 
     fn disconnect(&mut self, from_node: &str, to_node: &str) -> EditResult<()> {
-        let before = self.graph.edges.len();
         self.graph
             .edges
             .retain(|e| !(e.from_node == from_node && e.to_node == to_node));
-
-        if self.graph.edges.len() == before {
-            // No edges were removed — not an error, just a no-op
-        }
-
         Ok(())
     }
 
@@ -260,9 +303,15 @@ impl<'a> GraphEditor<'a> {
             .find(|n| n.id == node_id)
             .ok_or_else(|| EditError::NodeNotFound(node_id.to_string()))?;
 
-        if let Some(obj) = node.config.as_object_mut() {
-            obj.insert(key.to_string(), value);
+        // Ensure config is an object — upgrade if null/non-object
+        if !node.config.is_object() {
+            node.config = serde_json::json!({});
         }
+
+        node.config
+            .as_object_mut()
+            .expect("guaranteed to be object above")
+            .insert(key.to_string(), value);
 
         Ok(())
     }
@@ -306,6 +355,29 @@ impl<'a> GraphEditor<'a> {
         }
 
         Ok(())
+    }
+
+    /// Check if adding an edge from → to would create a cycle.
+    /// Uses BFS from to_node to check if from_node is reachable.
+    fn would_create_cycle(&self, from_node: &str, to_node: &str) -> bool {
+        let mut visited = HashSet::new();
+        let mut queue = VecDeque::new();
+        queue.push_back(to_node);
+
+        while let Some(current) = queue.pop_front() {
+            if current == from_node {
+                return true;
+            }
+            if !visited.insert(current) {
+                continue;
+            }
+            for edge in &self.graph.edges {
+                if edge.from_node == current && !visited.contains(edge.to_node.as_str()) {
+                    queue.push_back(&edge.to_node);
+                }
+            }
+        }
+        false
     }
 
     /// Get a reference to the modified graph.
@@ -724,5 +796,53 @@ mod tests {
         });
 
         assert!(matches!(result, Err(EditError::SelfLoop(_))));
+    }
+
+    #[test]
+    fn test_cycle_detection() {
+        let registry = test_registry();
+        let mut graph = empty_graph();
+        let mut editor = GraphEditor::new(&mut graph, &registry);
+
+        editor.apply_all(vec![
+            GraphOp::AddNode { id: "a".into(), node_type: "transform".into(), config: None },
+            GraphOp::AddNode { id: "b".into(), node_type: "transform".into(), config: None },
+            GraphOp::AddNode { id: "c".into(), node_type: "transform".into(), config: None },
+            GraphOp::Connect { from_node: "a".into(), from_port: None, to_node: "b".into(), to_port: None },
+            GraphOp::Connect { from_node: "b".into(), from_port: None, to_node: "c".into(), to_port: None },
+        ]).unwrap();
+
+        // c -> a would create a cycle (a -> b -> c -> a)
+        let result = editor.apply(GraphOp::Connect {
+            from_node: "c".into(), from_port: None, to_node: "a".into(), to_port: None,
+        });
+        assert!(matches!(result, Err(EditError::WouldCreateCycle { .. })));
+    }
+
+    #[test]
+    fn test_apply_all_rollback_on_failure() {
+        let registry = test_registry();
+        let mut graph = empty_graph();
+        let mut editor = GraphEditor::new(&mut graph, &registry);
+
+        // First op succeeds, second fails — graph should be rolled back
+        let result = editor.apply_all(vec![
+            GraphOp::AddNode { id: "a".into(), node_type: "transform".into(), config: None },
+            GraphOp::AddNode { id: "a".into(), node_type: "transform".into(), config: None }, // duplicate
+        ]);
+
+        assert!(result.is_err());
+        assert_eq!(editor.graph().nodes.len(), 0); // rolled back
+    }
+
+    #[test]
+    fn test_display_graphop() {
+        let op = GraphOp::Connect {
+            from_node: "a".into(),
+            from_port: None,
+            to_node: "b".into(),
+            to_port: None,
+        };
+        assert_eq!(format!("{}", op), "connect(a -> b)");
     }
 }

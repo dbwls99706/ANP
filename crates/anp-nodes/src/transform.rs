@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use anp_core::graph::spec::NodeKind;
-use anp_core::node::traits::{NodeError, NodeExecutor, NodeOutput, NodeResult, NodeStatus};
+use anp_core::node::traits::{NodeError, NodeExecutor, NodeOutput, NodeResult};
 use anp_core::runtime::context::ExecutionContext;
 
 /// Transform node — maps input fields using dot-path notation
@@ -107,17 +107,14 @@ impl NodeExecutor for TransformNode {
         }
 
         // Single object transform
-        let result = transform_single(&input, &self.mapping);
+        let (result, missing) = transform_single_with_report(&input, &self.mapping);
 
-        let mut ports = HashMap::new();
-        ports.insert("default".to_string(), result.clone());
-
-        Ok(NodeOutput {
-            ports,
-            status: NodeStatus::Ok,
-            logs: vec![format!("transformed with {} mappings", self.mapping.len())],
-            error: None,
-        })
+        let mut output = NodeOutput::data(result);
+        output.logs.push(format!("transformed with {} mappings", self.mapping.len()));
+        if !missing.is_empty() {
+            output.logs.push(format!("unresolved paths: {}", missing.join(", ")));
+        }
+        Ok(output)
     }
 }
 
@@ -125,15 +122,28 @@ fn transform_single(
     input: &serde_json::Value,
     mapping: &HashMap<String, String>,
 ) -> serde_json::Value {
+    transform_single_with_report(input, mapping).0
+}
+
+fn transform_single_with_report(
+    input: &serde_json::Value,
+    mapping: &HashMap<String, String>,
+) -> (serde_json::Value, Vec<String>) {
     let mut result = serde_json::Map::new();
+    let mut missing = Vec::new();
 
     for (output_key, input_path) in mapping {
-        if let Some(value) = resolve_dot_path(input, input_path) {
-            result.insert(output_key.clone(), value);
+        match resolve_dot_path(input, input_path) {
+            Some(value) => {
+                result.insert(output_key.clone(), value);
+            }
+            None => {
+                missing.push(input_path.clone());
+            }
         }
     }
 
-    serde_json::Value::Object(result)
+    (serde_json::Value::Object(result), missing)
 }
 
 #[cfg(test)]
