@@ -35,15 +35,14 @@ The simplest ANP graph — read a file and print it to the console:
 └──────────┘          └──────────┘
 ```
 
-```bash
-$ anp run examples/hello.anp.json
-
- INFO starting ANP engine name=Hello ANP
- INFO execution plan created stages=2 entry_nodes=["source"]
- INFO starting batch execution run_id=fa7dd046-...
+```
+PS C:\Users\HighTech\Downloads\asdf\ANP> anp run examples\hello.anp.json
+2026-03-13T12:15:03.225687Z  INFO starting ANP engine name=Hello ANP
+2026-03-13T12:15:03.225882Z  INFO execution plan created stages=2 entry_nodes=["source"]
+2026-03-13T12:15:03.225977Z  INFO starting batch execution run_id=fa7dd046-7fb1-41fe-9b17-eadc5a4ab9af
 Hello, ANP!
- INFO batch execution completed elapsed_ms=0 nodes_executed=2 nodes_failed=0
- INFO ANP engine finished
+2026-03-13T12:15:03.226657Z  INFO batch execution completed run_id=fa7dd046-7fb1-41fe-9b17-eadc5a4ab9af elapsed_ms=0 nodes_executed=2 nodes_failed=0
+2026-03-13T12:15:03.226790Z  INFO ANP engine finished
 ```
 
 Two nodes, one edge, zero code. The `file_read` node reads `hello_data.txt`, passes it through the `default` port to the `console` node, which prints it. See [hello.anp.json](examples/hello.anp.json).
@@ -97,17 +96,16 @@ A 5-stage ETL pipeline — read JSON data, transform fields, filter by score, fo
    source            parse          high_score_filter   format_report      output
 ```
 
-```bash
-$ anp run examples/data_pipeline.anp.json
-
- INFO starting ANP engine name=AI Data Pipeline
- INFO execution plan created stages=5 entry_nodes=["source"]
- INFO starting batch execution run_id=9330fcd8-...
+```
+PS C:\Users\HighTech\Downloads\asdf\ANP> anp run examples\data_pipeline.anp.json
+2026-03-13T12:26:44.045145Z  INFO starting ANP engine name=AI Data Pipeline
+2026-03-13T12:26:44.045316Z  INFO execution plan created stages=5 entry_nodes=["source"]
+2026-03-13T12:26:44.045577Z  INFO starting batch execution run_id=9330fcd8-d3b5-4742-9c23-e3dafca7e680
 [pipeline] Top performer: Alice (Engineering) — Score: 95
 [pipeline] Top performer: Charlie (Design) — Score: 88
 [pipeline] Top performer: Eve (Engineering) — Score: 91
- INFO batch execution completed elapsed_ms=0 nodes_executed=5 nodes_failed=0
- INFO ANP engine finished
+2026-03-13T12:26:44.046160Z  INFO batch execution completed run_id=9330fcd8-d3b5-4742-9c23-e3dafca7e680 elapsed_ms=0 nodes_executed=5 nodes_failed=0
+2026-03-13T12:26:44.046247Z  INFO ANP engine finished
 ```
 
 5 nodes execute in sequence: `file_read` loads `sample_data.json`, `transform` maps fields, `filter` keeps only scores ≥ 80, `template` formats each record with `{{name}} ({{department}}) — Score: {{score}}`, and `console` prints with a `[pipeline]` prefix. See [data_pipeline.anp.json](examples/data_pipeline.anp.json).
