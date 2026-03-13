@@ -1,5 +1,7 @@
 [
-  { "name": "Alice", "age": 25 },
-  { "name": "Bob", "age": 30 },
-  { "name": "Charlie", "age": 35 }
+  { "name": "Alice", "email": "alice@example.com", "score": 95, "department": "Engineering" },
+  { "name": "Bob", "email": "bob@example.com", "score": 72, "department": "Marketing" },
+  { "name": "Charlie", "email": "charlie@example.com", "score": 88, "department": "Design" },
+  { "name": "Diana", "email": "diana@example.com", "score": 64, "department": "Sales" },
+  { "name": "Eve", "email": "eve@example.com", "score": 91, "department": "Engineering" }
 ]

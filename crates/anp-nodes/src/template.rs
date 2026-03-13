@@ -144,6 +144,24 @@ impl NodeExecutor for TemplateNode {
             input
         };
 
+        // If input is an array, render template for each element
+        if let serde_json::Value::Array(items) = &data {
+            let mut rendered_items = Vec::with_capacity(items.len());
+            let mut all_unresolved = Vec::new();
+            for item in items {
+                let (rendered, unresolved) = render_template(&self.template, item);
+                rendered_items.push(serde_json::Value::String(rendered));
+                all_unresolved.extend(unresolved);
+            }
+            let mut output = NodeOutput::data(serde_json::Value::Array(rendered_items));
+            if !all_unresolved.is_empty() {
+                all_unresolved.sort();
+                all_unresolved.dedup();
+                output = output.with_log(format!("unresolved placeholders: {}", all_unresolved.join(", ")));
+            }
+            return Ok(output);
+        }
+
         let (rendered, unresolved) = render_template(&self.template, &data);
 
         let mut output = NodeOutput::data(serde_json::Value::String(rendered));

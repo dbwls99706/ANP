@@ -45,8 +45,22 @@ impl NodeExecutor for ConsoleNode {
         input: serde_json::Value,
         _ctx: &ExecutionContext,
     ) -> NodeResult<NodeOutput> {
+        // If input is an array of strings, print each on its own line
+        if let serde_json::Value::Array(items) = &input {
+            if items.iter().all(|v| v.is_string()) {
+                for item in items {
+                    let s = item.as_str().unwrap_or("");
+                    if self.prefix.is_empty() {
+                        println!("{}", s);
+                    } else {
+                        println!("{}{}", self.prefix, s);
+                    }
+                }
+                return Ok(NodeOutput::data(input));
+            }
+        }
+
         let output_str = if input.is_null() {
-            // No input — check if there's a static message in the node
             "".to_string()
         } else if let Some(s) = input.as_str() {
             s.to_string()
