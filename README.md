@@ -22,7 +22,7 @@ AI coding tools: Prompt → Code → Compile → Run
 ANP:             Prompt → Graph → Run
 ```
 
-The key insight: **AI calling AI**. An `llm_call` node lets graphs contain intelligence — programs that think, reason, and adapt at runtime.
+The key insight: **AI calling AI**. An `llm_call` node lets graphs contain intelligence. A `tool_router` node lets AI choose its own actions. A `memory` node gives graphs persistent state. Programs that think, reason, remember, and act autonomously — all as a graph.
 
 ## Demo: AI Chatbot in Zero Lines of Code
 
@@ -72,6 +72,36 @@ $ cargo run -p anp-cli -- run examples/data_pipeline.anp.json
 [pipeline] Top performer: Charlie (Design) — Score: 88
 ```
 
+## Demo: Autonomous AI Agent
+
+An AI agent that **decides its own actions** — the LLM chooses whether to search, calculate, or chat:
+
+```
+┌──────────┐        ┌────────┐        ┌─────────────┐    search    ┌──────────┐
+│  http    ├───────▶│ memory ├───────▶│ tool_router ├────────────▶│ llm_call │
+│  server  │        │        │        │  (AI picks  │  calculate  │ (search) │──▶ console
+│  :3000   │        └────────┘        │   the tool) ├────────────▶│ llm_call │
+└──────────┘                          │             │   respond   │ (calc)   │
+                                      └─────────────┘────────────▶│ llm_call │
+                                                                  │ (chat)   │
+                                                                  └──────────┘
+```
+
+```bash
+$ cargo run -p anp-cli -- run examples/ai_agent.anp.json
+
+$ curl -X POST http://localhost:3000/agent \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "What is the square root of 144?"}'
+# → AI routes to "calculate" tool automatically
+
+$ curl -X POST http://localhost:3000/agent \
+  -d '{"prompt": "Tell me a joke"}'
+# → AI routes to "respond" tool automatically
+```
+
+**No if/else logic. No routing code. The AI decides.** See [ai_agent.anp.json](examples/ai_agent.anp.json).
+
 ## Quick Start
 
 ### Prerequisites
@@ -98,6 +128,9 @@ cargo run -p anp-cli -- run examples/ai_chatbot.anp.json
 
 # REST API
 cargo run -p anp-cli -- run examples/simple_api.anp.json
+
+# Autonomous AI agent (requires API key)
+cargo run -p anp-cli -- run examples/ai_agent.anp.json
 ```
 
 ### Generate from Prompt
@@ -165,8 +198,10 @@ anp edit <graph> <instruction>  # Edit graph with natural language
 |------|------|-------------|
 | `llm_call` | Processor | Calls OpenAI or Anthropic LLMs — **AI invoking AI** |
 | `http_client` | Processor | Outbound HTTP requests (GET, POST, PUT, DELETE...) |
+| `tool_router` | Processor | **LLM-powered agentic routing** — AI decides which tool to use |
+| `memory` | Processor | Session-based conversation history and key-value state |
 
-**11 nodes** that compose into any application — from data pipelines to AI chatbots to REST APIs.
+**13 nodes** that compose into any application — from data pipelines to AI agents to REST APIs.
 
 ## How It Works
 
@@ -220,7 +255,7 @@ No compilation. No source code. Just a graph and a runtime.
 └──────┬──────┘
        ↓
 ┌──────┴──────┐
-│    Nodes     │  11 built-in nodes (AI, network, data, I/O)
+│    Nodes     │  13 built-in nodes (AI, agents, network, data, I/O)
 └─────────────┘
 ```
 
@@ -236,13 +271,16 @@ No compilation. No source code. Just a graph and a runtime.
 | Kind | Description | Examples |
 |------|-------------|----------|
 | **Source** | Produces data (runs once) | `file_read` |
-| **Processor** | Transforms data | `transform`, `filter`, `database`, `llm_call`, `http_client`, `template`, `conditional` |
+| **Processor** | Transforms data | `transform`, `filter`, `database`, `llm_call`, `http_client`, `template`, `conditional`, `memory`, `tool_router` |
 | **Sink** | Consumes data | `console`, `file_write` |
 | **Service** | Long-running event loop | `http_server` |
 
 ### Key Features
 
 - **AI-in-the-graph** — `llm_call` node enables graphs that think and reason
+- **Agentic workflows** — `tool_router` lets AI choose its own actions autonomously
+- **Stateful sessions** — `memory` node provides conversation history and persistent state
+- **Execution tracing** — per-node timing, success/failure tracking (NodeTrace)
 - **Event-driven runtime** — Service nodes trigger downstream pipelines per-event
 - **Parallel pipeline execution** — independent stages run concurrently
 - **Conditional routing** — branch data to different ports based on conditions
@@ -250,7 +288,7 @@ No compilation. No source code. Just a graph and a runtime.
 - **HTTP client** — call external APIs from within graphs
 - **Transactional graph editing** — 6 atomic GraphOps with rollback on failure
 - **LLM Planner** — generate graphs from natural language prompts
-- **Security** — path traversal protection, URL scheme validation, body size limits
+- **Security** — SSRF protection, path traversal guard, URL validation, body size limits
 
 ## Examples
 
@@ -262,14 +300,15 @@ No compilation. No source code. Just a graph and a runtime.
 | [`ai_chatbot.anp.json`](examples/ai_chatbot.anp.json) | **AI chatbot** — http_server → template → llm_call → console |
 | [`smart_api.anp.json`](examples/smart_api.anp.json) | **Smart API** — REST endpoints with AI-powered analysis |
 | [`data_pipeline.anp.json`](examples/data_pipeline.anp.json) | **Data pipeline** — file_read → transform → filter → template → console |
+| [`ai_agent.anp.json`](examples/ai_agent.anp.json) | **AI Agent** — tool_router → multiple LLM tools (autonomous routing) |
 
 ## Project Structure
 
 ```
 ANP_Tool/
 ├── crates/
-│   ├── anp-core/      # Graph spec, runtime engine, node system, GraphOp editor
-│   ├── anp-nodes/     # 11 built-in node implementations
+│   ├── anp-core/      # Graph spec, runtime engine, node system, GraphOp editor, execution tracing
+│   ├── anp-nodes/     # 13 built-in node implementations
 │   ├── anp-planner/   # LLM-powered graph generation
 │   └── anp-cli/       # CLI interface
 ├── examples/          # Example ANP graph files
@@ -281,8 +320,8 @@ ANP_Tool/
 - **v0.1** — Graph spec, runtime engine, basic nodes, CLI
 - **v0.2** — LLM Planner (Prompt → Graph generation)
 - **v0.3** — GraphOp API + GraphEditor (`anp edit`)
-- **v0.4** — AI-native nodes (llm_call, http_client, template, conditional) ← *current*
-- **v0.5** — REPL mode, interactive editing, graph optimizer
+- **v0.4** — AI-native nodes (llm_call, http_client, template, conditional)
+- **v0.5** — Observability, agentic workflows, state management (memory, tool_router, NodeTrace) ← *current*
 - **v1.0** — Plugin ecosystem, custom node types, visual graph editor
 
 ## License

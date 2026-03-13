@@ -6,7 +6,9 @@ pub mod filter;
 pub mod http_client;
 pub mod http_server;
 pub mod llm_call;
+pub mod memory;
 pub mod template;
+pub mod tool_router;
 pub mod transform;
 
 use anp_core::graph::spec::{NodeKind, PortSpec};
@@ -256,6 +258,59 @@ pub fn register_all(registry: &mut NodeRegistry) {
                     "default_port": { "type": "string", "default": "default" }
                 },
                 "required": ["field", "branches"]
+            }),
+        },
+    });
+
+    // Memory (Processor) — session-based state and conversation history
+    registry.register(NodeInfo {
+        factory: || Box::new(memory::MemoryNode::new()),
+        schema: NodeSchema {
+            node_type: "memory".to_string(),
+            kind: NodeKind::Processor,
+            description: "Session-based memory: conversation history and key-value state persistence".to_string(),
+            inputs: vec![PortSpec::new("default")],
+            outputs: vec![PortSpec::new("default")],
+            config_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "max_history": { "type": "integer", "minimum": 1, "maximum": 1000, "default": 50 },
+                    "initial_state": { "type": "object", "description": "Initial key-value pairs" }
+                }
+            }),
+        },
+    });
+
+    // Tool Router (Processor) — LLM-powered agentic routing
+    registry.register(NodeInfo {
+        factory: || Box::new(tool_router::ToolRouterNode::new()),
+        schema: NodeSchema {
+            node_type: "tool_router".to_string(),
+            kind: NodeKind::Processor,
+            description: "LLM-powered agentic routing — AI decides which tool/port to route data to".to_string(),
+            inputs: vec![PortSpec::new("default")],
+            outputs: vec![PortSpec::new("default")],
+            config_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "provider": { "type": "string", "enum": ["openai", "anthropic"], "default": "openai" },
+                    "model": { "type": "string", "description": "Model name" },
+                    "tools": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": { "type": "string", "description": "Tool/port name" },
+                                "description": { "type": "string", "description": "What this tool does" }
+                            },
+                            "required": ["name", "description"]
+                        }
+                    },
+                    "system_prompt": { "type": "string" },
+                    "max_tokens": { "type": "integer", "default": 64 },
+                    "timeout_secs": { "type": "integer", "default": 30 }
+                },
+                "required": ["tools"]
             }),
         },
     });

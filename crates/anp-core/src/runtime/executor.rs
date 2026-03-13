@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 
 use tracing::{debug, error, info, warn};
 
 use crate::graph::spec::{AnpGraph, NodeKind};
 use crate::node::traits::{NodeError, NodeExecutor, NodeOutput, NodeResult, NodeStatus, PipelineTrigger};
-use crate::runtime::context::ExecutionContext;
+use crate::runtime::context::{ExecutionContext, NodeTrace};
 use crate::runtime::scheduler::ExecutionPlan;
 
 /// Errors from execution
@@ -130,6 +131,7 @@ fn find_downstream_from_port(
 }
 
 /// Execute a single node: gather input → execute → store output. Returns the stored output value.
+/// Records a NodeTrace with timing and status for observability.
 async fn execute_single_node(
     node_id: &str,
     plan: &ExecutionPlan,
@@ -147,43 +149,84 @@ async fn execute_single_node(
     }
 
     let input = gather_input(node_id, plan, ctx, run_id);
+    let node_type = node.node_type().to_string();
 
     debug!(
         node_id = %node_id,
-        node_type = %node.node_type(),
+        node_type = %node_type,
         "executing node"
     );
 
+    let start = Instant::now();
+
     match node.execute(input, ctx).await {
         Ok(output) => {
+            let duration_us = start.elapsed().as_micros() as u64;
+
             for log in &output.logs {
                 debug!(node_id = %node_id, "{}", log);
             }
 
+            let output_ports: Vec<String> = output.ports.keys().cloned().collect();
+
             match output.status {
                 NodeStatus::Ok => {
+                    ctx.record_trace(run_id, NodeTrace {
+                        node_id: node_id.to_string(),
+                        node_type,
+                        duration_us,
+                        success: true,
+                        error: None,
+                        output_ports,
+                    });
                     let stored = store_output(node_id, &output, plan, ctx, run_id);
                     Ok(stored)
                 }
                 NodeStatus::Skip => {
+                    ctx.record_trace(run_id, NodeTrace {
+                        node_id: node_id.to_string(),
+                        node_type,
+                        duration_us,
+                        success: true,
+                        error: None,
+                        output_ports: vec!["skip".to_string()],
+                    });
                     info!(node_id = %node_id, "node returned Skip");
                     Ok(serde_json::Value::Null)
                 }
                 NodeStatus::Error => {
+                    let err_msg = output.error.clone();
+                    ctx.record_trace(run_id, NodeTrace {
+                        node_id: node_id.to_string(),
+                        node_type,
+                        duration_us,
+                        success: false,
+                        error: err_msg.clone(),
+                        output_ports,
+                    });
                     error!(
                         node_id = %node_id,
-                        error = ?output.error,
+                        error = ?err_msg,
                         "node returned Error status"
                     );
                     store_error_output(node_id, &output, plan, ctx, run_id);
                     Ok(serde_json::json!({
-                        "error": output.error,
+                        "error": err_msg,
                         "node_id": node_id
                     }))
                 }
             }
         }
         Err(e) => {
+            let duration_us = start.elapsed().as_micros() as u64;
+            ctx.record_trace(run_id, NodeTrace {
+                node_id: node_id.to_string(),
+                node_type,
+                duration_us,
+                success: false,
+                error: Some(e.to_string()),
+                output_ports: vec![],
+            });
             error!(node_id = %node_id, error = %e, "node execution failed");
             Err(e)
         }
@@ -228,30 +271,62 @@ pub async fn execute_batch(
             }
 
             let input = gather_input(node_id, plan, ctx, &run_id);
+            let node_type_str = node.node_type().to_string();
 
             debug!(
                 node_id = %node_id,
-                node_type = %node.node_type(),
+                node_type = %node_type_str,
                 "executing node"
             );
 
+            let start = Instant::now();
+
             match node.execute(input, ctx).await {
                 Ok(output) => {
+                    let duration_us = start.elapsed().as_micros() as u64;
+
                     for log in &output.logs {
                         debug!(node_id = %node_id, "{}", log);
                     }
 
+                    let output_ports: Vec<String> = output.ports.keys().cloned().collect();
+
                     match output.status {
                         NodeStatus::Ok => {
+                            ctx.record_trace(&run_id, NodeTrace {
+                                node_id: node_id.clone(),
+                                node_type: node_type_str,
+                                duration_us,
+                                success: true,
+                                error: None,
+                                output_ports,
+                            });
                             store_output(node_id, &output, plan, ctx, &run_id);
                         }
                         NodeStatus::Skip => {
+                            ctx.record_trace(&run_id, NodeTrace {
+                                node_id: node_id.clone(),
+                                node_type: node_type_str,
+                                duration_us,
+                                success: true,
+                                error: None,
+                                output_ports: vec!["skip".to_string()],
+                            });
                             info!(node_id = %node_id, "node returned Skip, stopping pipeline branch");
                         }
                         NodeStatus::Error => {
+                            let err_msg = output.error.clone();
+                            ctx.record_trace(&run_id, NodeTrace {
+                                node_id: node_id.clone(),
+                                node_type: node_type_str,
+                                duration_us,
+                                success: false,
+                                error: err_msg.clone(),
+                                output_ports,
+                            });
                             error!(
                                 node_id = %node_id,
-                                error = ?output.error,
+                                error = ?err_msg,
                                 "node returned Error status"
                             );
                             store_error_output(node_id, &output, plan, ctx, &run_id);
@@ -259,6 +334,15 @@ pub async fn execute_batch(
                     }
                 }
                 Err(e) => {
+                    let duration_us = start.elapsed().as_micros() as u64;
+                    ctx.record_trace(&run_id, NodeTrace {
+                        node_id: node_id.clone(),
+                        node_type: node_type_str,
+                        duration_us,
+                        success: false,
+                        error: Some(e.to_string()),
+                        output_ports: vec![],
+                    });
                     error!(node_id = %node_id, error = %e, "node execution failed");
                     return Err(ExecutionError::NodeFailed {
                         node_id: node_id.clone(),
@@ -271,7 +355,24 @@ pub async fn execute_batch(
 
     if let Some(run_ctx) = ctx.finish_run(&run_id) {
         let elapsed = run_ctx.metadata.started_at.elapsed();
-        info!(run_id = %run_id, elapsed_ms = elapsed.as_millis(), "batch execution completed");
+        let trace_count = run_ctx.traces.len();
+        let failed_count = run_ctx.traces.iter().filter(|t| !t.success).count();
+        info!(
+            run_id = %run_id,
+            elapsed_ms = elapsed.as_millis(),
+            nodes_executed = trace_count,
+            nodes_failed = failed_count,
+            "batch execution completed"
+        );
+        for trace in &run_ctx.traces {
+            debug!(
+                node_id = %trace.node_id,
+                node_type = %trace.node_type,
+                duration_us = trace.duration_us,
+                success = trace.success,
+                "node trace"
+            );
+        }
     }
 
     Ok(())
