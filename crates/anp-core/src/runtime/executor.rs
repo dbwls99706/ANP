@@ -333,9 +333,13 @@ pub async fn execute_service(
     info!("all service nodes started, waiting for Ctrl+C...");
 
     // Wait for Ctrl+C
-    tokio::signal::ctrl_c()
-        .await
-        .expect("failed to listen for Ctrl+C");
+    if let Err(e) = tokio::signal::ctrl_c().await {
+        error!(error = %e, "failed to listen for shutdown signal");
+        return Err(ExecutionError::NodeFailed {
+            node_id: "runtime".to_string(),
+            message: format!("signal handler failed: {}", e),
+        });
+    }
 
     info!("shutdown signal received");
 
@@ -366,7 +370,7 @@ fn gather_input(
 
     match inputs.len() {
         0 => serde_json::Value::Null,
-        1 => inputs.into_iter().next().unwrap(),
+        1 => inputs.into_iter().next().unwrap_or(serde_json::Value::Null),
         _ => serde_json::Value::Array(inputs),
     }
 }
@@ -382,7 +386,12 @@ fn store_output(
     let val = if let Some(default_val) = output.ports.get("default") {
         default_val.clone()
     } else if output.ports.len() == 1 {
-        output.ports.values().next().unwrap().clone()
+        output
+            .ports
+            .values()
+            .next()
+            .cloned()
+            .unwrap_or(serde_json::Value::Null)
     } else if !output.ports.is_empty() {
         let map: serde_json::Map<String, serde_json::Value> = output
             .ports

@@ -1,3 +1,4 @@
+use anp_core::graph::editor::GraphOp;
 use anp_core::graph::spec::AnpGraph;
 use anp_core::graph::validate;
 use anp_core::node::registry::NodeRegistry;
@@ -115,6 +116,79 @@ impl AnpPlanner {
                         attempts: attempt + 1,
                         errors,
                     });
+                }
+            }
+        }
+    }
+
+    /// Generate graph operations from a natural language edit instruction.
+    /// Returns a list of GraphOps to apply to an existing graph.
+    pub async fn generate_edit(
+        &self,
+        instruction: &str,
+        current_graph: &AnpGraph,
+    ) -> PlannerResult<Vec<GraphOp>> {
+        info!(provider = %self.client.provider(), "generating graph edit operations");
+        debug!(instruction = %instruction, "edit instruction");
+
+        let graph_json = serde_json::to_string_pretty(current_graph)
+            .map_err(|e| PlannerError::ParseError(e.to_string()))?;
+
+        let edit_system = prompt::build_edit_system_prompt(&self.catalog_text);
+        let edit_user = prompt::build_edit_user_prompt(instruction, &graph_json);
+
+        let mut attempt = 0;
+        let mut current_user_msg = edit_user;
+
+        loop {
+            let response = self
+                .client
+                .generate(&edit_system, &current_user_msg)
+                .await?;
+
+            debug!(attempt = attempt, "received edit LLM response");
+
+            // Extract JSON array from response
+            let json_str = match parser::extract_json(&response) {
+                Ok(json) => json,
+                Err(e) => {
+                    if attempt < MAX_FIX_ATTEMPTS {
+                        warn!(attempt = attempt, error = %e, "failed to extract JSON ops, retrying");
+                        current_user_msg = format!(
+                            "Your previous response did not contain valid JSON. \
+                             Please respond with ONLY a valid JSON array of graph operations.\n\n\
+                             Original instruction: {}",
+                            instruction
+                        );
+                        attempt += 1;
+                        continue;
+                    }
+                    return Err(e);
+                }
+            };
+
+            // Parse as Vec<GraphOp>
+            match serde_json::from_str::<Vec<GraphOp>>(&json_str) {
+                Ok(ops) => {
+                    info!(ops = ops.len(), attempts = attempt + 1, "edit ops generated successfully");
+                    return Ok(ops);
+                }
+                Err(e) => {
+                    if attempt < MAX_FIX_ATTEMPTS {
+                        warn!(attempt = attempt, error = %e, "failed to parse ops, retrying");
+                        current_user_msg = format!(
+                            "Your previous response could not be parsed as graph operations: {}\n\n\
+                             Please respond with ONLY a valid JSON array of operations.\n\n\
+                             Original instruction: {}",
+                            e, instruction
+                        );
+                        attempt += 1;
+                        continue;
+                    }
+                    return Err(PlannerError::ParseError(format!(
+                        "failed to parse graph operations: {}",
+                        e
+                    )));
                 }
             }
         }

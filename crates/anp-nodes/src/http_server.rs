@@ -88,8 +88,10 @@ impl NodeExecutor for HttpServerNode {
         };
 
         // Use a single fallback handler that matches all routes
+        // Limit request body to 1MB to prevent memory exhaustion
         let app = Router::new()
             .fallback(handle_request)
+            .layer(axum::extract::DefaultBodyLimit::max(1024 * 1024))
             .with_state(state);
 
         let port = self.port;

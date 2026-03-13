@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
 
+use anp_core::graph::editor::GraphEditor;
 use anp_core::graph::spec::{AnpGraph, NodeKind};
 use anp_core::graph::{loader, validate};
 use anp_core::node::registry::NodeRegistry;
@@ -67,6 +68,16 @@ enum Commands {
         #[arg(long)]
         explain: bool,
     },
+    /// Edit an existing ANP graph using a natural language instruction
+    Edit {
+        /// Path to the .anp.json graph file to edit
+        graph: PathBuf,
+        /// Natural language instruction for how to modify the graph
+        instruction: String,
+        /// Show the generated operations without applying them
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 fn create_registry() -> NodeRegistry {
@@ -99,6 +110,11 @@ async fn main() {
             run,
             explain,
         } => cmd_prompt(prompt, output, run, explain).await,
+        Commands::Edit {
+            graph,
+            instruction,
+            dry_run,
+        } => cmd_edit(graph, instruction, dry_run).await,
     }
 }
 
@@ -181,6 +197,88 @@ async fn cmd_prompt(prompt: String, output: Option<PathBuf>, run: bool, explain:
             }
         }
     }
+}
+
+async fn cmd_edit(path: PathBuf, instruction: String, dry_run: bool) {
+    // 1. Load existing graph
+    let mut graph = match loader::load_from_file(&path) {
+        Ok(g) => g,
+        Err(e) => {
+            eprintln!("Error loading graph: {}", e);
+            std::process::exit(1);
+        }
+    };
+
+    // 2. Detect LLM client
+    let client = match auto_detect_client() {
+        Ok(c) => c,
+        Err(_) => {
+            eprintln!("No LLM API key found.");
+            eprintln!("Set ANTHROPIC_API_KEY or OPENAI_API_KEY environment variable.");
+            eprintln!();
+            eprintln!("Example:");
+            eprintln!("  export ANTHROPIC_API_KEY=sk-ant-...");
+            std::process::exit(1);
+        }
+    };
+
+    // 3. Generate edit operations
+    let registry = create_registry();
+    let planner = AnpPlanner::new(client, &registry);
+
+    let ops = match planner.generate_edit(&instruction, &graph).await {
+        Ok(ops) => ops,
+        Err(e) => {
+            eprintln!("Error: {}", e);
+            std::process::exit(1);
+        }
+    };
+
+    if ops.is_empty() {
+        println!("No changes needed.");
+        return;
+    }
+
+    // 4. Show operations
+    println!("Operations ({}):", ops.len());
+    for op in &ops {
+        println!("  {}", serde_json::to_string(op).unwrap_or_default());
+    }
+
+    if dry_run {
+        return;
+    }
+
+    // 5. Apply operations
+    {
+        let mut editor = GraphEditor::new(&mut graph, &registry);
+        if let Err(e) = editor.apply_all(ops) {
+            eprintln!("Error applying operations: {}", e);
+            std::process::exit(1);
+        }
+    }
+
+    // 6. Validate
+    if let Err(errors) = validate::validate(&graph) {
+        eprintln!("Warning: edited graph has validation errors:");
+        for err in &errors {
+            eprintln!("  - {}", err);
+        }
+    }
+
+    // 7. Save
+    let json = serde_json::to_string_pretty(&graph).unwrap_or_else(|e| {
+        eprintln!("Error serializing graph: {}", e);
+        std::process::exit(1);
+    });
+
+    std::fs::write(&path, &json).unwrap_or_else(|e| {
+        eprintln!("Error writing file: {}", e);
+        std::process::exit(1);
+    });
+
+    println!();
+    println!("Graph saved to {}", path.display());
 }
 
 fn explain_graph(graph: &AnpGraph) {

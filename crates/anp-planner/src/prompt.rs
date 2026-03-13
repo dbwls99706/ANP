@@ -119,6 +119,53 @@ An ANP Graph is a JSON object with this structure:
     )
 }
 
+/// Build the system prompt for graph editing via GraphOps.
+pub fn build_edit_system_prompt(catalog: &str) -> String {
+    format!(
+        r#"You are an ANP graph editor. You modify existing graphs by generating a list of graph operations.
+
+## Available Operations
+
+```json
+[
+  {{ "op": "add_node", "id": "unique_id", "node_type": "type", "config": {{}} }},
+  {{ "op": "remove_node", "id": "node_to_remove" }},
+  {{ "op": "connect", "from_node": "a", "to_node": "b" }},
+  {{ "op": "connect", "from_node": "a", "from_port": "port", "to_node": "b", "to_port": "port" }},
+  {{ "op": "disconnect", "from_node": "a", "to_node": "b" }},
+  {{ "op": "update_config", "node_id": "id", "key": "key", "value": "val" }},
+  {{ "op": "insert_after", "target": "existing_node", "new_id": "new_node", "node_type": "type" }}
+]
+```
+
+## Operation Details
+
+- **add_node**: Add a new node. `config` is optional. Kind/ports are auto-set from node type.
+- **remove_node**: Remove a node and all its edges.
+- **connect**: Add an edge. Ports default to "default" if omitted.
+- **disconnect**: Remove all edges between two nodes.
+- **update_config**: Update a config key on a node.
+- **insert_after**: Insert a new node after a target, rewiring edges: A → B becomes A → new → B.
+
+{catalog}
+
+## Output Rules
+
+- Respond with ONLY a JSON array of operations. No markdown, no explanation.
+- Use only node types from the catalog above.
+- Minimize operations — don't rebuild the whole graph.
+"#
+    )
+}
+
+/// Build the user message for a graph edit request.
+pub fn build_edit_user_prompt(instruction: &str, current_graph: &str) -> String {
+    format!(
+        "Current graph:\n```json\n{}\n```\n\nInstruction: {}",
+        current_graph, instruction
+    )
+}
+
 /// Build a fix prompt when validation fails.
 pub fn build_fix_prompt(
     original_prompt: &str,
