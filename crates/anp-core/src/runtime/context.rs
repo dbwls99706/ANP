@@ -23,6 +23,8 @@ pub struct RunContext {
     pub data: HashMap<String, serde_json::Value>,
     /// Run metadata for tracing
     pub metadata: RunMetadata,
+    /// Per-node execution traces
+    pub traces: Vec<NodeTrace>,
 }
 
 /// Metadata about a pipeline run
@@ -30,6 +32,24 @@ pub struct RunContext {
 pub struct RunMetadata {
     pub started_at: Instant,
     pub source_node: String,
+}
+
+/// Trace record for a single node execution
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct NodeTrace {
+    /// Node ID that was executed
+    pub node_id: String,
+    /// Node type (e.g., "llm_call", "filter")
+    pub node_type: String,
+    /// Execution duration in microseconds
+    pub duration_us: u64,
+    /// Whether execution succeeded
+    pub success: bool,
+    /// Error message if failed
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    /// Output port names used
+    pub output_ports: Vec<String>,
 }
 
 impl ExecutionContext {
@@ -52,6 +72,7 @@ impl ExecutionContext {
                     started_at: Instant::now(),
                     source_node,
                 },
+                traces: Vec::new(),
             },
         );
     }
@@ -73,6 +94,21 @@ impl ExecutionContext {
     /// Finish and clean up a run (prevents memory leaks)
     pub fn finish_run(&self, run_id: &str) -> Option<RunContext> {
         self.runs.remove(run_id).map(|(_, ctx)| ctx)
+    }
+
+    /// Record a node execution trace for a run
+    pub fn record_trace(&self, run_id: &str, trace: NodeTrace) {
+        if let Some(mut run) = self.runs.get_mut(run_id) {
+            run.traces.push(trace);
+        }
+    }
+
+    /// Get all traces for a run
+    pub fn get_traces(&self, run_id: &str) -> Vec<NodeTrace> {
+        self.runs
+            .get(run_id)
+            .map(|run| run.traces.clone())
+            .unwrap_or_default()
     }
 
     /// Access global shared state

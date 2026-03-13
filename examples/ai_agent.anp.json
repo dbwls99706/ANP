@@ -1,0 +1,118 @@
+{
+  "version": "0.1",
+  "metadata": {
+    "name": "Autonomous AI Agent",
+    "description": "An AI agent that autonomously decides which tool to use — search, calculate, or respond. The LLM chooses the action; the graph executes it. No code, pure AI-native autonomy."
+  },
+  "nodes": [
+    {
+      "id": "server",
+      "node_type": "http_server",
+      "kind": "service",
+      "config": {
+        "port": 3000,
+        "routes": [
+          { "path": "/agent", "method": "POST", "output_port": "agent" },
+          { "path": "/health", "output_port": "health" }
+        ]
+      },
+      "inputs": [],
+      "outputs": [
+        { "name": "default" },
+        { "name": "agent" },
+        { "name": "health" }
+      ]
+    },
+    {
+      "id": "memory",
+      "node_type": "memory",
+      "kind": "processor",
+      "config": {
+        "max_history": 20
+      },
+      "inputs": [{ "name": "default" }],
+      "outputs": [{ "name": "default" }]
+    },
+    {
+      "id": "router",
+      "node_type": "tool_router",
+      "kind": "processor",
+      "config": {
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "tools": [
+          { "name": "search", "description": "Search for information or look up facts" },
+          { "name": "calculate", "description": "Perform mathematical calculations" },
+          { "name": "respond", "description": "Respond directly to the user with a conversational answer" }
+        ],
+        "system_prompt": "You are a tool selector. Based on the user's input, pick the single best tool."
+      },
+      "inputs": [{ "name": "default" }],
+      "outputs": [
+        { "name": "default" },
+        { "name": "search" },
+        { "name": "calculate" },
+        { "name": "respond" }
+      ]
+    },
+    {
+      "id": "search_handler",
+      "node_type": "llm_call",
+      "kind": "processor",
+      "config": {
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "system_prompt": "You are a knowledgeable search assistant. Answer factual questions concisely.",
+        "max_tokens": 512
+      },
+      "inputs": [{ "name": "default" }],
+      "outputs": [{ "name": "default" }]
+    },
+    {
+      "id": "calc_handler",
+      "node_type": "llm_call",
+      "kind": "processor",
+      "config": {
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "system_prompt": "You are a calculator. Compute the answer and show your work briefly.",
+        "max_tokens": 256
+      },
+      "inputs": [{ "name": "default" }],
+      "outputs": [{ "name": "default" }]
+    },
+    {
+      "id": "chat_handler",
+      "node_type": "llm_call",
+      "kind": "processor",
+      "config": {
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "system_prompt": "You are a friendly conversational assistant. Be helpful and concise.",
+        "max_tokens": 256
+      },
+      "inputs": [{ "name": "default" }],
+      "outputs": [{ "name": "default" }]
+    },
+    {
+      "id": "log",
+      "node_type": "console",
+      "kind": "sink",
+      "config": {
+        "prefix": "[agent] "
+      },
+      "inputs": [{ "name": "default" }],
+      "outputs": []
+    }
+  ],
+  "edges": [
+    { "id": "e1", "from_node": "server", "from_port": "agent", "to_node": "memory", "to_port": "default" },
+    { "id": "e2", "from_node": "memory", "to_node": "router" },
+    { "id": "e3", "from_node": "router", "from_port": "search", "to_node": "search_handler", "to_port": "default" },
+    { "id": "e4", "from_node": "router", "from_port": "calculate", "to_node": "calc_handler", "to_port": "default" },
+    { "id": "e5", "from_node": "router", "from_port": "respond", "to_node": "chat_handler", "to_port": "default" },
+    { "id": "e6", "from_node": "search_handler", "to_node": "log" },
+    { "id": "e7", "from_node": "calc_handler", "to_node": "log" },
+    { "id": "e8", "from_node": "chat_handler", "to_node": "log" }
+  ]
+}

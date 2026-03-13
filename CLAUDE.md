@@ -30,7 +30,7 @@ Programs are not written — they are **generated from intent**. The fundamental
 ### Crate Structure
 
 - **anp-core**: Graph spec, validation, runtime engine, execution scheduler, GraphOp editor
-- **anp-nodes**: Built-in node implementations (console, file_io, transform, filter, database, http_server, llm_call, http_client, template, conditional)
+- **anp-nodes**: Built-in node implementations (console, file_io, transform, filter, database, http_server, llm_call, http_client, template, conditional, memory, tool_router)
 - **anp-planner**: LLM integration — generates graphs from prompts, edit ops from instructions
 - **anp-cli**: CLI entry point (`anp run`, `anp prompt`, `anp edit`, etc.)
 
@@ -39,7 +39,7 @@ Programs are not written — they are **generated from intent**. The fundamental
 | Kind | Behavior | Example |
 |------|----------|---------|
 | Source | Produces data, no inputs, executes once | file_read |
-| Processor | Transforms data, has inputs and outputs | transform, filter, database, llm_call, http_client, template, conditional |
+| Processor | Transforms data, has inputs and outputs | transform, filter, database, llm_call, http_client, template, conditional, memory, tool_router |
 | Sink | Consumes data, no outputs | console, file_write |
 | Service | Long-running event loop, triggers downstream | http_server |
 
@@ -69,12 +69,15 @@ Programs are not written — they are **generated from intent**. The fundamental
 - CLI uses proper Result-based error propagation (no process::exit)
 - Template engine: `{{variable}}` syntax with dot-path resolution
 - Conditional routing: multi-branch port routing with operator support (eq, neq, gt, gte, lt, lte, contains, exists)
+- Memory node: session-based conversation history (max_history limit) + key-value state
+- Tool Router: LLM-powered agentic routing — AI decides which tool/port to use
+- Execution tracing: per-node timing (NodeTrace), success/failure tracking, output port recording
 
 ## Roadmap
 
 - v0.1: Core runtime (graph spec, scheduler, executor, built-in nodes)
 - v0.2: LLM Planner (`anp prompt` command)
 - v0.3: GraphOp API + GraphEditor (`anp edit` command)
-- v0.4: AI-native nodes (llm_call, http_client, template, conditional) ← current
-- v0.5: REPL mode, interactive editing
-- v1.0: Plugin ecosystem, custom node types
+- v0.4: AI-native nodes (llm_call, http_client, template, conditional)
+- v0.5: Observability, agentic workflows, state management (memory, tool_router, NodeTrace) ← current
+- v1.0: Plugin ecosystem, custom node types, visual graph editor
