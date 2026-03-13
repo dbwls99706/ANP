@@ -64,6 +64,21 @@ impl NodeExecutor for DatabaseNode {
         let op = input
             .get("op")
             .and_then(|v| v.as_str())
+            .or_else(|| {
+                // Infer operation from HTTP method metadata when "op" is not explicit
+                match input.get("_method").and_then(|v| v.as_str()) {
+                    Some("POST") | Some("PUT") => Some("set"),
+                    Some("GET") => {
+                        if input.get("key").is_some() {
+                            Some("get")
+                        } else {
+                            Some("list")
+                        }
+                    }
+                    Some("DELETE") => Some("delete"),
+                    _ => None,
+                }
+            })
             .unwrap_or("list");
 
         match op {
@@ -166,5 +181,67 @@ mod tests {
             .unwrap();
         assert_eq!(get_result.ports["default"]["value"], "hello");
         assert_eq!(get_result.ports["default"]["found"], true);
+    }
+
+    #[tokio::test]
+    async fn test_infer_op_from_http_method() {
+        let mut db = DatabaseNode::new();
+        let ctx = ExecutionContext::new();
+        db.init(&serde_json::json!({})).await.unwrap();
+
+        // POST should infer "set"
+        let result = db
+            .execute(
+                serde_json::json!({
+                    "key": "user:1",
+                    "value": {"name": "Alice"},
+                    "_method": "POST",
+                    "_path": "/users"
+                }),
+                &ctx,
+            )
+            .await
+            .unwrap();
+        assert_eq!(result.ports["default"]["op"], "set");
+        assert_eq!(result.ports["default"]["success"], true);
+
+        // GET with key should infer "get"
+        let result = db
+            .execute(
+                serde_json::json!({
+                    "key": "user:1",
+                    "_method": "GET"
+                }),
+                &ctx,
+            )
+            .await
+            .unwrap();
+        assert_eq!(result.ports["default"]["op"], "get");
+        assert_eq!(result.ports["default"]["value"]["name"], "Alice");
+
+        // GET without key should infer "list"
+        let result = db
+            .execute(
+                serde_json::json!({ "_method": "GET" }),
+                &ctx,
+            )
+            .await
+            .unwrap();
+        assert_eq!(result.ports["default"]["op"], "list");
+        assert_eq!(result.ports["default"]["count"], 1);
+
+        // DELETE should infer "delete"
+        let result = db
+            .execute(
+                serde_json::json!({
+                    "key": "user:1",
+                    "_method": "DELETE"
+                }),
+                &ctx,
+            )
+            .await
+            .unwrap();
+        assert_eq!(result.ports["default"]["op"], "delete");
+        assert_eq!(result.ports["default"]["existed"], true);
     }
 }
