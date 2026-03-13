@@ -42,13 +42,16 @@
       "id": "output",
       "node_type": "console",
       "kind": "sink",
-      "config": {},
+      "config": {
+        "prefix": "[api] "
+      },
       "inputs": [{ "name": "default" }],
       "outputs": []
     }
   ],
   "edges": [
-    { "id": "e1", "from_node": "server", "to_node": "db" },
-    { "id": "e2", "from_node": "db", "to_node": "output" }
+    { "id": "e1", "from_node": "server", "from_port": "users_get", "to_node": "db", "to_port": "default" },
+    { "id": "e2", "from_node": "server", "from_port": "users_post", "to_node": "db", "to_port": "default" },
+    { "id": "e3", "from_node": "db", "to_node": "output" }
   ]
 }

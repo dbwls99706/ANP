@@ -1,9 +1,10 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use tracing::{debug, error, info, warn};
 
 use crate::graph::spec::{AnpGraph, NodeKind};
-use crate::node::traits::{NodeExecutor, NodeOutput, NodeStatus};
+use crate::node::traits::{NodeError, NodeExecutor, NodeOutput, NodeResult, NodeStatus, PipelineTrigger};
 use crate::runtime::context::ExecutionContext;
 use crate::runtime::scheduler::ExecutionPlan;
 
@@ -20,6 +21,175 @@ pub enum ExecutionError {
     ServiceInBatchMode(String),
 }
 
+/// Runtime implementation of PipelineTrigger.
+/// Service nodes use this to execute downstream pipeline on each event.
+pub struct PipelineTriggerImpl {
+    pub plan: Arc<ExecutionPlan>,
+    pub nodes: Arc<HashMap<String, Box<dyn NodeExecutor>>>,
+    pub ctx: Arc<ExecutionContext>,
+}
+
+#[async_trait::async_trait]
+impl PipelineTrigger for PipelineTriggerImpl {
+    async fn trigger(
+        &self,
+        source_node: &str,
+        port: &str,
+        data: serde_json::Value,
+    ) -> NodeResult<serde_json::Value> {
+        let run_id = uuid::Uuid::new_v4().to_string();
+        self.ctx.start_run(run_id.clone(), source_node.to_string());
+
+        debug!(run_id = %run_id, source = %source_node, port = %port, "pipeline trigger fired");
+
+        // Store the trigger data as the source node's output
+        self.ctx.set_node_output(&run_id, source_node, data);
+
+        // Find downstream nodes reachable from source_node via the specified port
+        let downstream_nodes = find_downstream_from_port(source_node, port, &self.plan);
+
+        // Find the source node's stage index
+        let source_stage = self.plan.node_map.get(source_node).copied().unwrap_or(0);
+
+        // Execute stages after the source node's stage
+        let mut last_output = serde_json::Value::Null;
+        for (stage_idx, stage) in self.plan.stages.iter().enumerate() {
+            if stage_idx <= source_stage {
+                continue;
+            }
+
+            // Only execute nodes that are downstream of the trigger
+            let stage_nodes: Vec<&String> = stage
+                .node_ids
+                .iter()
+                .filter(|id| downstream_nodes.contains(id.as_str()))
+                .collect();
+
+            if stage_nodes.is_empty() {
+                continue;
+            }
+
+            for node_id in &stage_nodes {
+                match execute_single_node(node_id, &self.plan, &self.nodes, &self.ctx, &run_id).await {
+                    Ok(val) => {
+                        last_output = val;
+                    }
+                    Err(e) => {
+                        error!(node_id = %node_id, error = %e, "node execution failed in trigger pipeline");
+                        self.ctx.finish_run(&run_id);
+                        return Err(e);
+                    }
+                }
+            }
+        }
+
+        // Cleanup run
+        if let Some(run_ctx) = self.ctx.finish_run(&run_id) {
+            let elapsed = run_ctx.metadata.started_at.elapsed();
+            debug!(run_id = %run_id, elapsed_ms = elapsed.as_millis(), "trigger pipeline completed");
+        }
+
+        Ok(last_output)
+    }
+}
+
+/// Find all nodes downstream from a specific node+port
+fn find_downstream_from_port(
+    source_node: &str,
+    port: &str,
+    plan: &ExecutionPlan,
+) -> std::collections::HashSet<String> {
+    let mut visited = std::collections::HashSet::new();
+    let mut queue = std::collections::VecDeque::new();
+
+    // Find direct targets from source_node:port
+    if let Some(port_map) = plan.edge_map.get(source_node) {
+        if let Some(edges) = port_map.get(port) {
+            for edge in edges {
+                if visited.insert(edge.to_node.clone()) {
+                    queue.push_back(edge.to_node.clone());
+                }
+            }
+        }
+    }
+
+    // BFS to find all transitive downstream nodes
+    while let Some(node_id) = queue.pop_front() {
+        if let Some(port_map) = plan.edge_map.get(&node_id) {
+            for edges in port_map.values() {
+                for edge in edges {
+                    if visited.insert(edge.to_node.clone()) {
+                        queue.push_back(edge.to_node.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    visited
+}
+
+/// Execute a single node: gather input → execute → store output. Returns the stored output value.
+async fn execute_single_node(
+    node_id: &str,
+    plan: &ExecutionPlan,
+    nodes: &HashMap<String, Box<dyn NodeExecutor>>,
+    ctx: &ExecutionContext,
+    run_id: &str,
+) -> NodeResult<serde_json::Value> {
+    let node = nodes
+        .get(node_id)
+        .ok_or_else(|| NodeError::Other(format!("node '{}' not found", node_id)))?;
+
+    // Service nodes are never executed directly
+    if node.node_kind() == NodeKind::Service {
+        return Ok(serde_json::Value::Null);
+    }
+
+    let input = gather_input(node_id, plan, ctx, run_id);
+
+    debug!(
+        node_id = %node_id,
+        node_type = %node.node_type(),
+        "executing node"
+    );
+
+    match node.execute(input, ctx).await {
+        Ok(output) => {
+            for log in &output.logs {
+                debug!(node_id = %node_id, "{}", log);
+            }
+
+            match output.status {
+                NodeStatus::Ok => {
+                    let stored = store_output(node_id, &output, plan, ctx, run_id);
+                    Ok(stored)
+                }
+                NodeStatus::Skip => {
+                    info!(node_id = %node_id, "node returned Skip");
+                    Ok(serde_json::Value::Null)
+                }
+                NodeStatus::Error => {
+                    error!(
+                        node_id = %node_id,
+                        error = ?output.error,
+                        "node returned Error status"
+                    );
+                    store_error_output(node_id, &output, plan, ctx, run_id);
+                    Ok(serde_json::json!({
+                        "error": output.error,
+                        "node_id": node_id
+                    }))
+                }
+            }
+        }
+        Err(e) => {
+            error!(node_id = %node_id, error = %e, "node execution failed");
+            Err(e)
+        }
+    }
+}
+
 /// Execute a batch pipeline (Source → Processor → Sink)
 pub async fn execute_batch(
     _graph: &AnpGraph,
@@ -29,7 +199,6 @@ pub async fn execute_batch(
 ) -> Result<(), ExecutionError> {
     let run_id = uuid::Uuid::new_v4().to_string();
 
-    // Find the first source node as the run trigger
     let source_node = plan
         .entry_nodes
         .first()
@@ -43,9 +212,6 @@ pub async fn execute_batch(
     for (stage_idx, stage) in plan.stages.iter().enumerate() {
         debug!(stage = stage_idx, nodes = ?stage.node_ids, "executing stage");
 
-        // Execute nodes in this stage
-        // For simplicity in v0.1, execute sequentially within a stage
-        // TODO: Use tokio::join! for true parallel execution
         for node_id in &stage.node_ids {
             let node = nodes
                 .get(node_id)
@@ -57,7 +223,6 @@ pub async fn execute_batch(
                 continue;
             }
 
-            // Gather input from upstream nodes via edge_map
             let input = gather_input(node_id, plan, ctx, &run_id);
 
             debug!(
@@ -68,14 +233,12 @@ pub async fn execute_batch(
 
             match node.execute(input, ctx).await {
                 Ok(output) => {
-                    // Log node output logs
                     for log in &output.logs {
                         debug!(node_id = %node_id, "{}", log);
                     }
 
                     match output.status {
                         NodeStatus::Ok => {
-                            // Store output for downstream consumption
                             store_output(node_id, &output, plan, ctx, &run_id);
                         }
                         NodeStatus::Skip => {
@@ -87,8 +250,7 @@ pub async fn execute_batch(
                                 error = ?output.error,
                                 "node returned Error status"
                             );
-                            // Store error output for error port routing
-                            store_output(node_id, &output, plan, ctx, &run_id);
+                            store_error_output(node_id, &output, plan, ctx, &run_id);
                         }
                     }
                 }
@@ -103,11 +265,79 @@ pub async fn execute_batch(
         }
     }
 
-    // Cleanup run
     if let Some(run_ctx) = ctx.finish_run(&run_id) {
         let elapsed = run_ctx.metadata.started_at.elapsed();
         info!(run_id = %run_id, elapsed_ms = elapsed.as_millis(), "batch execution completed");
     }
+
+    Ok(())
+}
+
+/// Execute service mode: start Service nodes, then wait for shutdown signal
+pub async fn execute_service(
+    _graph: &AnpGraph,
+    plan: Arc<ExecutionPlan>,
+    nodes: Arc<HashMap<String, Box<dyn NodeExecutor>>>,
+    ctx: Arc<ExecutionContext>,
+) -> Result<(), ExecutionError> {
+    info!("starting service mode execution");
+
+    // First, execute any Source nodes (batch-style)
+    for node_id in &plan.entry_nodes {
+        if let Some(node) = nodes.get(node_id) {
+            if node.node_kind() == NodeKind::Source {
+                let run_id = uuid::Uuid::new_v4().to_string();
+                ctx.start_run(run_id.clone(), node_id.clone());
+
+                let input = gather_input(node_id, &plan, &ctx, &run_id);
+                match node.execute(input, &ctx).await {
+                    Ok(output) => {
+                        store_output(node_id, &output, &plan, &ctx, &run_id);
+                    }
+                    Err(e) => {
+                        error!(node_id = %node_id, error = %e, "source node execution failed");
+                        return Err(ExecutionError::NodeFailed {
+                            node_id: node_id.clone(),
+                            message: e.to_string(),
+                        });
+                    }
+                }
+
+                ctx.finish_run(&run_id);
+            }
+        }
+    }
+
+    // Create PipelineTrigger for Service nodes
+    let trigger: Arc<dyn PipelineTrigger> = Arc::new(PipelineTriggerImpl {
+        plan: Arc::clone(&plan),
+        nodes: Arc::clone(&nodes),
+        ctx: Arc::clone(&ctx),
+    });
+
+    // Start all Service nodes
+    for node_id in &plan.entry_nodes {
+        if let Some(node) = nodes.get(node_id) {
+            if node.node_kind() == NodeKind::Service {
+                info!(node_id = %node_id, "starting service node");
+                node.start_service(node_id, Arc::clone(&trigger))
+                    .await
+                    .map_err(|e| ExecutionError::NodeFailed {
+                        node_id: node_id.clone(),
+                        message: e.to_string(),
+                    })?;
+            }
+        }
+    }
+
+    info!("all service nodes started, waiting for Ctrl+C...");
+
+    // Wait for Ctrl+C
+    tokio::signal::ctrl_c()
+        .await
+        .expect("failed to listen for Ctrl+C");
+
+    info!("shutdown signal received");
 
     Ok(())
 }
@@ -119,13 +349,13 @@ fn gather_input(
     ctx: &ExecutionContext,
     run_id: &str,
 ) -> serde_json::Value {
-    // Find all edges that target this node
     let mut inputs: Vec<serde_json::Value> = Vec::new();
+    let mut seen_sources = std::collections::HashSet::new();
 
     for (from_id, ports) in &plan.edge_map {
         for edges in ports.values() {
             for edge in edges {
-                if edge.to_node == node_id {
+                if edge.to_node == node_id && seen_sources.insert(from_id.clone()) {
                     if let Some(output) = ctx.get_node_output(run_id, from_id) {
                         inputs.push(output);
                     }
@@ -141,28 +371,56 @@ fn gather_input(
     }
 }
 
-/// Store node output into the context, routing through output ports
+/// Store node output into the context. Returns the stored value.
 fn store_output(
     node_id: &str,
     output: &NodeOutput,
     _plan: &ExecutionPlan,
     ctx: &ExecutionContext,
     run_id: &str,
-) {
-    // Store the default port value, or merge all ports
-    if let Some(default_val) = output.ports.get("default") {
-        ctx.set_node_output(run_id, node_id, default_val.clone());
+) -> serde_json::Value {
+    let val = if let Some(default_val) = output.ports.get("default") {
+        default_val.clone()
     } else if output.ports.len() == 1 {
-        // Single non-default port
-        let val = output.ports.values().next().unwrap();
-        ctx.set_node_output(run_id, node_id, val.clone());
+        output.ports.values().next().unwrap().clone()
     } else if !output.ports.is_empty() {
-        // Multiple ports — store as object
         let map: serde_json::Map<String, serde_json::Value> = output
             .ports
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
-        ctx.set_node_output(run_id, node_id, serde_json::Value::Object(map));
+        serde_json::Value::Object(map)
+    } else {
+        serde_json::Value::Null
+    };
+
+    ctx.set_node_output(run_id, node_id, val.clone());
+    val
+}
+
+/// Store error output — routes to "error" port edges if they exist, otherwise logs
+fn store_error_output(
+    node_id: &str,
+    output: &NodeOutput,
+    plan: &ExecutionPlan,
+    ctx: &ExecutionContext,
+    run_id: &str,
+) {
+    let error_val = serde_json::json!({
+        "error": output.error,
+        "node_id": node_id,
+        "ports": output.ports,
+    });
+
+    // Check if there's an "error" port in the edge_map for this node
+    if let Some(port_map) = plan.edge_map.get(node_id) {
+        if port_map.contains_key("error") {
+            ctx.set_node_output(run_id, node_id, error_val);
+            debug!(node_id = %node_id, "routed error to error port");
+            return;
+        }
     }
+
+    ctx.set_node_output(run_id, node_id, error_val);
+    warn!(node_id = %node_id, error = ?output.error, "no error port found, error logged");
 }

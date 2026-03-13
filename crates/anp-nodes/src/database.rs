@@ -64,7 +64,7 @@ impl NodeExecutor for DatabaseNode {
         let op = input
             .get("op")
             .and_then(|v| v.as_str())
-            .unwrap_or("get");
+            .unwrap_or("list");
 
         match op {
             "set" => {

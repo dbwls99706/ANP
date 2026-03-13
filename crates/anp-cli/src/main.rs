@@ -46,6 +46,11 @@ enum Commands {
         /// Path to the .anp.json graph file
         graph: PathBuf,
     },
+    /// Initialize a new ANP project
+    Init {
+        /// Project name
+        name: String,
+    },
 }
 
 fn create_registry() -> NodeRegistry {
@@ -71,6 +76,7 @@ async fn main() {
         Commands::Info { graph: path } => cmd_info(path),
         Commands::Explain { graph: path } => cmd_explain(path),
         Commands::Graph { graph: path } => cmd_graph(path),
+        Commands::Init { name } => cmd_init(name),
     }
 }
 
@@ -246,6 +252,68 @@ fn describe_node(node: &anp_core::graph::spec::Node) -> String {
         }
         other => format!("'{}' node", other),
     }
+}
+
+fn cmd_init(name: String) {
+    let dir = PathBuf::from(&name);
+    if dir.exists() {
+        eprintln!("Error: directory '{}' already exists", name);
+        std::process::exit(1);
+    }
+
+    std::fs::create_dir_all(&dir).unwrap_or_else(|e| {
+        eprintln!("Error creating directory: {}", e);
+        std::process::exit(1);
+    });
+
+    let graph_content = format!(
+        r#"{{
+  "version": "0.1",
+  "metadata": {{
+    "name": "{}",
+    "description": "A new ANP application"
+  }},
+  "nodes": [
+    {{
+      "id": "source",
+      "node_type": "file_read",
+      "kind": "source",
+      "config": {{ "path": "data.txt" }},
+      "inputs": [],
+      "outputs": [{{ "name": "default" }}]
+    }},
+    {{
+      "id": "output",
+      "node_type": "console",
+      "kind": "sink",
+      "config": {{}},
+      "inputs": [{{ "name": "default" }}],
+      "outputs": []
+    }}
+  ],
+  "edges": [
+    {{ "id": "e1", "from_node": "source", "to_node": "output" }}
+  ]
+}}"#,
+        name
+    );
+
+    let graph_path = dir.join("main.anp.json");
+    std::fs::write(&graph_path, graph_content).unwrap_or_else(|e| {
+        eprintln!("Error writing graph file: {}", e);
+        std::process::exit(1);
+    });
+
+    let data_path = dir.join("data.txt");
+    std::fs::write(&data_path, format!("Hello from {}!\n", name)).unwrap_or_else(|e| {
+        eprintln!("Error writing data file: {}", e);
+        std::process::exit(1);
+    });
+
+    println!("Created ANP project '{}'", name);
+    println!();
+    println!("  cd {}", name);
+    println!("  anp run main.anp.json");
 }
 
 fn cmd_graph(path: PathBuf) {
