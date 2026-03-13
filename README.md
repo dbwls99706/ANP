@@ -12,14 +12,20 @@ Other AI coding tools generate source code. ANP generates **executable graphs** 
 
 ## Demo
 
-Run an HTTP API defined entirely as a graph — zero source code:
+This REST API has **no source code** — just a graph:
+
+```
+┌──────────┐  GET /users   ┌──────────┐       ┌──────────┐
+│  http    ├──────────────▶│ database ├──────▶│ console  │
+│  server  │  POST /users  │  (KV)    │       │ (stdout) │
+│  :3000   ├──────────────▶│          │       │          │
+└──────────┘               └──────────┘       └──────────┘
+   Service                   Processor             Sink
+```
 
 ```bash
 $ cargo run -p anp-cli -- run examples/simple_api.anp.json
 
- INFO starting ANP engine name=Simple REST API
- INFO execution plan created stages=3 entry_nodes=["server"]
- INFO starting service mode execution
  INFO HTTP server listening port=3000
  INFO all service nodes started, waiting for Ctrl+C...
 ```
@@ -221,7 +227,15 @@ ANP_Tool/
 
 ## Future Vision
 
-ANP aims to become an AI-native software runtime where applications are generated and executed directly from natural language descriptions — no source code in the loop.
+ANP's goal is to make software generation fully graph-native. Instead of generating source code, AI systems will generate executable graphs that the runtime executes directly — no compilation, no boilerplate, no source code in the loop.
+
+```
+"Build a REST API for todos"
+        ↓ LLM Planner
+   ANP Graph (JSON)
+        ↓ Runtime
+   Running HTTP API
+```
 
 ## License
 
