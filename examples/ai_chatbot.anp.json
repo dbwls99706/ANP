@@ -1,0 +1,66 @@
+{
+  "version": "0.1",
+  "metadata": {
+    "name": "AI Chatbot",
+    "description": "A chatbot that answers questions using LLM — the 'AI calling AI' paradigm. No code, just a graph."
+  },
+  "nodes": [
+    {
+      "id": "server",
+      "node_type": "http_server",
+      "kind": "service",
+      "config": {
+        "port": 3000,
+        "routes": [
+          { "path": "/chat", "method": "POST", "output_port": "chat" },
+          { "path": "/health", "output_port": "health" }
+        ]
+      },
+      "inputs": [],
+      "outputs": [
+        { "name": "default" },
+        { "name": "chat" },
+        { "name": "health" }
+      ]
+    },
+    {
+      "id": "build_prompt",
+      "node_type": "template",
+      "kind": "processor",
+      "config": {
+        "template": "{{message}}"
+      },
+      "inputs": [{ "name": "default" }],
+      "outputs": [{ "name": "default" }]
+    },
+    {
+      "id": "llm",
+      "node_type": "llm_call",
+      "kind": "processor",
+      "config": {
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "system_prompt": "You are a helpful, concise assistant. Answer in 2-3 sentences max.",
+        "temperature": 0.7,
+        "max_tokens": 256
+      },
+      "inputs": [{ "name": "default" }],
+      "outputs": [{ "name": "default" }]
+    },
+    {
+      "id": "log",
+      "node_type": "console",
+      "kind": "sink",
+      "config": {
+        "prefix": "[chatbot] "
+      },
+      "inputs": [{ "name": "default" }],
+      "outputs": []
+    }
+  ],
+  "edges": [
+    { "id": "e1", "from_node": "server", "from_port": "chat", "to_node": "build_prompt", "to_port": "default" },
+    { "id": "e2", "from_node": "build_prompt", "to_node": "llm" },
+    { "id": "e3", "from_node": "llm", "to_node": "log" }
+  ]
+}

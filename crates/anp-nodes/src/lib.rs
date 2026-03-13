@@ -1,8 +1,12 @@
+pub mod conditional;
 pub mod console;
 pub mod database;
 pub mod file_io;
 pub mod filter;
+pub mod http_client;
 pub mod http_server;
+pub mod llm_call;
+pub mod template;
 pub mod transform;
 
 use anp_core::graph::spec::{NodeKind, PortSpec};
@@ -157,6 +161,101 @@ pub fn register_all(registry: &mut NodeRegistry) {
                         "description": "Initial key-value pairs to pre-populate"
                     }
                 }
+            }),
+        },
+    });
+
+    // LLM Call (Processor) — AI calling AI within a graph
+    registry.register(NodeInfo {
+        factory: || Box::new(llm_call::LlmCallNode::new()),
+        schema: NodeSchema {
+            node_type: "llm_call".to_string(),
+            kind: NodeKind::Processor,
+            description: "Calls an LLM (OpenAI or Anthropic) — AI invoking AI within a graph".to_string(),
+            inputs: vec![PortSpec::new("default")],
+            outputs: vec![PortSpec::new("default")],
+            config_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "provider": { "type": "string", "enum": ["openai", "anthropic"], "default": "openai" },
+                    "model": { "type": "string", "description": "Model name (e.g., gpt-4o-mini, claude-sonnet-4-20250514)" },
+                    "system_prompt": { "type": "string", "description": "System prompt for the LLM" },
+                    "temperature": { "type": "number", "minimum": 0, "maximum": 2, "default": 0.7 },
+                    "max_tokens": { "type": "integer", "minimum": 1, "maximum": 128000, "default": 1024 },
+                    "timeout_secs": { "type": "integer", "minimum": 1, "maximum": 300, "default": 60 }
+                }
+            }),
+        },
+    });
+
+    // HTTP Client (Processor) — outbound HTTP requests
+    registry.register(NodeInfo {
+        factory: || Box::new(http_client::HttpClientNode::new()),
+        schema: NodeSchema {
+            node_type: "http_client".to_string(),
+            kind: NodeKind::Processor,
+            description: "Makes outbound HTTP requests (GET, POST, PUT, DELETE, etc.)".to_string(),
+            inputs: vec![PortSpec::new("default")],
+            outputs: vec![PortSpec::new("default")],
+            config_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "url": { "type": "string", "description": "Target URL" },
+                    "method": { "type": "string", "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"], "default": "GET" },
+                    "headers": { "type": "object", "description": "HTTP headers as key-value pairs" },
+                    "timeout_secs": { "type": "integer", "minimum": 1, "maximum": 300, "default": 30 }
+                }
+            }),
+        },
+    });
+
+    // Template (Processor) — renders string templates with {{variable}} placeholders
+    registry.register(NodeInfo {
+        factory: || Box::new(template::TemplateNode::new()),
+        schema: NodeSchema {
+            node_type: "template".to_string(),
+            kind: NodeKind::Processor,
+            description: "Renders string templates with {{variable}} placeholders and dot-path support".to_string(),
+            inputs: vec![PortSpec::new("default")],
+            outputs: vec![PortSpec::new("default")],
+            config_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "template": { "type": "string", "description": "Template string with {{placeholders}}" }
+                },
+                "required": ["template"]
+            }),
+        },
+    });
+
+    // Conditional (Processor) — routes data to different ports based on conditions
+    registry.register(NodeInfo {
+        factory: || Box::new(conditional::ConditionalNode::new()),
+        schema: NodeSchema {
+            node_type: "conditional".to_string(),
+            kind: NodeKind::Processor,
+            description: "Routes data to different output ports based on field conditions (if/else branching)".to_string(),
+            inputs: vec![PortSpec::new("default")],
+            outputs: vec![PortSpec::new("default")],
+            config_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "field": { "type": "string", "description": "Dot-path to the field to evaluate" },
+                    "branches": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "op": { "type": "string", "enum": ["eq", "neq", "gt", "gte", "lt", "lte", "contains", "exists"] },
+                                "value": { "description": "Value to compare against" },
+                                "port": { "type": "string", "description": "Output port name if condition matches" }
+                            },
+                            "required": ["op", "port"]
+                        }
+                    },
+                    "default_port": { "type": "string", "default": "default" }
+                },
+                "required": ["field", "branches"]
             }),
         },
     });
