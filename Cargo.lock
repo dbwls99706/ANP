@@ -46,6 +46,7 @@ dependencies = [
  "anp-core",
  "async-trait",
  "axum",
+ "reqwest",
  "serde",
  "serde_json",
  "tokio",

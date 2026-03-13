@@ -1,0 +1,70 @@
+{
+  "version": "0.1",
+  "metadata": {
+    "name": "Smart REST API",
+    "description": "A REST API with AI-powered enrichment — requests go through LLM processing before storage. Built entirely as a graph."
+  },
+  "nodes": [
+    {
+      "id": "server",
+      "node_type": "http_server",
+      "kind": "service",
+      "config": {
+        "port": 3000,
+        "routes": [
+          { "path": "/items", "method": "POST", "output_port": "create" },
+          { "path": "/items", "method": "GET", "output_port": "list" },
+          { "path": "/analyze", "method": "POST", "output_port": "analyze" }
+        ]
+      },
+      "inputs": [],
+      "outputs": [
+        { "name": "default" },
+        { "name": "create" },
+        { "name": "list" },
+        { "name": "analyze" }
+      ]
+    },
+    {
+      "id": "db",
+      "node_type": "database",
+      "kind": "processor",
+      "config": {
+        "initial": {}
+      },
+      "inputs": [{ "name": "default" }],
+      "outputs": [{ "name": "default" }]
+    },
+    {
+      "id": "ai_analyze",
+      "node_type": "llm_call",
+      "kind": "processor",
+      "config": {
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "system_prompt": "You are a data analyst. Analyze the given data and return a JSON summary with keys: sentiment, category, summary. Be concise.",
+        "temperature": 0.3,
+        "max_tokens": 256
+      },
+      "inputs": [{ "name": "default" }],
+      "outputs": [{ "name": "default" }]
+    },
+    {
+      "id": "log",
+      "node_type": "console",
+      "kind": "sink",
+      "config": {
+        "prefix": "[smart-api] "
+      },
+      "inputs": [{ "name": "default" }],
+      "outputs": []
+    }
+  ],
+  "edges": [
+    { "id": "e1", "from_node": "server", "from_port": "create", "to_node": "db", "to_port": "default" },
+    { "id": "e2", "from_node": "server", "from_port": "list", "to_node": "db", "to_port": "default" },
+    { "id": "e3", "from_node": "server", "from_port": "analyze", "to_node": "ai_analyze", "to_port": "default" },
+    { "id": "e4", "from_node": "db", "to_node": "log" },
+    { "id": "e5", "from_node": "ai_analyze", "to_node": "log" }
+  ]
+}

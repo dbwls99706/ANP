@@ -1,0 +1,72 @@
+{
+  "version": "0.1",
+  "metadata": {
+    "name": "AI Data Pipeline",
+    "description": "Reads data, fetches external API, enriches with AI, filters, and outputs — a complete ETL pipeline as a graph."
+  },
+  "nodes": [
+    {
+      "id": "source",
+      "node_type": "file_read",
+      "kind": "source",
+      "config": {
+        "path": "examples/sample_data.json"
+      },
+      "inputs": [],
+      "outputs": [{ "name": "default" }]
+    },
+    {
+      "id": "parse",
+      "node_type": "transform",
+      "kind": "processor",
+      "config": {
+        "mapping": {
+          "name": "name",
+          "email": "email",
+          "score": "score",
+          "department": "department"
+        }
+      },
+      "inputs": [{ "name": "default" }],
+      "outputs": [{ "name": "default" }]
+    },
+    {
+      "id": "high_score_filter",
+      "node_type": "filter",
+      "kind": "processor",
+      "config": {
+        "field": "score",
+        "op": "gte",
+        "value": 80
+      },
+      "inputs": [{ "name": "default" }],
+      "outputs": [{ "name": "default" }]
+    },
+    {
+      "id": "format_report",
+      "node_type": "template",
+      "kind": "processor",
+      "config": {
+        "template": "Top performer: {{name}} ({{department}}) — Score: {{score}}"
+      },
+      "inputs": [{ "name": "default" }],
+      "outputs": [{ "name": "default" }]
+    },
+    {
+      "id": "output",
+      "node_type": "console",
+      "kind": "sink",
+      "config": {
+        "prefix": "[pipeline] "
+      },
+      "inputs": [{ "name": "default" }],
+      "outputs": []
+    }
+  ],
+  "edges": [
+    { "id": "e1", "from_node": "source", "to_node": "parse" },
+    { "id": "e2", "from_node": "parse", "to_node": "high_score_filter" },
+    { "id": "e3", "from_node": "high_score_filter", "to_node": "format_report" },
+    { "id": "e4", "from_node": "format_report", "to_node": "output" }
+  ]
+}
