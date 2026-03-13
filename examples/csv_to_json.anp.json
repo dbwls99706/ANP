@@ -23,7 +23,8 @@
         "type": "map",
         "mapping": {
           "full_name": "name",
-          "years_old": "age"
+          "contact": "email",
+          "rating": "score"
         }
       },
       "inputs": [{ "name": "default" }],
@@ -34,7 +35,7 @@
       "node_type": "file_write",
       "kind": "sink",
       "config": {
-        "path": "/tmp/anp_output.json"
+        "path": "output.json"
       },
       "inputs": [{ "name": "default" }],
       "outputs": []
