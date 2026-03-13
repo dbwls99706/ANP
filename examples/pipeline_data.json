@@ -1,0 +1,6 @@
+[
+  { "name": "Alice", "age": 25, "address": { "city": "Seoul" } },
+  { "name": "Bob", "age": 17, "address": { "city": "Busan" } },
+  { "name": "Charlie", "age": 30, "address": { "city": "Incheon" } },
+  { "name": "Diana", "age": 19, "address": { "city": "Daegu" } }
+]

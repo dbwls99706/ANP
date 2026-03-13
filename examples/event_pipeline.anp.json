@@ -1,0 +1,63 @@
+{
+  "version": "0.1",
+  "metadata": {
+    "name": "Event Pipeline",
+    "description": "HTTP server → transform → database → console logging"
+  },
+  "nodes": [
+    {
+      "id": "server",
+      "node_type": "http_server",
+      "kind": "service",
+      "config": {
+        "port": 8080,
+        "routes": [
+          { "path": "/events", "method": "POST", "output_port": "events" }
+        ]
+      },
+      "inputs": [],
+      "outputs": [
+        { "name": "default" },
+        { "name": "events" }
+      ]
+    },
+    {
+      "id": "transform",
+      "node_type": "transform",
+      "kind": "processor",
+      "config": {
+        "type": "map",
+        "mapping": {
+          "event_type": "type",
+          "payload": "data",
+          "timestamp": "ts"
+        }
+      },
+      "inputs": [{ "name": "default" }],
+      "outputs": [{ "name": "default" }]
+    },
+    {
+      "id": "store",
+      "node_type": "database",
+      "kind": "processor",
+      "config": {},
+      "inputs": [{ "name": "default" }],
+      "outputs": [{ "name": "default" }]
+    },
+    {
+      "id": "logger",
+      "node_type": "console",
+      "kind": "sink",
+      "config": {
+        "prefix": "[event] "
+      },
+      "inputs": [{ "name": "default" }],
+      "outputs": []
+    }
+  ],
+  "edges": [
+    { "id": "e1", "from_node": "server", "to_node": "transform" },
+    { "id": "e2", "from_node": "transform", "to_node": "store" },
+    { "id": "e3", "from_node": "store", "to_node": "logger" }
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "version": "0.1",
+  "metadata": {
+    "name": "Simple REST API",
+    "description": "HTTP server connected to an in-memory database — AI-native REST server"
+  },
+  "nodes": [
+    {
+      "id": "server",
+      "node_type": "http_server",
+      "kind": "service",
+      "config": {
+        "port": 3000,
+        "routes": [
+          { "path": "/users", "method": "GET", "output_port": "users_get" },
+          { "path": "/users", "method": "POST", "output_port": "users_post" },
+          { "path": "/health", "output_port": "health" }
+        ]
+      },
+      "inputs": [],
+      "outputs": [
+        { "name": "default" },
+        { "name": "users_get" },
+        { "name": "users_post" },
+        { "name": "health" }
+      ]
+    },
+    {
+      "id": "db",
+      "node_type": "database",
+      "kind": "processor",
+      "config": {
+        "initial": {
+          "user:1": { "name": "Alice", "age": 25 },
+          "user:2": { "name": "Bob", "age": 30 }
+        }
+      },
+      "inputs": [{ "name": "default" }],
+      "outputs": [{ "name": "default" }]
+    },
+    {
+      "id": "output",
+      "node_type": "console",
+      "kind": "sink",
+      "config": {},
+      "inputs": [{ "name": "default" }],
+      "outputs": []
+    }
+  ],
+  "edges": [
+    { "id": "e1", "from_node": "server", "to_node": "db" },
+    { "id": "e2", "from_node": "db", "to_node": "output" }
+  ]
+}
