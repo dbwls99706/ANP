@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
@@ -46,10 +47,35 @@ pub trait NodeExecutor: Send + Sync {
         ctx: &ExecutionContext,
     ) -> NodeResult<NodeOutput>;
 
+    /// Start a long-running service (Service nodes only).
+    /// The service should spawn its event loop and call `trigger` for each event.
+    /// Default implementation is a no-op, so non-Service nodes don't need to implement this.
+    async fn start_service(
+        &self,
+        _node_id: &str,
+        _trigger: Arc<dyn PipelineTrigger>,
+    ) -> NodeResult<()> {
+        Ok(())
+    }
+
     /// Shutdown and clean up resources
     async fn shutdown(&mut self) -> NodeResult<()> {
         Ok(())
     }
+}
+
+/// Trait for Service nodes to trigger downstream pipeline execution.
+/// The runtime provides an implementation; Service nodes call `trigger()` on each event.
+#[async_trait::async_trait]
+pub trait PipelineTrigger: Send + Sync {
+    /// Execute the downstream pipeline from a source node's output port.
+    /// Returns the final output value from the pipeline run.
+    async fn trigger(
+        &self,
+        source_node: &str,
+        port: &str,
+        data: serde_json::Value,
+    ) -> NodeResult<serde_json::Value>;
 }
 
 /// Output from a node execution
