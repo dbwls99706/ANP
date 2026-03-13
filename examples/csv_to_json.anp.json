@@ -1,0 +1,47 @@
+{
+  "version": "0.1",
+  "metadata": {
+    "name": "CSV to JSON",
+    "description": "Reads a text file, transforms the content, and writes JSON output"
+  },
+  "nodes": [
+    {
+      "id": "reader",
+      "node_type": "file_read",
+      "kind": "source",
+      "config": {
+        "path": "examples/sample_data.json"
+      },
+      "inputs": [],
+      "outputs": [{ "name": "default" }]
+    },
+    {
+      "id": "transform",
+      "node_type": "transform",
+      "kind": "processor",
+      "config": {
+        "type": "map",
+        "mapping": {
+          "full_name": "name",
+          "years_old": "age"
+        }
+      },
+      "inputs": [{ "name": "default" }],
+      "outputs": [{ "name": "default" }]
+    },
+    {
+      "id": "writer",
+      "node_type": "file_write",
+      "kind": "sink",
+      "config": {
+        "path": "/tmp/anp_output.json"
+      },
+      "inputs": [{ "name": "default" }],
+      "outputs": []
+    }
+  ],
+  "edges": [
+    { "id": "e1", "from_node": "reader", "to_node": "transform" },
+    { "id": "e2", "from_node": "transform", "to_node": "writer" }
+  ]
+}

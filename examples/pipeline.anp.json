@@ -1,0 +1,61 @@
+{
+  "version": "0.1",
+  "metadata": {
+    "name": "Data Pipeline",
+    "description": "Reads JSON data, transforms fields, filters by condition, and prints results"
+  },
+  "nodes": [
+    {
+      "id": "reader",
+      "node_type": "file_read",
+      "kind": "source",
+      "config": {
+        "path": "examples/pipeline_data.json"
+      },
+      "inputs": [],
+      "outputs": [{ "name": "default" }]
+    },
+    {
+      "id": "transform",
+      "node_type": "transform",
+      "kind": "processor",
+      "config": {
+        "type": "map",
+        "mapping": {
+          "name": "name",
+          "age": "age",
+          "city": "address.city"
+        }
+      },
+      "inputs": [{ "name": "default" }],
+      "outputs": [{ "name": "default" }]
+    },
+    {
+      "id": "filter",
+      "node_type": "filter",
+      "kind": "processor",
+      "config": {
+        "field": "age",
+        "op": "gte",
+        "value": 20
+      },
+      "inputs": [{ "name": "default" }],
+      "outputs": [{ "name": "default" }]
+    },
+    {
+      "id": "output",
+      "node_type": "console",
+      "kind": "sink",
+      "config": {
+        "prefix": "[result] "
+      },
+      "inputs": [{ "name": "default" }],
+      "outputs": []
+    }
+  ],
+  "edges": [
+    { "id": "e1", "from_node": "reader", "to_node": "transform" },
+    { "id": "e2", "from_node": "transform", "to_node": "filter" },
+    { "id": "e3", "from_node": "filter", "to_node": "output" }
+  ]
+}

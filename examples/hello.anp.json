@@ -1,0 +1,36 @@
+{
+  "version": "0.1",
+  "metadata": {
+    "name": "Hello ANP",
+    "description": "The simplest ANP graph — prints Hello, ANP! to the console"
+  },
+  "nodes": [
+    {
+      "id": "source",
+      "node_type": "file_read",
+      "kind": "source",
+      "config": {
+        "path": "examples/hello_data.txt"
+      },
+      "inputs": [],
+      "outputs": [{ "name": "default" }]
+    },
+    {
+      "id": "output",
+      "node_type": "console",
+      "kind": "sink",
+      "config": {},
+      "inputs": [{ "name": "default" }],
+      "outputs": []
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from_node": "source",
+      "from_port": "default",
+      "to_node": "output",
+      "to_port": "default"
+    }
+  ]
+}
