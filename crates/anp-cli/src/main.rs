@@ -1,12 +1,16 @@
 use std::path::PathBuf;
+use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
 
-use anp_core::graph::spec::NodeKind;
+use anp_core::graph::editor::GraphEditor;
+use anp_core::graph::spec::{AnpGraph, NodeKind};
 use anp_core::graph::{loader, validate};
 use anp_core::node::registry::NodeRegistry;
 use anp_core::runtime::engine::AnpEngine;
+use anp_planner::generator::AnpPlanner;
+use anp_planner::llm::auto_detect_client;
 
 #[derive(Parser)]
 #[command(
@@ -51,7 +55,48 @@ enum Commands {
         /// Project name
         name: String,
     },
+    /// Generate an ANP graph from a natural language prompt using an LLM
+    Prompt {
+        /// The prompt describing the desired application
+        prompt: String,
+        /// Save graph to file instead of printing to stdout
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+        /// Generate and immediately run the graph
+        #[arg(long)]
+        run: bool,
+        /// Show a human-readable explanation of the generated graph
+        #[arg(long)]
+        explain: bool,
+    },
+    /// Edit an existing ANP graph using a natural language instruction
+    Edit {
+        /// Path to the .anp.json graph file to edit
+        graph: PathBuf,
+        /// Natural language instruction for how to modify the graph
+        instruction: String,
+        /// Show the generated operations without applying them
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
+
+/// Unified error type for CLI operations.
+#[derive(Debug)]
+enum CliError {
+    /// Generic error with message
+    Message(String),
+}
+
+impl std::fmt::Display for CliError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CliError::Message(msg) => write!(f, "{}", msg),
+        }
+    }
+}
+
+type CliResult = Result<(), CliError>;
 
 fn create_registry() -> NodeRegistry {
     let mut registry = NodeRegistry::new();
@@ -59,8 +104,23 @@ fn create_registry() -> NodeRegistry {
     registry
 }
 
+fn require_llm_client() -> Result<Box<dyn anp_planner::llm::LlmClient>, CliError> {
+    auto_detect_client().map_err(|_| {
+        CliError::Message(
+            "No LLM API key found.\n\
+             Set ANTHROPIC_API_KEY or OPENAI_API_KEY environment variable.\n\n\
+             Example:\n  export ANTHROPIC_API_KEY=sk-ant-..."
+                .to_string(),
+        )
+    })
+}
+
+fn load_graph(path: &std::path::Path) -> Result<AnpGraph, CliError> {
+    loader::load_from_file(path).map_err(|e| CliError::Message(format!("Error loading graph: {}", e)))
+}
+
 #[tokio::main]
-async fn main() {
+async fn main() -> ExitCode {
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
@@ -70,142 +130,152 @@ async fn main() {
 
     let cli = Cli::parse();
 
-    match cli.command {
+    let result = match cli.command {
         Commands::Run { graph: path } => cmd_run(path).await,
         Commands::Validate { graph: path } => cmd_validate(path),
         Commands::Info { graph: path } => cmd_info(path),
         Commands::Explain { graph: path } => cmd_explain(path),
         Commands::Graph { graph: path } => cmd_graph(path),
         Commands::Init { name } => cmd_init(name),
+        Commands::Prompt {
+            prompt,
+            output,
+            run,
+            explain,
+        } => cmd_prompt(prompt, output, run, explain).await,
+        Commands::Edit {
+            graph,
+            instruction,
+            dry_run,
+        } => cmd_edit(graph, instruction, dry_run).await,
+    };
+
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("Error: {}", e);
+            ExitCode::FAILURE
+        }
     }
 }
 
-async fn cmd_run(path: PathBuf) {
+async fn cmd_run(path: PathBuf) -> CliResult {
     let registry = create_registry();
     let engine = AnpEngine::new(registry);
-
-    match engine.run_file(&path).await {
-        Ok(()) => {}
-        Err(e) => {
-            eprintln!("Error: {}", e);
-            std::process::exit(1);
-        }
-    }
+    engine
+        .run_file(&path)
+        .await
+        .map_err(|e| CliError::Message(e.to_string()))
 }
 
-fn cmd_validate(path: PathBuf) {
-    match loader::load_from_file(&path) {
-        Ok(graph) => match validate::validate(&graph) {
-            Ok(()) => {
-                println!("Graph '{}' is valid.", graph.metadata.name);
-            }
-            Err(errors) => {
-                eprintln!("Validation errors:");
-                for err in errors {
-                    eprintln!("  - {}", err);
-                }
-                std::process::exit(1);
-            }
-        },
-        Err(e) => {
-            eprintln!("Error loading graph: {}", e);
-            std::process::exit(1);
+async fn cmd_prompt(prompt: String, output: Option<PathBuf>, run: bool, explain: bool) -> CliResult {
+    let client = require_llm_client()?;
+    let registry = create_registry();
+    let planner = AnpPlanner::new(client, &registry);
+
+    let graph = planner
+        .generate(&prompt)
+        .await
+        .map_err(|e| CliError::Message(e.to_string()))?;
+
+    let json = serde_json::to_string_pretty(&graph)
+        .map_err(|e| CliError::Message(format!("Error serializing graph: {}", e)))?;
+
+    match &output {
+        Some(path) => {
+            std::fs::write(path, &json)
+                .map_err(|e| CliError::Message(format!("Error writing file: {}", e)))?;
+            println!("Graph saved to {}", path.display());
+        }
+        None => {
+            println!("{}", json);
         }
     }
-}
 
-fn cmd_info(path: PathBuf) {
-    let graph = match loader::load_from_file(&path) {
-        Ok(g) => g,
-        Err(e) => {
-            eprintln!("Error: {}", e);
-            std::process::exit(1);
-        }
-    };
-
-    println!("ANP Graph: {}", graph.metadata.name);
-    if !graph.metadata.description.is_empty() {
-        println!("Description: {}", graph.metadata.description);
-    }
-    println!("Version: {}", graph.version);
-    println!("Nodes: {}", graph.nodes.len());
-    println!("Edges: {}", graph.edges.len());
-    println!();
-
-    // Node details
-    println!("Nodes:");
-    for node in &graph.nodes {
-        println!(
-            "  [{:>9}] {} (type: {})",
-            node.kind.to_string(),
-            node.id,
-            node.node_type
-        );
-    }
-
-    if !graph.edges.is_empty() {
+    if explain {
         println!();
-        println!("Edges:");
-        for edge in &graph.edges {
-            println!(
-                "  {} {}.{} -> {}.{}",
-                edge.id, edge.from_node, edge.from_port, edge.to_node, edge.to_port
-            );
-        }
+        explain_graph(&graph);
     }
+
+    if run {
+        println!();
+        let engine = AnpEngine::new(registry);
+        engine
+            .run(&graph)
+            .await
+            .map_err(|e| CliError::Message(format!("Runtime error: {}", e)))?;
+    }
+
+    Ok(())
 }
 
-fn cmd_explain(path: PathBuf) {
-    let graph = match loader::load_from_file(&path) {
-        Ok(g) => g,
-        Err(e) => {
-            eprintln!("Error: {}", e);
-            std::process::exit(1);
-        }
-    };
+async fn cmd_edit(path: PathBuf, instruction: String, dry_run: bool) -> CliResult {
+    let mut graph = load_graph(&path)?;
+    let client = require_llm_client()?;
+    let registry = create_registry();
+    let planner = AnpPlanner::new(client, &registry);
 
+    let ops = planner
+        .generate_edit(&instruction, &graph)
+        .await
+        .map_err(|e| CliError::Message(e.to_string()))?;
+
+    if ops.is_empty() {
+        println!("No changes needed.");
+        return Ok(());
+    }
+
+    println!("Operations ({}):", ops.len());
+    for op in &ops {
+        println!("  {}", op);
+    }
+
+    if dry_run {
+        return Ok(());
+    }
+
+    {
+        let mut editor = GraphEditor::new(&mut graph, &registry);
+        editor
+            .apply_all(ops)
+            .map_err(|e| CliError::Message(format!("Error applying operations: {}", e)))?;
+    }
+
+    if let Err(errors) = validate::validate(&graph) {
+        eprintln!("Warning: edited graph has validation errors:");
+        for err in &errors {
+            eprintln!("  - {}", err);
+        }
+    }
+
+    let json = serde_json::to_string_pretty(&graph)
+        .map_err(|e| CliError::Message(format!("Error serializing graph: {}", e)))?;
+
+    std::fs::write(&path, &json)
+        .map_err(|e| CliError::Message(format!("Error writing file: {}", e)))?;
+
+    println!();
+    println!("Graph saved to {}", path.display());
+    Ok(())
+}
+
+fn explain_graph(graph: &AnpGraph) {
     println!("This graph defines: {}", graph.metadata.name);
     if !graph.metadata.description.is_empty() {
         println!("{}", graph.metadata.description);
     }
     println!();
 
-    // Group nodes by kind
-    let services: Vec<_> = graph
-        .nodes
-        .iter()
-        .filter(|n| n.kind == NodeKind::Service)
-        .collect();
-    let sources: Vec<_> = graph
-        .nodes
-        .iter()
-        .filter(|n| n.kind == NodeKind::Source)
-        .collect();
-    let processors: Vec<_> = graph
-        .nodes
-        .iter()
-        .filter(|n| n.kind == NodeKind::Processor)
-        .collect();
-    let sinks: Vec<_> = graph
-        .nodes
-        .iter()
-        .filter(|n| n.kind == NodeKind::Sink)
-        .collect();
-
-    for node in &services {
-        println!("  [service] {} starts as a long-running service", describe_node(node));
-    }
-    for node in &sources {
-        println!("  [source] {} produces data", describe_node(node));
-    }
-    for node in &processors {
-        println!("  [process] {} transforms data", describe_node(node));
-    }
-    for node in &sinks {
-        println!("  [output] {} consumes data", describe_node(node));
+    for node in &graph.nodes {
+        let kind_label = match node.kind {
+            NodeKind::Service => "service",
+            NodeKind::Source => "source",
+            NodeKind::Processor => "process",
+            NodeKind::Sink => "output",
+        };
+        println!("  [{}] {}", kind_label, describe_node(node));
     }
 
-    // Show flow
     if !graph.edges.is_empty() {
         println!();
         println!("Data flow:");
@@ -226,6 +296,108 @@ fn cmd_explain(path: PathBuf) {
             );
         }
     }
+}
+
+fn cmd_validate(path: PathBuf) -> CliResult {
+    let graph = load_graph(&path)?;
+    match validate::validate(&graph) {
+        Ok(()) => {
+            println!("Graph '{}' is valid.", graph.metadata.name);
+            Ok(())
+        }
+        Err(errors) => {
+            let mut msg = "Validation errors:\n".to_string();
+            for err in &errors {
+                msg.push_str(&format!("  - {}\n", err));
+            }
+            Err(CliError::Message(msg))
+        }
+    }
+}
+
+fn cmd_info(path: PathBuf) -> CliResult {
+    let graph = load_graph(&path)?;
+
+    println!("ANP Graph: {}", graph.metadata.name);
+    if !graph.metadata.description.is_empty() {
+        println!("Description: {}", graph.metadata.description);
+    }
+    println!("Version: {}", graph.version);
+    println!("Nodes: {}", graph.nodes.len());
+    println!("Edges: {}", graph.edges.len());
+    println!();
+
+    println!("Nodes:");
+    for node in &graph.nodes {
+        println!(
+            "  [{:>9}] {} (type: {})",
+            node.kind, node.id, node.node_type
+        );
+    }
+
+    if !graph.edges.is_empty() {
+        println!();
+        println!("Edges:");
+        for edge in &graph.edges {
+            println!(
+                "  {} {}.{} -> {}.{}",
+                edge.id, edge.from_node, edge.from_port, edge.to_node, edge.to_port
+            );
+        }
+    }
+
+    Ok(())
+}
+
+fn cmd_explain(path: PathBuf) -> CliResult {
+    let graph = load_graph(&path)?;
+
+    println!("This graph defines: {}", graph.metadata.name);
+    if !graph.metadata.description.is_empty() {
+        println!("{}", graph.metadata.description);
+    }
+    println!();
+
+    let services: Vec<_> = graph.nodes.iter().filter(|n| n.kind == NodeKind::Service).collect();
+    let sources: Vec<_> = graph.nodes.iter().filter(|n| n.kind == NodeKind::Source).collect();
+    let processors: Vec<_> = graph.nodes.iter().filter(|n| n.kind == NodeKind::Processor).collect();
+    let sinks: Vec<_> = graph.nodes.iter().filter(|n| n.kind == NodeKind::Sink).collect();
+
+    for node in &services {
+        println!("  [service] {} starts as a long-running service", describe_node(node));
+    }
+    for node in &sources {
+        println!("  [source] {} produces data", describe_node(node));
+    }
+    for node in &processors {
+        println!("  [process] {} transforms data", describe_node(node));
+    }
+    for node in &sinks {
+        println!("  [output] {} consumes data", describe_node(node));
+    }
+
+    if !graph.edges.is_empty() {
+        println!();
+        println!("Data flow:");
+        for edge in &graph.edges {
+            let from_port = if edge.from_port == "default" {
+                String::new()
+            } else {
+                format!(".{}", edge.from_port)
+            };
+            let to_port = if edge.to_port == "default" {
+                String::new()
+            } else {
+                format!(".{}", edge.to_port)
+            };
+            println!(
+                "  {}{} -> {}{}",
+                edge.from_node, from_port, edge.to_node, to_port
+            );
+        }
+    }
+
+    Ok(())
 }
 
 fn describe_node(node: &anp_core::graph::spec::Node) -> String {
@@ -254,17 +426,17 @@ fn describe_node(node: &anp_core::graph::spec::Node) -> String {
     }
 }
 
-fn cmd_init(name: String) {
+fn cmd_init(name: String) -> CliResult {
     let dir = PathBuf::from(&name);
     if dir.exists() {
-        eprintln!("Error: directory '{}' already exists", name);
-        std::process::exit(1);
+        return Err(CliError::Message(format!(
+            "directory '{}' already exists",
+            name
+        )));
     }
 
-    std::fs::create_dir_all(&dir).unwrap_or_else(|e| {
-        eprintln!("Error creating directory: {}", e);
-        std::process::exit(1);
-    });
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| CliError::Message(format!("Error creating directory: {}", e)))?;
 
     let graph_content = format!(
         r#"{{
@@ -299,31 +471,22 @@ fn cmd_init(name: String) {
     );
 
     let graph_path = dir.join("main.anp.json");
-    std::fs::write(&graph_path, graph_content).unwrap_or_else(|e| {
-        eprintln!("Error writing graph file: {}", e);
-        std::process::exit(1);
-    });
+    std::fs::write(&graph_path, graph_content)
+        .map_err(|e| CliError::Message(format!("Error writing graph file: {}", e)))?;
 
     let data_path = dir.join("data.txt");
-    std::fs::write(&data_path, format!("Hello from {}!\n", name)).unwrap_or_else(|e| {
-        eprintln!("Error writing data file: {}", e);
-        std::process::exit(1);
-    });
+    std::fs::write(&data_path, format!("Hello from {}!\n", name))
+        .map_err(|e| CliError::Message(format!("Error writing data file: {}", e)))?;
 
     println!("Created ANP project '{}'", name);
     println!();
     println!("  cd {}", name);
     println!("  anp run main.anp.json");
+    Ok(())
 }
 
-fn cmd_graph(path: PathBuf) {
-    let graph = match loader::load_from_file(&path) {
-        Ok(g) => g,
-        Err(e) => {
-            eprintln!("Error: {}", e);
-            std::process::exit(1);
-        }
-    };
+fn cmd_graph(path: PathBuf) -> CliResult {
+    let graph = load_graph(&path)?;
 
     println!("digraph \"{}\" {{", graph.metadata.name);
     println!("  rankdir=LR;");
@@ -361,4 +524,5 @@ fn cmd_graph(path: PathBuf) {
     }
 
     println!("}}");
+    Ok(())
 }

@@ -2,6 +2,7 @@
 members = [
     "crates/anp-core",
     "crates/anp-nodes",
+    "crates/anp-planner",
     "crates/anp-cli",
 ]
 resolver = "2"
@@ -23,5 +24,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 async-trait = "0.1"
 dashmap = "6"
 uuid = { version = "1", features = ["v4"] }
+reqwest = { version = "0.12", features = ["json"] }
 anp-core = { path = "crates/anp-core" }
 anp-nodes = { path = "crates/anp-nodes" }
+anp-planner = { path = "crates/anp-planner" }

@@ -63,14 +63,33 @@ impl NodeExecutor for HttpServerNode {
     }
 
     async fn init(&mut self, config: &serde_json::Value) -> NodeResult<()> {
-        self.port = config
+        let port_val = config
             .get("port")
             .and_then(|v| v.as_u64())
-            .unwrap_or(3000) as u16;
+            .unwrap_or(3000);
+
+        if port_val > u16::MAX as u64 {
+            return Err(NodeError::InvalidConfig(format!(
+                "port {} exceeds maximum value {}",
+                port_val,
+                u16::MAX
+            )));
+        }
+        self.port = port_val as u16;
 
         if let Some(routes) = config.get("routes") {
             self.routes = serde_json::from_value(routes.clone())
                 .map_err(|e| NodeError::InvalidConfig(format!("invalid routes config: {}", e)))?;
+
+            // Validate route output_ports are non-empty
+            for route in &self.routes {
+                if route.output_port.is_empty() {
+                    return Err(NodeError::InvalidConfig(format!(
+                        "route {} {} has empty output_port",
+                        route.method, route.path
+                    )));
+                }
+            }
         }
 
         Ok(())
@@ -88,8 +107,10 @@ impl NodeExecutor for HttpServerNode {
         };
 
         // Use a single fallback handler that matches all routes
+        // Limit request body to 1MB to prevent memory exhaustion
         let app = Router::new()
             .fallback(handle_request)
+            .layer(axum::extract::DefaultBodyLimit::max(1024 * 1024))
             .with_state(state);
 
         let port = self.port;
@@ -171,13 +192,22 @@ async fn handle_request(
         }
     };
 
-    // Parse body as JSON (or empty object)
+    // Parse body as JSON — return 400 for invalid JSON instead of silently accepting
     let body_json: serde_json::Value = if body.is_empty() {
         serde_json::json!({})
     } else {
-        serde_json::from_slice(&body).unwrap_or_else(|_| {
-            serde_json::json!({ "raw": String::from_utf8_lossy(&body) })
-        })
+        match serde_json::from_slice(&body) {
+            Ok(v) => v,
+            Err(e) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    axum::Json(serde_json::json!({
+                        "error": "invalid JSON body",
+                        "detail": e.to_string()
+                    })),
+                );
+            }
+        }
     };
 
     // Build the trigger data: merge body with request metadata.
