@@ -248,10 +248,13 @@ async fn cmd_edit(path: PathBuf, instruction: String, dry_run: bool) -> CliResul
     }
 
     if let Err(errors) = validate::validate(&graph) {
-        eprintln!("Warning: edited graph has validation errors:");
+        eprintln!("Error: edited graph has validation errors:");
         for err in &errors {
             eprintln!("  - {}", err);
         }
+        return Err(CliError::Message(
+            "graph not saved due to validation errors (use --dry-run to see operations without applying)".into(),
+        ));
     }
 
     let json = serde_json::to_string_pretty(&graph)
@@ -467,6 +470,35 @@ fn describe_node(node: &anp_core::graph::spec::Node) -> String {
                 .unwrap_or("?");
             format!("Filter ({} {})", field, op)
         }
+        "llm_call" => {
+            let model = node
+                .config
+                .get("model")
+                .and_then(|v| v.as_str())
+                .unwrap_or("default");
+            format!("LLM call ({})", model)
+        }
+        "http_client" => {
+            let method = node
+                .config
+                .get("method")
+                .and_then(|v| v.as_str())
+                .unwrap_or("GET");
+            let url = node
+                .config
+                .get("url")
+                .and_then(|v| v.as_str())
+                .unwrap_or("?");
+            format!("HTTP client ({} {})", method, url)
+        }
+        "template" => "Template renderer".to_string(),
+        "conditional" => "Conditional router".to_string(),
+        "memory" => "Session memory".to_string(),
+        "tool_router" => "AI tool router (agentic)".to_string(),
+        "html_template" => "HTML template renderer".to_string(),
+        "static_file" => "Static file server".to_string(),
+        "foreach" => "ForEach iterator".to_string(),
+        "merge" => "Data merger".to_string(),
         other => format!("'{}' node", other),
     }
 }
