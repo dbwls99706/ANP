@@ -100,9 +100,13 @@ Programs are not written — they are **generated from intent**. The fundamental
 - Conditional routing: multi-branch port routing with operator support (eq, neq, gt, gte, lt, lte, contains, exists)
 - Memory node: session-based conversation history (max_history limit) + key-value state
 - Tool Router: LLM-powered agentic routing — AI decides which tool/port to use
+- Parallel stage execution: independent nodes within a stage execute concurrently via futures::join_all
+- O(1) input gathering: reverse edge index eliminates O(E) edge scanning per node
+- HTTP client connection pooling: shared reqwest::Client reuses TCP/TLS connections (5-10x faster)
+- Static file caching: in-memory LRU cache with configurable TTL, ETag generation, 304 Not Modified support
 - Execution tracing: per-node timing (NodeTrace), success/failure tracking, output port recording
 - HTML Template node: full HTML rendering with `{{variable}}` placeholders, XSS-safe escaping, `{{{raw}}}` for unescaped output
-- Static File node: serves CSS/JS/images with auto content-type detection, path traversal prevention
+- Static File node: serves CSS/JS/images with auto content-type detection, path traversal prevention, in-memory caching
 - HTTP Server: supports HTML responses via `_content_type` field from pipeline results
 - HTTP Server: path parameters (`/users/:id` → `{"id": "42"}`) and query params (`?key=val` → `{"_query": {"key": "val"}}`)
 - ForEach node: graph-native iteration over arrays — replaces for-loops without code

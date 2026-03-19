@@ -1,27 +1,40 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::time::Instant;
+use tokio::sync::RwLock;
 
 use anp_core::graph::spec::NodeKind;
 use anp_core::node::traits::{NodeError, NodeExecutor, NodeOutput, NodeResult};
 use anp_core::runtime::context::ExecutionContext;
 
+/// Cached file entry with content, metadata, and ETag
+struct CachedFile {
+    content: String,
+    content_type: &'static str,
+    etag: String,
+    cached_at: Instant,
+}
+
 /// Static File node — reads a static file and outputs it with proper content type.
 ///
-/// Designed for serving CSS, JS, images, and other static assets through `http_server`.
+/// Now with in-memory caching and ETag support for maximum performance.
+/// Cached files are served without disk I/O. TTL-based invalidation ensures freshness.
 ///
 /// Config example:
 /// ```json
 /// {
-///   "path": "./static/style.css"
+///   "path": "./static/style.css",
+///   "cache_ttl_secs": 300
 /// }
 /// ```
 ///
-/// Can also receive the path dynamically via input: `{ "path": "style.css" }`
-/// with a configured `base_dir` for security.
-///
-/// Output: `{ "body": "<file contents>", "_content_type": "text/css" }`
+/// Output: `{ "body": "<file contents>", "_content_type": "text/css", "_etag": "..." }`
 pub struct StaticFileNode {
     path: Option<String>,
     base_dir: Option<String>,
+    cache_ttl_secs: u64,
+    cache: Arc<RwLock<HashMap<String, CachedFile>>>,
 }
 
 impl Default for StaticFileNode {
@@ -35,6 +48,8 @@ impl StaticFileNode {
         Self {
             path: None,
             base_dir: None,
+            cache_ttl_secs: 300, // 5 minutes default
+            cache: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 }
@@ -136,6 +151,10 @@ impl NodeExecutor for StaticFileNode {
             self.base_dir = Some(base.to_string());
         }
 
+        if let Some(ttl) = config.get("cache_ttl_secs").and_then(|v| v.as_u64()) {
+            self.cache_ttl_secs = ttl;
+        }
+
         Ok(())
     }
 
@@ -168,15 +187,85 @@ impl NodeExecutor for StaticFileNode {
         };
 
         let content_type = content_type_for(file_path);
+        let cache_key = resolved.to_string_lossy().to_string();
 
-        // Read file
+        // Check if client sent If-None-Match (ETag)
+        let client_etag = input
+            .get("_if_none_match")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+
+        // Check cache first
+        {
+            let cache = self.cache.read().await;
+            if let Some(cached) = cache.get(&cache_key) {
+                let age = cached.cached_at.elapsed().as_secs();
+                if age < self.cache_ttl_secs {
+                    // ETag match → 304 Not Modified
+                    if !client_etag.is_empty() && client_etag == cached.etag {
+                        return Ok(NodeOutput::data(serde_json::json!({
+                            "_status": 304,
+                            "_content_type": cached.content_type,
+                            "_etag": cached.etag,
+                            "_cache": "hit",
+                        })));
+                    }
+                    return Ok(NodeOutput::data(serde_json::json!({
+                        "body": cached.content,
+                        "_content_type": cached.content_type,
+                        "_etag": cached.etag,
+                        "_cache": "hit",
+                        "_cache_control": format!("public, max-age={}", self.cache_ttl_secs),
+                    })));
+                }
+            }
+        }
+
+        // Cache miss — read from disk
         let body = tokio::fs::read_to_string(&resolved).await.map_err(|e| {
             NodeError::ExecutionFailed(format!("failed to read '{}': {}", resolved.display(), e))
         })?;
 
+        // Generate ETag from content hash (FNV-1a)
+        let etag = {
+            let mut h: u64 = 14695981039346656037;
+            for &b in body.as_bytes() {
+                h ^= b as u64;
+                h = h.wrapping_mul(1099511628211);
+            }
+            format!("\"{}\"", format!("{:016x}", h))
+        };
+
+        // Store in cache
+        {
+            let mut cache = self.cache.write().await;
+            cache.insert(
+                cache_key,
+                CachedFile {
+                    content: body.clone(),
+                    content_type,
+                    etag: etag.clone(),
+                    cached_at: Instant::now(),
+                },
+            );
+        }
+
+        // ETag match → 304
+        if !client_etag.is_empty() && client_etag == etag {
+            return Ok(NodeOutput::data(serde_json::json!({
+                "_status": 304,
+                "_content_type": content_type,
+                "_etag": etag,
+                "_cache": "miss",
+            })));
+        }
+
         Ok(NodeOutput::data(serde_json::json!({
             "body": body,
-            "_content_type": content_type
+            "_content_type": content_type,
+            "_etag": etag,
+            "_cache": "miss",
+            "_cache_control": format!("public, max-age={}", self.cache_ttl_secs),
         })))
     }
 }

@@ -13,12 +13,14 @@ pub struct ExecutionStage {
 pub struct ExecutionPlan {
     /// Ordered stages of parallel execution
     pub stages: Vec<ExecutionStage>,
-    /// NodeId → PortName → Edges (O(1) port-based lookup)
+    /// NodeId → PortName → Edges (O(1) port-based lookup, outbound edges)
     pub edge_map: HashMap<String, HashMap<String, Vec<Edge>>>,
     /// NodeId → stage index (O(1) node lookup)
     pub node_map: HashMap<String, usize>,
     /// Source + Service nodes (pipeline entry points)
     pub entry_nodes: Vec<String>,
+    /// Reverse index: ToNodeId → list of FromNodeIds (O(1) input gathering)
+    pub reverse_edge_map: HashMap<String, Vec<String>>,
 }
 
 /// Errors from scheduling
@@ -127,11 +129,23 @@ pub fn schedule(graph: &AnpGraph) -> Result<ExecutionPlan, ScheduleError> {
         .map(|n| n.id.clone())
         .collect();
 
+    // Build reverse edge map: ToNodeId → [FromNodeId] (deduped)
+    let mut reverse_edge_map: HashMap<String, Vec<String>> = HashMap::new();
+    for edge in &graph.edges {
+        let sources = reverse_edge_map
+            .entry(edge.to_node.clone())
+            .or_default();
+        if !sources.contains(&edge.from_node) {
+            sources.push(edge.from_node.clone());
+        }
+    }
+
     Ok(ExecutionPlan {
         stages,
         edge_map,
         node_map,
         entry_nodes,
+        reverse_edge_map,
     })
 }
 
