@@ -25,6 +25,7 @@ async-trait = "0.1"
 dashmap = "6"
 uuid = { version = "1", features = ["v4"] }
 reqwest = { version = "0.12", features = ["json"] }
+flate2 = "1"
 anp-core = { path = "crates/anp-core" }
 anp-nodes = { path = "crates/anp-nodes" }
 anp-planner = { path = "crates/anp-planner" }

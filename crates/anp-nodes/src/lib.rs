@@ -32,6 +32,8 @@ pub mod filter;
 pub mod foreach;
 pub mod form_node;
 pub mod group_by_node;
+pub mod gzip_node;
+pub mod health_check_node;
 pub mod hash_node;
 pub mod html_template;
 pub mod http_client;
@@ -64,6 +66,7 @@ pub mod queue_node;
 pub mod random_node;
 pub mod rate_limit;
 pub mod redirect_node;
+pub mod request_id_node;
 pub mod redis_client_node;
 pub mod regex_node;
 pub mod retry_node;
@@ -1372,6 +1375,65 @@ pub fn register_all(registry: &mut NodeRegistry) {
                 "properties": {
                     "operation": { "type": "string", "enum": ["connect", "disconnect", "send", "broadcast", "join_room", "leave_room", "room_send", "connections", "rooms", "history", "kick"] },
                     "max_history": { "type": "integer", "default": 100 }
+                }
+            }),
+        },
+    });
+
+    // === Production Readiness Nodes ===
+
+    // Gzip compression (Processor) — gzip compress/decompress for HTTP responses
+    registry.register(NodeInfo {
+        factory: || Box::new(gzip_node::GzipNode::new()),
+        schema: NodeSchema {
+            node_type: "gzip".to_string(),
+            kind: NodeKind::Processor,
+            description: "Gzip compression/decompression using flate2. Compress text/JSON for HTTP responses (70-90% size reduction) or decompress incoming data. Base64 encoding for transport.".to_string(),
+            inputs: vec![PortSpec::new("default")],
+            outputs: vec![PortSpec::new("default")],
+            config_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "operation": { "type": "string", "enum": ["compress", "decompress"], "default": "compress" },
+                    "level": { "type": "integer", "minimum": 0, "maximum": 9, "default": 6, "description": "Compression level (0=none, 1=fast, 9=best)" }
+                }
+            }),
+        },
+    });
+
+    // Health Check (Processor) — K8s/load balancer health probes + Prometheus metrics
+    registry.register(NodeInfo {
+        factory: || Box::new(health_check_node::HealthCheckNode::new()),
+        schema: NodeSchema {
+            node_type: "health_check".to_string(),
+            kind: NodeKind::Processor,
+            description: "Health check / readiness probe for production deployments. Tracks uptime, request count, error rate. Supports K8s liveness/readiness probes, custom health checks, and Prometheus metrics export.".to_string(),
+            inputs: vec![PortSpec::new("default")],
+            outputs: vec![PortSpec::new("default")],
+            config_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "operation": { "type": "string", "enum": ["health", "ready", "live", "metrics", "set_ready", "set_alive", "record_request", "record_error", "register_check", "update_check"] },
+                    "version": { "type": "string", "description": "Application version string" }
+                }
+            }),
+        },
+    });
+
+    // Request ID (Processor) — correlation ID for distributed tracing
+    registry.register(NodeInfo {
+        factory: || Box::new(request_id_node::RequestIdNode::new()),
+        schema: NodeSchema {
+            node_type: "request_id".to_string(),
+            kind: NodeKind::Processor,
+            description: "Request ID / correlation ID generator for distributed tracing. Generates unique IDs, propagates existing IDs from upstream, adds response headers. Essential for production debugging.".to_string(),
+            inputs: vec![PortSpec::new("default")],
+            outputs: vec![PortSpec::new("default")],
+            config_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "prefix": { "type": "string", "default": "req", "description": "ID prefix" },
+                    "header_name": { "type": "string", "default": "x-request-id", "description": "HTTP header name for the request ID" }
                 }
             }),
         },

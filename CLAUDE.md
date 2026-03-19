@@ -31,7 +31,7 @@ Programs are not written — they are **generated from intent**. The fundamental
 ### Crate Structure
 
 - **anp-core**: Graph spec, validation, runtime engine, execution scheduler, GraphOp editor
-- **anp-nodes**: 100 built-in node implementations across 12 categories (see Node Catalog below)
+- **anp-nodes**: 103 built-in node implementations across 12 categories (see Node Catalog below)
 - **anp-planner**: LLM integration — generates graphs from prompts, edit ops from instructions
 - **anp-cli**: CLI entry point (`anp run`, `anp prompt`, `anp edit`, etc.)
 
@@ -44,13 +44,13 @@ Programs are not written — they are **generated from intent**. The fundamental
 | Sink | Consumes data, no outputs | console, file_write, log, email |
 | Service | Long-running event loop, triggers downstream | http_server, cron, websocket |
 
-### Node Catalog (100 nodes)
+### Node Catalog (103 nodes)
 
 **I/O & Core** (16): console, file_read, file_write, transform, filter, foreach, merge, template, template_engine, conditional, switch, try_catch, parallel, accumulator, debounce, sleep
 
 **HTTP & Networking** (8): http_server, http_client, cors, redirect, webhook, websocket, sse, static_file
 
-**Data Formats** (8): json_parse, csv, yaml, xml, toml, markdown, base64, url_encode
+**Data Formats** (9): json_parse, csv, yaml, xml, toml, markdown, base64, url_encode, gzip
 
 **Data Processing** (8): diff, group_by, pivot, lookup, math, array, string, regex
 
@@ -66,7 +66,7 @@ Programs are not written — they are **generated from intent**. The fundamental
 
 **UI & Frontend** (8): html_template, form, chart, table, markdown_render, paginate, breadcrumb, layout, meta
 
-**Observability** (6): log, validate, random, uuid, timestamp, env
+**Observability** (8): log, validate, random, uuid, timestamp, env, health_check, request_id
 
 **Integration** (3): email, image_resize, multipart
 
@@ -154,6 +154,9 @@ Programs are not written — they are **generated from intent**. The fundamental
 - Message Broker node: topic-based pub/sub with dead letter queues, ack/nack, subscription management, stats
 - State Machine node: FSM with states, transitions, guard conditions, context, history, wildcard transitions — overcomes DAG limitation
 - WebSocket Enhanced (ws) node: room management, broadcasting, direct messaging, connection tracking, message history, kick
+- Gzip node: flate2-based gzip compression/decompression, configurable level, base64 transport encoding
+- Health Check node: K8s liveness/readiness probes, Prometheus metrics export, custom health checks, uptime/error tracking
+- Request ID node: correlation ID generation/propagation for distributed tracing, custom prefixes
 
 ## Roadmap
 
@@ -163,5 +166,5 @@ Programs are not written — they are **generated from intent**. The fundamental
 - v0.4: AI-native nodes (llm_call, http_client, template, conditional)
 - v0.5: Observability, agentic workflows, state management (memory, tool_router, NodeTrace)
 - v0.6: 92-node ecosystem — AI/ML, auth, data processing, UI, workflow nodes
-- v0.7: 100-node ecosystem — AES crypto, OAuth 2.0, SQL engine, Redis, message broker, FSM, WebSocket rooms ← current
+- v0.7: 103-node ecosystem — AES crypto, OAuth 2.0, SQL engine, Redis, message broker, FSM, WebSocket rooms, gzip compression, health checks, request tracing ← current
 - v1.0: Plugin ecosystem, custom node types, visual graph editor
