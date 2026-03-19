@@ -103,17 +103,40 @@ impl PipelineTriggerImpl {
                 continue;
             }
 
-            for node_id in &stage_nodes {
-                match execute_single_node(node_id, &self.plan, &self.nodes, &self.ctx, &run_id)
-                    .await
-                {
-                    Ok(val) => {
-                        last_output = val;
+            // Execute independent nodes within a stage concurrently
+            if stage_nodes.len() > 1 {
+                let futures: Vec<_> = stage_nodes
+                    .iter()
+                    .map(|node_id| {
+                        execute_single_node(node_id, &self.plan, &self.nodes, &self.ctx, &run_id)
+                    })
+                    .collect();
+                let results = futures::future::join_all(futures).await;
+                for (i, result) in results.into_iter().enumerate() {
+                    match result {
+                        Ok(val) => {
+                            last_output = val;
+                        }
+                        Err(e) => {
+                            error!(node_id = %stage_nodes[i], error = %e, "node execution failed in trigger pipeline");
+                            self.ctx.finish_run(&run_id);
+                            return Err(e);
+                        }
                     }
-                    Err(e) => {
-                        error!(node_id = %node_id, error = %e, "node execution failed in trigger pipeline");
-                        self.ctx.finish_run(&run_id);
-                        return Err(e);
+                }
+            } else {
+                for node_id in &stage_nodes {
+                    match execute_single_node(node_id, &self.plan, &self.nodes, &self.ctx, &run_id)
+                        .await
+                    {
+                        Ok(val) => {
+                            last_output = val;
+                        }
+                        Err(e) => {
+                            error!(node_id = %node_id, error = %e, "node execution failed in trigger pipeline");
+                            self.ctx.finish_run(&run_id);
+                            return Err(e);
+                        }
                     }
                 }
             }
@@ -306,107 +329,48 @@ pub async fn execute_batch(
     for (stage_idx, stage) in plan.stages.iter().enumerate() {
         debug!(stage = stage_idx, nodes = ?stage.node_ids, "executing stage");
 
-        for node_id in &stage.node_ids {
-            let node = nodes
-                .get(node_id)
-                .ok_or_else(|| ExecutionError::NodeNotFound(node_id.clone()))?;
+        // Filter out service nodes
+        let executable_nodes: Vec<&String> = stage
+            .node_ids
+            .iter()
+            .filter(|node_id| {
+                nodes
+                    .get(node_id.as_str())
+                    .map(|n| n.node_kind() != NodeKind::Service)
+                    .unwrap_or(true)
+            })
+            .collect();
 
-            // Service nodes are skipped in batch mode
-            if node.node_kind() == NodeKind::Service {
-                warn!(node_id = %node_id, "skipping service node in batch mode");
-                continue;
-            }
-
-            let input = gather_input(node_id, plan, ctx, &run_id);
-            let node_type_str = node.node_type().to_string();
-
-            debug!(
-                node_id = %node_id,
-                node_type = %node_type_str,
-                "executing node"
-            );
-
-            let start = Instant::now();
-
-            match node.execute(input, ctx).await {
-                Ok(output) => {
-                    let duration_us = start.elapsed().as_micros() as u64;
-
-                    for log in &output.logs {
-                        debug!(node_id = %node_id, "{}", log);
-                    }
-
-                    let output_ports: Vec<String> = output.ports.keys().cloned().collect();
-
-                    match output.status {
-                        NodeStatus::Ok => {
-                            ctx.record_trace(
-                                &run_id,
-                                NodeTrace {
-                                    node_id: node_id.clone(),
-                                    node_type: node_type_str,
-                                    duration_us,
-                                    success: true,
-                                    error: None,
-                                    output_ports,
-                                },
-                            );
-                            store_output(node_id, &output, plan, ctx, &run_id);
-                        }
-                        NodeStatus::Skip => {
-                            ctx.record_trace(
-                                &run_id,
-                                NodeTrace {
-                                    node_id: node_id.clone(),
-                                    node_type: node_type_str,
-                                    duration_us,
-                                    success: true,
-                                    error: None,
-                                    output_ports: vec!["skip".to_string()],
-                                },
-                            );
-                            info!(node_id = %node_id, "node returned Skip, stopping pipeline branch");
-                        }
-                        NodeStatus::Error => {
-                            let err_msg = output.error.clone();
-                            ctx.record_trace(
-                                &run_id,
-                                NodeTrace {
-                                    node_id: node_id.clone(),
-                                    node_type: node_type_str,
-                                    duration_us,
-                                    success: false,
-                                    error: err_msg.clone(),
-                                    output_ports,
-                                },
-                            );
-                            error!(
-                                node_id = %node_id,
-                                error = ?err_msg,
-                                "node returned Error status"
-                            );
-                            store_error_output(node_id, &output, plan, ctx, &run_id);
-                        }
+        // Execute independent nodes within a stage concurrently
+        if executable_nodes.len() > 1 {
+            let futures: Vec<_> = executable_nodes
+                .iter()
+                .map(|node_id| execute_single_node(node_id, plan, nodes, ctx, &run_id))
+                .collect();
+            let results = futures::future::join_all(futures).await;
+            for (i, result) in results.into_iter().enumerate() {
+                match result {
+                    Ok(_val) => {}
+                    Err(e) => {
+                        error!(node_id = %executable_nodes[i], error = %e, "node execution failed");
+                        return Err(ExecutionError::NodeFailed {
+                            node_id: executable_nodes[i].clone(),
+                            message: e.to_string(),
+                        });
                     }
                 }
-                Err(e) => {
-                    let duration_us = start.elapsed().as_micros() as u64;
-                    ctx.record_trace(
-                        &run_id,
-                        NodeTrace {
-                            node_id: node_id.clone(),
-                            node_type: node_type_str,
-                            duration_us,
-                            success: false,
-                            error: Some(e.to_string()),
-                            output_ports: vec![],
-                        },
-                    );
-                    error!(node_id = %node_id, error = %e, "node execution failed");
-                    return Err(ExecutionError::NodeFailed {
-                        node_id: node_id.clone(),
-                        message: e.to_string(),
-                    });
+            }
+        } else {
+            for node_id in &executable_nodes {
+                match execute_single_node(node_id, plan, nodes, ctx, &run_id).await {
+                    Ok(_val) => {}
+                    Err(e) => {
+                        error!(node_id = %node_id, error = %e, "node execution failed");
+                        return Err(ExecutionError::NodeFailed {
+                            node_id: node_id.to_string(),
+                            message: e.to_string(),
+                        });
+                    }
                 }
             }
         }
@@ -535,25 +499,23 @@ pub async fn execute_service(
     Ok(())
 }
 
-/// Gather input data for a node from its upstream edges
+/// Gather input data for a node from its upstream edges.
+/// Uses reverse_edge_map for O(1) lookup instead of scanning all edges.
 fn gather_input(
     node_id: &str,
     plan: &ExecutionPlan,
     ctx: &ExecutionContext,
     run_id: &str,
 ) -> serde_json::Value {
-    let mut inputs: Vec<serde_json::Value> = Vec::new();
-    let mut seen_sources = std::collections::HashSet::new();
+    let sources = match plan.reverse_edge_map.get(node_id) {
+        Some(s) => s,
+        None => return serde_json::Value::Null,
+    };
 
-    for (from_id, ports) in &plan.edge_map {
-        for edges in ports.values() {
-            for edge in edges {
-                if edge.to_node == node_id && seen_sources.insert(from_id.clone()) {
-                    if let Some(output) = ctx.get_node_output(run_id, from_id) {
-                        inputs.push(output);
-                    }
-                }
-            }
+    let mut inputs: Vec<serde_json::Value> = Vec::with_capacity(sources.len());
+    for from_id in sources {
+        if let Some(output) = ctx.get_node_output(run_id, from_id) {
+            inputs.push(output);
         }
     }
 

@@ -33,6 +33,8 @@ pub struct HttpClientNode {
     timeout_secs: u64,
     retry_count: u32,
     retry_backoff_ms: u64,
+    /// Shared HTTP client — reuses TCP/TLS connections across requests
+    client: Option<reqwest::Client>,
 }
 
 /// Maximum response body size: 1MB
@@ -53,6 +55,7 @@ impl HttpClientNode {
             timeout_secs: 30,
             retry_count: 2,
             retry_backoff_ms: 500,
+            client: None,
         }
     }
 }
@@ -217,6 +220,19 @@ impl NodeExecutor for HttpClientNode {
             self.retry_backoff_ms = backoff;
         }
 
+        // Build shared client once — reuses TCP connections and TLS sessions
+        self.client = Some(
+            reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(self.timeout_secs))
+                .redirect(reqwest::redirect::Policy::none())
+                .pool_max_idle_per_host(16)
+                .pool_idle_timeout(std::time::Duration::from_secs(90))
+                .build()
+                .map_err(|e| {
+                    NodeError::InitFailed(format!("failed to build HTTP client: {}", e))
+                })?,
+        );
+
         Ok(())
     }
 
@@ -263,14 +279,14 @@ impl NodeExecutor for HttpClientNode {
                 let delay = self.retry_backoff_ms * 2u64.pow(attempt - 1);
                 tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
             }
-            // Build a fresh client+request each attempt (request builder is consumed by send)
-            let client = reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(self.timeout_secs))
-                .redirect(reqwest::redirect::Policy::none())
-                .build()
-                .map_err(|e| {
-                    NodeError::ExecutionFailed(format!("failed to build HTTP client: {}", e))
-                })?;
+            // Reuse pooled client — avoids TCP/TLS handshake per request
+            let client = self.client.as_ref().cloned().unwrap_or_else(|| {
+                reqwest::Client::builder()
+                    .timeout(std::time::Duration::from_secs(self.timeout_secs))
+                    .redirect(reqwest::redirect::Policy::none())
+                    .build()
+                    .expect("failed to build fallback HTTP client")
+            });
 
             let mut request = match method.as_str() {
                 "GET" => client.get(&url),

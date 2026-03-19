@@ -314,6 +314,18 @@ async fn handle_request(
             // Check if the pipeline result requests a specific content type
             // (e.g., html_template node sets _content_type to "text/html")
             if let Some(content_type) = result.get("_content_type").and_then(|v| v.as_str()) {
+                // Handle 304 Not Modified (ETag match from static_file)
+                if result.get("_status").and_then(|v| v.as_u64()) == Some(304) {
+                    let mut response = axum::response::Response::new(axum::body::Body::empty());
+                    *response.status_mut() = StatusCode::NOT_MODIFIED;
+                    if let Some(etag) = result.get("_etag").and_then(|v| v.as_str()) {
+                        if let Ok(val) = HeaderValue::from_str(etag) {
+                            response.headers_mut().insert("etag", val);
+                        }
+                    }
+                    return response.into_response();
+                }
+
                 let body = if content_type.starts_with("text/html") {
                     result
                         .get("html")
@@ -331,6 +343,18 @@ async fn handle_request(
                 let mut response = axum::response::Response::new(axum::body::Body::from(body));
                 if let Ok(val) = HeaderValue::from_str(content_type) {
                     response.headers_mut().insert("content-type", val);
+                }
+                // Add ETag header if present
+                if let Some(etag) = result.get("_etag").and_then(|v| v.as_str()) {
+                    if let Ok(val) = HeaderValue::from_str(etag) {
+                        response.headers_mut().insert("etag", val);
+                    }
+                }
+                // Add Cache-Control header if present
+                if let Some(cc) = result.get("_cache_control").and_then(|v| v.as_str()) {
+                    if let Ok(val) = HeaderValue::from_str(cc) {
+                        response.headers_mut().insert("cache-control", val);
+                    }
                 }
                 response.into_response()
             } else {
