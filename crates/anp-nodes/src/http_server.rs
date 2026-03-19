@@ -6,6 +6,7 @@ use anp_core::runtime::context::ExecutionContext;
 use axum::body::Bytes;
 use axum::extract::State;
 use axum::http::{Method, StatusCode};
+use axum::http::HeaderValue;
 use axum::response::IntoResponse;
 use axum::Router;
 use serde::Deserialize;
@@ -188,7 +189,8 @@ async fn handle_request(
                     "path": path,
                     "method": method_str
                 })),
-            );
+            )
+                .into_response();
         }
     };
 
@@ -205,7 +207,8 @@ async fn handle_request(
                         "error": "invalid JSON body",
                         "detail": e.to_string()
                     })),
-                );
+                )
+                    .into_response();
             }
         }
     };
@@ -226,13 +229,32 @@ async fn handle_request(
     }
 
     match state.trigger.trigger(&state.node_id, &output_port, trigger_data).await {
-        Ok(result) => (StatusCode::OK, axum::Json(result)),
+        Ok(result) => {
+            // Check if the pipeline result requests a specific content type
+            // (e.g., html_template node sets _content_type to "text/html")
+            if let Some(content_type) = result.get("_content_type").and_then(|v| v.as_str()) {
+                let body = if content_type.starts_with("text/html") {
+                    result.get("html").and_then(|v| v.as_str()).unwrap_or("").to_string()
+                } else {
+                    result.get("body").and_then(|v| v.as_str()).unwrap_or("").to_string()
+                };
+
+                let mut response = axum::response::Response::new(axum::body::Body::from(body));
+                if let Ok(val) = HeaderValue::from_str(content_type) {
+                    response.headers_mut().insert("content-type", val);
+                }
+                response.into_response()
+            } else {
+                (StatusCode::OK, axum::Json(result)).into_response()
+            }
+        }
         Err(e) => {
             error!(error = %e, "pipeline trigger failed");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 axum::Json(serde_json::json!({ "error": e.to_string() })),
             )
+                .into_response()
         }
     }
 }
