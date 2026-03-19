@@ -1,4 +1,5 @@
 pub mod accumulator;
+pub mod aes_node;
 pub mod agent_loop_node;
 pub mod aggregate_node;
 pub mod api_key_node;
@@ -43,13 +44,16 @@ pub mod layout_node;
 pub mod llm_call;
 pub mod log_node;
 pub mod lookup_node;
+pub mod oauth_node;
 pub mod markdown_node;
 pub mod markdown_render_node;
 pub mod math_node;
 pub mod memory;
 pub mod merge;
+pub mod message_broker_node;
 pub mod meta_node;
 pub mod metrics_node;
+pub mod multipart_node;
 pub mod paginate_node;
 pub mod parallel_node;
 pub mod password_node;
@@ -60,6 +64,7 @@ pub mod queue_node;
 pub mod random_node;
 pub mod rate_limit;
 pub mod redirect_node;
+pub mod redis_client_node;
 pub mod regex_node;
 pub mod retry_node;
 pub mod sanitize_node;
@@ -67,7 +72,9 @@ pub mod semaphore_node;
 pub mod sentiment_node;
 pub mod session_node;
 pub mod sleep_node;
+pub mod sql_query_node;
 pub mod sse_node;
+pub mod state_machine_node;
 pub mod static_file;
 pub mod string_node;
 pub mod summarize_node;
@@ -87,6 +94,7 @@ pub mod url_encode_node;
 pub mod uuid_node;
 pub mod validate_node;
 pub mod webhook_node;
+pub mod websocket_enhanced_node;
 pub mod websocket_node;
 pub mod xml_node;
 pub mod yaml_node;
@@ -1190,5 +1198,182 @@ pub fn register_all(registry: &mut NodeRegistry) {
     registry.register(NodeInfo {
         factory: || Box::new(kv_store_node::KvStoreNode::new()),
         schema: NodeSchema { node_type: "kv_store".to_string(), kind: NodeKind::Processor, description: "Key-value store with namespaces: get, set, delete, list, has, count, clear.".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"namespace": {"type": "string", "default": "default"}, "operation": {"type": "string", "enum": ["get","set","delete","list","has","count","clear"]}}, "required": ["operation"]}) },
+    });
+
+    // === NEW NODES: Filling capability gaps ===
+
+    // OAuth 2.0 (Processor) — authorization code flow, client credentials, token refresh, PKCE
+    registry.register(NodeInfo {
+        factory: || Box::new(oauth_node::OAuthNode::new()),
+        schema: NodeSchema {
+            node_type: "oauth".to_string(),
+            kind: NodeKind::Processor,
+            description: "OAuth 2.0 authorization: authorize_url, token_exchange, refresh, client_credentials, PKCE. Works with http_client for actual HTTP calls. Supports Google, GitHub, Microsoft presets.".to_string(),
+            inputs: vec![PortSpec::new("default")],
+            outputs: vec![PortSpec::new("default")],
+            config_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "operation": { "type": "string", "enum": ["authorize_url", "token_exchange", "refresh", "client_credentials", "validate", "revoke", "pkce_authorize"] },
+                    "provider": { "type": "string", "enum": ["google", "github", "microsoft", "custom"], "default": "custom" },
+                    "authorize_url": { "type": "string", "description": "Authorization endpoint URL" },
+                    "token_url": { "type": "string", "description": "Token endpoint URL" },
+                    "redirect_uri": { "type": "string", "default": "http://localhost:3000/callback" },
+                    "client_id_env": { "type": "string", "default": "OAUTH_CLIENT_ID" },
+                    "client_secret_env": { "type": "string", "default": "OAUTH_CLIENT_SECRET" },
+                    "scopes": { "type": "array", "items": { "type": "string" } }
+                }
+            }),
+        },
+    });
+
+    // AES-256-CBC (Processor) — real AES encryption with PKCS7 padding
+    registry.register(NodeInfo {
+        factory: || Box::new(aes_node::AesNode::new()),
+        schema: NodeSchema {
+            node_type: "aes".to_string(),
+            kind: NodeKind::Processor,
+            description: "AES-256-CBC encryption/decryption. Pure Rust implementation with PKCS7 padding, key derivation from passphrase, hex-encoded output. Production-grade crypto.".to_string(),
+            inputs: vec![PortSpec::new("default")],
+            outputs: vec![PortSpec::new("default")],
+            config_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "operation": { "type": "string", "enum": ["encrypt", "decrypt"], "default": "encrypt" },
+                    "key_env": { "type": "string", "default": "AES_KEY", "description": "Environment variable containing the encryption passphrase" }
+                }
+            }),
+        },
+    });
+
+    // Multipart (Processor) — build/parse multipart form data for file uploads
+    registry.register(NodeInfo {
+        factory: || Box::new(multipart_node::MultipartNode::new()),
+        schema: NodeSchema {
+            node_type: "multipart".to_string(),
+            kind: NodeKind::Processor,
+            description: "Multipart form data builder and parser. Build multipart/form-data bodies for file uploads via http_client, parse multipart responses, or URL-encode form fields.".to_string(),
+            inputs: vec![PortSpec::new("default")],
+            outputs: vec![PortSpec::new("default")],
+            config_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "operation": { "type": "string", "enum": ["build", "parse", "url_encode"], "default": "build" }
+                }
+            }),
+        },
+    });
+
+    // SQL Query (Processor) — in-process SQL engine over JSON data
+    registry.register(NodeInfo {
+        factory: || Box::new(sql_query_node::SqlQueryNode::new()),
+        schema: NodeSchema {
+            node_type: "sql_query".to_string(),
+            kind: NodeKind::Processor,
+            description: "In-process SQL engine over JSON data. SELECT, INSERT, UPDATE, DELETE with WHERE, ORDER BY, GROUP BY, JOIN, LIMIT, OFFSET, and aggregates (SUM, AVG, MIN, MAX, COUNT).".to_string(),
+            inputs: vec![PortSpec::new("default")],
+            outputs: vec![PortSpec::new("default")],
+            config_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "operation": { "type": "string", "enum": ["query", "select", "insert", "update", "delete", "create_table", "drop_table", "describe"] },
+                    "tables": { "type": "object", "description": "Pre-populate tables with initial data (table_name → array of rows)" }
+                }
+            }),
+        },
+    });
+
+    // Redis (Processor) — Redis-compatible in-memory data structure store
+    registry.register(NodeInfo {
+        factory: || Box::new(redis_client_node::RedisClientNode::new()),
+        schema: NodeSchema {
+            node_type: "redis".to_string(),
+            kind: NodeKind::Processor,
+            description: "Redis-compatible in-memory data structure store. Supports strings (GET/SET/INCR), hashes (HSET/HGET/HGETALL), lists (LPUSH/RPUSH/LPOP/RPOP/LRANGE), sets (SADD/SMEMBERS), sorted sets (ZADD/ZRANGE), TTL/EXPIRE, KEYS, MGET/MSET.".to_string(),
+            inputs: vec![PortSpec::new("default")],
+            outputs: vec![PortSpec::new("default")],
+            config_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "operation": { "type": "string", "description": "Default Redis command" },
+                    "prefix": { "type": "string", "description": "Key prefix for namespacing" },
+                    "initial_data": { "type": "object", "description": "Pre-populate string keys" }
+                }
+            }),
+        },
+    });
+
+    // Message Broker (Processor) — topic-based pub/sub with dead letter queues
+    registry.register(NodeInfo {
+        factory: || Box::new(message_broker_node::MessageBrokerNode::new()),
+        schema: NodeSchema {
+            node_type: "message_broker".to_string(),
+            kind: NodeKind::Processor,
+            description: "Message broker with topics, subscriptions, and delivery guarantees. Publish/subscribe, consume, ack/nack, dead letter queues, topic management, and stats.".to_string(),
+            inputs: vec![PortSpec::new("default")],
+            outputs: vec![PortSpec::new("default")],
+            config_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "operation": { "type": "string", "enum": ["publish", "subscribe", "consume", "ack", "nack", "create_topic", "delete_topic", "list_topics", "unsubscribe", "dead_letters", "purge", "stats", "peek"] },
+                    "topics": { "type": "array", "items": { "type": "string" }, "description": "Pre-create topics" },
+                    "max_queue_size": { "type": "integer", "default": 10000 }
+                }
+            }),
+        },
+    });
+
+    // State Machine (Processor) — finite state machine with guards and history
+    registry.register(NodeInfo {
+        factory: || Box::new(state_machine_node::StateMachineNode::new()),
+        schema: NodeSchema {
+            node_type: "state_machine".to_string(),
+            kind: NodeKind::Processor,
+            description: "Finite State Machine (FSM) for stateful workflows. Define states, transitions with events, guard conditions, and context data. Supports create, transition, get_state, history, reset. Overcomes DAG limitations for cyclic/iterative processes.".to_string(),
+            inputs: vec![PortSpec::new("default")],
+            outputs: vec![PortSpec::new("default")],
+            config_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "operation": { "type": "string", "enum": ["create", "transition", "get_state", "set_context", "reset", "can_transition", "history", "destroy"] },
+                    "states": { "type": "array", "items": { "type": "string" }, "description": "Valid state names" },
+                    "initial_state": { "type": "string", "default": "initial" },
+                    "transitions": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "from": { "type": "string", "description": "Source state (or * for any)" },
+                                "event": { "type": "string", "description": "Event trigger" },
+                                "to": { "type": "string", "description": "Target state" },
+                                "guard_field": { "type": "string" },
+                                "guard_op": { "type": "string", "enum": ["eq", "neq", "gt", "gte", "lt", "lte", "exists", "is_null", "contains"] },
+                                "guard_value": { "description": "Value for guard comparison" }
+                            },
+                            "required": ["from", "event", "to"]
+                        }
+                    }
+                }
+            }),
+        },
+    });
+
+    // WebSocket Enhanced (Processor) — rooms, broadcasting, connection management
+    registry.register(NodeInfo {
+        factory: || Box::new(websocket_enhanced_node::WebSocketEnhancedNode::new()),
+        schema: NodeSchema {
+            node_type: "ws".to_string(),
+            kind: NodeKind::Processor,
+            description: "Enhanced WebSocket manager with rooms, broadcasting, direct messaging, connection tracking, and message history. Operations: connect, disconnect, send, broadcast, join_room, leave_room, room_send, connections, rooms, history, kick.".to_string(),
+            inputs: vec![PortSpec::new("default")],
+            outputs: vec![PortSpec::new("default")],
+            config_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "operation": { "type": "string", "enum": ["connect", "disconnect", "send", "broadcast", "join_room", "leave_room", "room_send", "connections", "rooms", "history", "kick"] },
+                    "max_history": { "type": "integer", "default": 100 }
+                }
+            }),
+        },
     });
 }

@@ -31,7 +31,7 @@ Programs are not written — they are **generated from intent**. The fundamental
 ### Crate Structure
 
 - **anp-core**: Graph spec, validation, runtime engine, execution scheduler, GraphOp editor
-- **anp-nodes**: 92 built-in node implementations across 10 categories (see Node Catalog below)
+- **anp-nodes**: 100 built-in node implementations across 12 categories (see Node Catalog below)
 - **anp-planner**: LLM integration — generates graphs from prompts, edit ops from instructions
 - **anp-cli**: CLI entry point (`anp run`, `anp prompt`, `anp edit`, etc.)
 
@@ -44,7 +44,7 @@ Programs are not written — they are **generated from intent**. The fundamental
 | Sink | Consumes data, no outputs | console, file_write, log, email |
 | Service | Long-running event loop, triggers downstream | http_server, cron, websocket |
 
-### Node Catalog (92 nodes)
+### Node Catalog (100 nodes)
 
 **I/O & Core** (16): console, file_read, file_write, transform, filter, foreach, merge, template, template_engine, conditional, switch, try_catch, parallel, accumulator, debounce, sleep
 
@@ -58,9 +58,9 @@ Programs are not written — they are **generated from intent**. The fundamental
 
 **AI Workflow** (2): prompt_chain, agent_loop
 
-**Auth & Security** (7): jwt, api_key, password, totp, encrypt, hash, sanitize
+**Auth & Security** (9): jwt, api_key, password, totp, encrypt, hash, sanitize, aes, oauth
 
-**State & Storage** (8): database, memory, cache, queue, priority_queue, session, kv_store, counter
+**State & Storage** (10): database, memory, cache, queue, priority_queue, session, kv_store, counter, redis, sql_query
 
 **Resilience & Flow** (9): rate_limit, retry, circuit_breaker, semaphore, deduplicate, throttle, batch, cron, aggregate
 
@@ -68,9 +68,9 @@ Programs are not written — they are **generated from intent**. The fundamental
 
 **Observability** (6): log, validate, random, uuid, timestamp, env
 
-**Integration** (2): email, image_resize
+**Integration** (3): email, image_resize, multipart
 
-**Advanced Workflow** (2): event_emitter, metrics
+**Advanced Workflow** (5): event_emitter, metrics, state_machine, message_broker, ws
 
 ### Graph Spec (v0.1)
 
@@ -141,7 +141,15 @@ Programs are not written — they are **generated from intent**. The fundamental
 - Event Emitter: pub/sub event system within graphs
 - Metrics node: counters, gauges, histograms with percentile summaries
 - KV Store: namespaced key-value storage with CRUD operations
-- Planner catalog: auto-generated from NodeRegistry (92 nodes reflected automatically)
+- Planner catalog: auto-generated from NodeRegistry (100 nodes reflected automatically)
+- OAuth node: OAuth 2.0 authorization code flow, client_credentials, token refresh, PKCE, provider presets (Google, GitHub, Microsoft)
+- AES node: pure Rust AES-256-CBC encryption/decryption, PKCS7 padding, key derivation from passphrase
+- Multipart node: multipart/form-data builder/parser for file uploads, URL-encoded form encoding
+- SQL Query node: in-process SQL engine over JSON arrays — SELECT, INSERT, UPDATE, DELETE, WHERE, ORDER BY, GROUP BY, JOIN, aggregates
+- Redis node: Redis-compatible in-memory data store — strings, hashes, lists, sets, sorted sets, TTL/EXPIRE, KEYS, INCR
+- Message Broker node: topic-based pub/sub with dead letter queues, ack/nack, subscription management, stats
+- State Machine node: FSM with states, transitions, guard conditions, context, history, wildcard transitions — overcomes DAG limitation
+- WebSocket Enhanced (ws) node: room management, broadcasting, direct messaging, connection tracking, message history, kick
 
 ## Roadmap
 
@@ -150,5 +158,6 @@ Programs are not written — they are **generated from intent**. The fundamental
 - v0.3: GraphOp API + GraphEditor (`anp edit` command)
 - v0.4: AI-native nodes (llm_call, http_client, template, conditional)
 - v0.5: Observability, agentic workflows, state management (memory, tool_router, NodeTrace)
-- v0.6: 92-node ecosystem — AI/ML, auth, data processing, UI, workflow nodes ← current
+- v0.6: 92-node ecosystem — AI/ML, auth, data processing, UI, workflow nodes
+- v0.7: 100-node ecosystem — AES crypto, OAuth 2.0, SQL engine, Redis, message broker, FSM, WebSocket rooms ← current
 - v1.0: Plugin ecosystem, custom node types, visual graph editor
