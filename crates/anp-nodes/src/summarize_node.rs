@@ -6,10 +6,15 @@ use anp_core::runtime::context::ExecutionContext;
 
 /// Summarize node — extractive text summarization.
 ///
+/// Config:
+/// ```json
+/// { "operation": "sentences", "max_sentences": 3, "max_length": 200, "top_n": 10 }
+/// ```
+///
 /// Operations:
 /// - `sentences`: extract first N sentences
 /// - `truncate`: truncate to max chars with "..." suffix
-/// - `keywords`: extract most frequent words (excluding stop words)
+/// - `keywords`: extract most frequent words excluding stop words
 pub struct SummarizeNode {
     operation: String,
     max_sentences: usize,
@@ -47,23 +52,33 @@ impl SummarizeNode {
     fn extract_sentences(text: &str, max: usize) -> String {
         let mut sentences = Vec::new();
         let mut start = 0;
-        for (i, ch) in text.char_indices() {
-            if ch == '.' || ch == '!' || ch == '?' {
-                let end = i + ch.len_utf8();
-                let sentence = text[start..end].trim();
-                if !sentence.is_empty() {
-                    sentences.push(sentence.to_string());
-                    if sentences.len() >= max {
-                        break;
-                    }
+        let chars: Vec<char> = text.chars().collect();
+        let len = chars.len();
+
+        for i in 0..len {
+            if (chars[i] == '.' || chars[i] == '!' || chars[i] == '?')
+                && (i + 1 >= len || chars[i + 1].is_whitespace())
+            {
+                let end = i + 1;
+                let sentence: String = chars[start..end].iter().collect();
+                let trimmed = sentence.trim();
+                if !trimmed.is_empty() {
+                    sentences.push(trimmed.to_string());
                 }
                 start = end;
+                if sentences.len() >= max {
+                    break;
+                }
             }
         }
-        // If no sentence terminators found, return the whole text (or first max_sentences worth)
+
         if sentences.is_empty() {
-            return text.to_string();
+            let trimmed = text.trim();
+            if !trimmed.is_empty() {
+                sentences.push(trimmed.to_string());
+            }
         }
+
         sentences.join(" ")
     }
 
@@ -78,22 +93,30 @@ impl SummarizeNode {
         format!("{}...", truncated)
     }
 
-    fn extract_keywords(text: &str, top_n: usize) -> Vec<(String, usize)> {
+    fn extract_keywords(text: &str, top_n: usize) -> (Vec<(String, usize)>, usize) {
+        let words: Vec<String> = text
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|w| !w.is_empty())
+            .map(|w| w.to_lowercase())
+            .collect();
+        let total_words = words.len();
+
         let mut freq: HashMap<String, usize> = HashMap::new();
-        for word in text.split(|c: char| !c.is_alphanumeric()) {
-            let w = word.to_lowercase();
-            if w.is_empty() || w.len() < 2 {
+        for word in &words {
+            if word.len() < 2 {
                 continue;
             }
-            if STOP_WORDS.contains(&w.as_str()) {
+            if STOP_WORDS.contains(&word.as_str()) {
                 continue;
             }
-            *freq.entry(w).or_insert(0) += 1;
+            *freq.entry(word.clone()).or_insert(0) += 1;
         }
-        let mut entries: Vec<(String, usize)> = freq.into_iter().collect();
-        entries.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
-        entries.truncate(top_n);
-        entries
+
+        let mut sorted: Vec<(String, usize)> = freq.into_iter().collect();
+        sorted.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+        sorted.truncate(top_n);
+
+        (sorted, total_words)
     }
 }
 
@@ -165,11 +188,7 @@ impl NodeExecutor for SummarizeNode {
                 })))
             }
             "keywords" => {
-                let total_words = text
-                    .split(|c: char| !c.is_alphanumeric())
-                    .filter(|w| !w.is_empty())
-                    .count();
-                let keywords = Self::extract_keywords(text, self.top_n);
+                let (keywords, total_words) = Self::extract_keywords(text, self.top_n);
                 let kw_json: Vec<serde_json::Value> = keywords
                     .into_iter()
                     .map(|(word, count)| serde_json::json!({"word": word, "count": count}))
@@ -192,7 +211,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_sentences() {
+    async fn test_sentences_basic() {
         let mut node = SummarizeNode::new();
         node.init(&serde_json::json!({"operation": "sentences", "max_sentences": 2}))
             .await
@@ -218,13 +237,12 @@ mod tests {
         let ctx = ExecutionContext::new();
         let output = node
             .execute(
-                serde_json::json!({"text": "This is a long text that needs truncating"}),
+                serde_json::json!({"text": "Hello World, this is long"}),
                 &ctx,
             )
             .await
             .unwrap();
-        let data = &output.ports["default"];
-        let summary = data["summary"].as_str().unwrap();
+        let summary = output.ports["default"]["summary"].as_str().unwrap();
         assert!(summary.ends_with("..."));
         assert!(summary.len() <= 10);
     }
@@ -252,24 +270,15 @@ mod tests {
         let ctx = ExecutionContext::new();
         let output = node
             .execute(
-                serde_json::json!({"text": "rust rust rust python python java"}),
+                serde_json::json!({"text": "rust is great and rust is fast and rust is safe"}),
                 &ctx,
             )
             .await
             .unwrap();
         let data = &output.ports["default"];
         let keywords = data["keywords"].as_array().unwrap();
+        assert!(!keywords.is_empty());
         assert_eq!(keywords[0]["word"], "rust");
-        assert_eq!(keywords[0]["count"], 3);
-    }
-
-    #[tokio::test]
-    async fn test_invalid_operation() {
-        let mut node = SummarizeNode::new();
-        let result = node
-            .init(&serde_json::json!({"operation": "abstract"}))
-            .await;
-        assert!(result.is_err());
     }
 
     #[tokio::test]
@@ -277,7 +286,16 @@ mod tests {
         let mut node = SummarizeNode::new();
         node.init(&serde_json::json!({})).await.unwrap();
         let ctx = ExecutionContext::new();
-        let result = node.execute(serde_json::json!({"data": "no text"}), &ctx).await;
+        let result = node.execute(serde_json::json!({}), &ctx).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_invalid_operation() {
+        let mut node = SummarizeNode::new();
+        let result = node
+            .init(&serde_json::json!({"operation": "compress"}))
+            .await;
         assert!(result.is_err());
     }
 

@@ -60,9 +60,7 @@ fn convert_markdown_to_html(md: &str) -> String {
         }
 
         // List items
-        if (trimmed.starts_with("- ") || trimmed.starts_with("* "))
-            && trimmed.len() > 2
-        {
+        if (trimmed.starts_with("- ") || trimmed.starts_with("* ")) && trimmed.len() > 2 {
             flush_paragraph(&mut paragraph_lines, &mut html_parts);
             let mut list_items: Vec<String> = Vec::new();
             while i < lines.len() {
@@ -109,8 +107,12 @@ fn inline_format(text: &str) -> String {
                 if close_bracket + 1 < len && chars[close_bracket + 1] == '(' {
                     if let Some(close_paren) = find_char(&chars, close_bracket + 2, ')') {
                         let link_text: String = chars[i + 1..close_bracket].iter().collect();
-                        let url: String = chars[close_bracket + 2..close_paren].iter().collect();
-                        result.push_str(&format!("<a href=\"{}\">{}</a>", url, link_text));
+                        let url: String =
+                            chars[close_bracket + 2..close_paren].iter().collect();
+                        result.push_str(&format!(
+                            "<a href=\"{}\">{}</a>",
+                            url, link_text
+                        ));
                         i = close_paren + 1;
                         continue;
                     }
@@ -240,7 +242,7 @@ mod tests {
     use serde_json::json;
 
     fn ctx() -> ExecutionContext {
-        ExecutionContext::new("test")
+        ExecutionContext::new()
     }
 
     #[tokio::test]
@@ -249,7 +251,7 @@ mod tests {
         node.init(&json!({"wrap": false})).await.unwrap();
         let input = json!({"text": "# Title\n## Subtitle"});
         let output = node.execute(input, &ctx()).await.unwrap();
-        let html = output.data.unwrap()["html"].as_str().unwrap().to_string();
+        let html = output.ports["default"]["html"].as_str().unwrap();
         assert!(html.contains("<h1>Title</h1>"));
         assert!(html.contains("<h2>Subtitle</h2>"));
     }
@@ -260,7 +262,7 @@ mod tests {
         node.init(&json!({"wrap": false})).await.unwrap();
         let input = json!({"text": "This is **bold** and *italic* text"});
         let output = node.execute(input, &ctx()).await.unwrap();
-        let html = output.data.unwrap()["html"].as_str().unwrap().to_string();
+        let html = output.ports["default"]["html"].as_str().unwrap();
         assert!(html.contains("<strong>bold</strong>"));
         assert!(html.contains("<em>italic</em>"));
     }
@@ -271,7 +273,7 @@ mod tests {
         node.init(&json!({"wrap": false})).await.unwrap();
         let input = json!({"text": "Use `println!` macro"});
         let output = node.execute(input, &ctx()).await.unwrap();
-        let html = output.data.unwrap()["html"].as_str().unwrap().to_string();
+        let html = output.ports["default"]["html"].as_str().unwrap();
         assert!(html.contains("<code>println!</code>"));
     }
 
@@ -281,7 +283,7 @@ mod tests {
         node.init(&json!({"wrap": false})).await.unwrap();
         let input = json!({"text": "- item 1\n- item 2\n- item 3"});
         let output = node.execute(input, &ctx()).await.unwrap();
-        let html = output.data.unwrap()["html"].as_str().unwrap().to_string();
+        let html = output.ports["default"]["html"].as_str().unwrap();
         assert!(html.contains("<ul>"));
         assert!(html.contains("<li>item 1</li>"));
         assert!(html.contains("<li>item 2</li>"));
@@ -294,7 +296,7 @@ mod tests {
         node.init(&json!({"wrap": false})).await.unwrap();
         let input = json!({"text": "Visit [Google](https://google.com)"});
         let output = node.execute(input, &ctx()).await.unwrap();
-        let html = output.data.unwrap()["html"].as_str().unwrap().to_string();
+        let html = output.ports["default"]["html"].as_str().unwrap();
         assert!(html.contains("<a href=\"https://google.com\">Google</a>"));
     }
 
@@ -304,7 +306,7 @@ mod tests {
         node.init(&json!({"wrap": false})).await.unwrap();
         let input = json!({"text": "above\n\n---\n\nbelow"});
         let output = node.execute(input, &ctx()).await.unwrap();
-        let html = output.data.unwrap()["html"].as_str().unwrap().to_string();
+        let html = output.ports["default"]["html"].as_str().unwrap();
         assert!(html.contains("<hr>"));
     }
 
@@ -314,7 +316,7 @@ mod tests {
         node.init(&json!({"wrap": true})).await.unwrap();
         let input = json!({"text": "# Hello"});
         let output = node.execute(input, &ctx()).await.unwrap();
-        let html = output.data.unwrap()["html"].as_str().unwrap().to_string();
+        let html = output.ports["default"]["html"].as_str().unwrap();
         assert!(html.starts_with("<html><body>"));
         assert!(html.ends_with("</body></html>"));
     }

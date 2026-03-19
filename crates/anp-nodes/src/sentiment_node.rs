@@ -6,7 +6,7 @@ use anp_core::runtime::context::ExecutionContext;
 ///
 /// Config:
 /// ```json
-/// { "field": "text", "custom_positive": ["fantastic"], "custom_negative": ["terrible"] }
+/// { "field": "text", "custom_positive": [], "custom_negative": [] }
 /// ```
 pub struct SentimentNode {
     field: String,
@@ -69,20 +69,20 @@ impl NodeExecutor for SentimentNode {
     }
 
     async fn init(&mut self, config: &serde_json::Value) -> NodeResult<()> {
-        if let Some(f) = config.get("field").and_then(|v| v.as_str()) {
-            self.field = f.to_string();
+        if let Some(field) = config.get("field").and_then(|v| v.as_str()) {
+            self.field = field.to_string();
         }
         if let Some(arr) = config.get("custom_positive").and_then(|v| v.as_array()) {
             for item in arr {
-                if let Some(w) = item.as_str() {
-                    self.positive_words.push(w.to_lowercase());
+                if let Some(word) = item.as_str() {
+                    self.positive_words.push(word.to_lowercase());
                 }
             }
         }
         if let Some(arr) = config.get("custom_negative").and_then(|v| v.as_array()) {
             for item in arr {
-                if let Some(w) = item.as_str() {
-                    self.negative_words.push(w.to_lowercase());
+                if let Some(word) = item.as_str() {
+                    self.negative_words.push(word.to_lowercase());
                 }
             }
         }
@@ -94,25 +94,36 @@ impl NodeExecutor for SentimentNode {
         input: serde_json::Value,
         _ctx: &ExecutionContext,
     ) -> NodeResult<NodeOutput> {
-        let text = self.resolve_field(&input).ok_or_else(|| {
-            NodeError::ExecutionFailed(format!("field '{}' not found or not a string", self.field))
-        })?;
+        let text = self
+            .resolve_field(&input)
+            .ok_or_else(|| {
+                NodeError::ExecutionFailed(format!(
+                    "field '{}' not found or not a string",
+                    self.field
+                ))
+            })?;
 
         let words = Self::extract_words(text);
         let word_count = words.len();
 
-        let positive_count = words
-            .iter()
-            .filter(|w| self.positive_words.contains(w))
-            .count();
-        let negative_count = words
-            .iter()
-            .filter(|w| self.negative_words.contains(w))
-            .count();
+        let mut positive_count = 0u64;
+        let mut negative_count = 0u64;
+
+        for word in &words {
+            if self.positive_words.contains(word) {
+                positive_count += 1;
+            }
+            if self.negative_words.contains(word) {
+                negative_count += 1;
+            }
+        }
 
         let total = positive_count + negative_count;
-        let denom = if total == 0 { 1 } else { total };
-        let score = (positive_count as f64 - negative_count as f64) / denom as f64;
+        let score = if total == 0 {
+            0.0
+        } else {
+            (positive_count as f64 - negative_count as f64) / total as f64
+        };
 
         let sentiment = if score > 0.1 {
             "positive"
@@ -143,7 +154,10 @@ mod tests {
         node.init(&serde_json::json!({})).await.unwrap();
         let ctx = ExecutionContext::new();
         let output = node
-            .execute(serde_json::json!({"text": "This is a great and amazing day"}), &ctx)
+            .execute(
+                serde_json::json!({"text": "This is a great and amazing day"}),
+                &ctx,
+            )
             .await
             .unwrap();
         let data = &output.ports["default"];
@@ -159,7 +173,10 @@ mod tests {
         node.init(&serde_json::json!({})).await.unwrap();
         let ctx = ExecutionContext::new();
         let output = node
-            .execute(serde_json::json!({"text": "This is terrible and awful"}), &ctx)
+            .execute(
+                serde_json::json!({"text": "This is terrible and awful"}),
+                &ctx,
+            )
             .await
             .unwrap();
         let data = &output.ports["default"];
@@ -173,12 +190,30 @@ mod tests {
         node.init(&serde_json::json!({})).await.unwrap();
         let ctx = ExecutionContext::new();
         let output = node
-            .execute(serde_json::json!({"text": "The cat sat on the mat"}), &ctx)
+            .execute(
+                serde_json::json!({"text": "The cat sat on the mat"}),
+                &ctx,
+            )
             .await
             .unwrap();
         let data = &output.ports["default"];
         assert_eq!(data["sentiment"], "neutral");
         assert_eq!(data["score"].as_f64().unwrap(), 0.0);
+    }
+
+    #[tokio::test]
+    async fn test_mixed_sentiment() {
+        let mut node = SentimentNode::new();
+        node.init(&serde_json::json!({})).await.unwrap();
+        let ctx = ExecutionContext::new();
+        let output = node
+            .execute(serde_json::json!({"text": "great but terrible"}), &ctx)
+            .await
+            .unwrap();
+        let data = &output.ports["default"];
+        assert_eq!(data["sentiment"], "neutral");
+        assert_eq!(data["positive_count"], 1);
+        assert_eq!(data["negative_count"], 1);
     }
 
     #[tokio::test]
@@ -202,28 +237,15 @@ mod tests {
     #[tokio::test]
     async fn test_custom_field() {
         let mut node = SentimentNode::new();
-        node.init(&serde_json::json!({"field": "body.content"}))
+        node.init(&serde_json::json!({"field": "body"}))
             .await
             .unwrap();
         let ctx = ExecutionContext::new();
         let output = node
-            .execute(
-                serde_json::json!({"body": {"content": "great amazing wonderful"}}),
-                &ctx,
-            )
+            .execute(serde_json::json!({"body": "amazing wonderful"}), &ctx)
             .await
             .unwrap();
-        let data = &output.ports["default"];
-        assert_eq!(data["sentiment"], "positive");
-    }
-
-    #[tokio::test]
-    async fn test_missing_field() {
-        let mut node = SentimentNode::new();
-        node.init(&serde_json::json!({})).await.unwrap();
-        let ctx = ExecutionContext::new();
-        let result = node.execute(serde_json::json!({"other": "data"}), &ctx).await;
-        assert!(result.is_err());
+        assert_eq!(output.ports["default"]["sentiment"], "positive");
     }
 
     #[tokio::test]

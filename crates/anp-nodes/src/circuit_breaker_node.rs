@@ -151,20 +151,40 @@ impl NodeExecutor for CircuitBreakerNode {
                         let mut s = self.state.write().unwrap();
                         *s = "half_open".to_string();
                     }
-                    self.half_open_allowed.store(0, Ordering::SeqCst);
+                    self.half_open_allowed.store(1, Ordering::SeqCst);
 
-                    // Allow this request through as half_open
-                    self.half_open_allowed.fetch_add(1, Ordering::SeqCst);
+                    // Process this request as half_open: check success/failure
+                    let has_error = input.get("_error").is_some();
+                    if has_error {
+                        // Back to open
+                        {
+                            let mut s = self.state.write().unwrap();
+                            *s = "open".to_string();
+                        }
+                        {
+                            let mut lft = self.last_failure_time.write().unwrap();
+                            *lft = now;
+                        }
+                        self.failures.fetch_add(1, Ordering::SeqCst);
+                    } else {
+                        // Success — reset to closed
+                        {
+                            let mut s = self.state.write().unwrap();
+                            *s = "closed".to_string();
+                        }
+                        self.failures.store(0, Ordering::SeqCst);
+                    }
 
-                    let total = self.total_requests.load(Ordering::SeqCst);
+                    let state = self.state.read().unwrap().clone();
                     let failures = self.failures.load(Ordering::SeqCst);
+                    let total = self.total_requests.load(Ordering::SeqCst);
 
                     let mut result = input.clone();
                     if let Some(obj) = result.as_object_mut() {
                         obj.insert(
                             "_circuit_breaker".to_string(),
                             serde_json::json!({
-                                "state": "half_open",
+                                "state": state,
                                 "failures": failures,
                                 "total_requests": total,
                             }),

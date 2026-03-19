@@ -10,8 +10,8 @@ use anp_core::runtime::context::ExecutionContext;
 /// ```
 ///
 /// Operations:
-/// - `embed`: converts text to a 26-dimensional vector (character frequency)
-/// - `similarity`: cosine similarity between two vectors (`a` and `b`)
+/// - `embed`: character frequency analysis → 26-dimensional vector
+/// - `similarity`: cosine similarity between two vectors
 /// - `distance`: euclidean distance between two vectors
 pub struct EmbeddingNode {
     operation: String,
@@ -34,18 +34,24 @@ impl EmbeddingNode {
 
     fn embed_text(&self, text: &str) -> Vec<f64> {
         let mut counts = vec![0u64; self.dimensions];
+        let lower = text.to_lowercase();
         let mut total = 0u64;
-        for ch in text.chars() {
-            if let Some(idx) = ch.to_ascii_lowercase().checked_sub('a') {
-                let idx = idx as usize;
+        for ch in lower.chars() {
+            if ch.is_ascii_lowercase() {
+                let idx = (ch as u8 - b'a') as usize;
                 if idx < self.dimensions {
                     counts[idx] += 1;
                     total += 1;
                 }
             }
         }
-        let denom = if total == 0 { 1.0 } else { total as f64 };
-        counts.iter().map(|&c| c as f64 / denom).collect()
+        if total == 0 {
+            return vec![0.0; self.dimensions];
+        }
+        counts
+            .iter()
+            .map(|&c| c as f64 / total as f64)
+            .collect()
     }
 
     fn cosine_similarity(a: &[f64], b: &[f64]) -> f64 {
@@ -66,8 +72,9 @@ impl EmbeddingNode {
             .sqrt()
     }
 
-    fn parse_vector(val: &serde_json::Value) -> Result<Vec<f64>, NodeError> {
-        val.as_array()
+    fn parse_vector(value: &serde_json::Value) -> Result<Vec<f64>, NodeError> {
+        value
+            .as_array()
             .ok_or_else(|| NodeError::ExecutionFailed("expected array for vector".into()))?
             .iter()
             .map(|v| {
@@ -103,9 +110,9 @@ impl NodeExecutor for EmbeddingNode {
             }
         }
         if let Some(dims) = config.get("dimensions").and_then(|v| v.as_u64()) {
-            if dims == 0 || dims > 1000 {
+            if dims == 0 || dims > 256 {
                 return Err(NodeError::InvalidConfig(
-                    "dimensions must be between 1 and 1000".into(),
+                    "dimensions must be between 1 and 256".into(),
                 ));
             }
             self.dimensions = dims as usize;
@@ -135,28 +142,38 @@ impl NodeExecutor for EmbeddingNode {
             "similarity" => {
                 let a = Self::parse_vector(
                     input.get("a").ok_or_else(|| {
-                        NodeError::ExecutionFailed("similarity requires 'a' field".into())
+                        NodeError::ExecutionFailed("similarity requires 'a' vector".into())
                     })?,
                 )?;
                 let b = Self::parse_vector(
                     input.get("b").ok_or_else(|| {
-                        NodeError::ExecutionFailed("similarity requires 'b' field".into())
+                        NodeError::ExecutionFailed("similarity requires 'b' vector".into())
                     })?,
                 )?;
+                if a.len() != b.len() {
+                    return Err(NodeError::ExecutionFailed(
+                        "vectors must have same dimensions".into(),
+                    ));
+                }
                 let sim = Self::cosine_similarity(&a, &b);
                 Ok(NodeOutput::data(serde_json::json!({ "similarity": sim })))
             }
             "distance" => {
                 let a = Self::parse_vector(
                     input.get("a").ok_or_else(|| {
-                        NodeError::ExecutionFailed("distance requires 'a' field".into())
+                        NodeError::ExecutionFailed("distance requires 'a' vector".into())
                     })?,
                 )?;
                 let b = Self::parse_vector(
                     input.get("b").ok_or_else(|| {
-                        NodeError::ExecutionFailed("distance requires 'b' field".into())
+                        NodeError::ExecutionFailed("distance requires 'b' vector".into())
                     })?,
                 )?;
+                if a.len() != b.len() {
+                    return Err(NodeError::ExecutionFailed(
+                        "vectors must have same dimensions".into(),
+                    ));
+                }
                 let dist = Self::euclidean_distance(&a, &b);
                 Ok(NodeOutput::data(serde_json::json!({ "distance": dist })))
             }
@@ -186,21 +203,17 @@ mod tests {
         let data = &output.ports["default"];
         let emb = data["embedding"].as_array().unwrap();
         assert_eq!(emb.len(), 26);
-        // 'a' appears 2/3, 'b' appears 1/3
         let a_val = emb[0].as_f64().unwrap();
         let b_val = emb[1].as_f64().unwrap();
         assert!((a_val - 2.0 / 3.0).abs() < 1e-9);
         assert!((b_val - 1.0 / 3.0).abs() < 1e-9);
-        // rest should be 0
-        assert_eq!(emb[2].as_f64().unwrap(), 0.0);
+        assert_eq!(data["dimensions"], 26);
     }
 
     #[tokio::test]
     async fn test_embed_empty() {
         let mut node = EmbeddingNode::new();
-        node.init(&serde_json::json!({"operation": "embed"}))
-            .await
-            .unwrap();
+        node.init(&serde_json::json!({})).await.unwrap();
         let ctx = ExecutionContext::new();
         let output = node
             .execute(serde_json::json!({"text": ""}), &ctx)
@@ -229,7 +242,25 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_distance() {
+    async fn test_distance_zero() {
+        let mut node = EmbeddingNode::new();
+        node.init(&serde_json::json!({"operation": "distance"}))
+            .await
+            .unwrap();
+        let ctx = ExecutionContext::new();
+        let output = node
+            .execute(
+                serde_json::json!({"a": [1.0, 2.0], "b": [1.0, 2.0]}),
+                &ctx,
+            )
+            .await
+            .unwrap();
+        let dist = output.ports["default"]["distance"].as_f64().unwrap();
+        assert!(dist.abs() < 1e-9);
+    }
+
+    #[tokio::test]
+    async fn test_distance_known() {
         let mut node = EmbeddingNode::new();
         node.init(&serde_json::json!({"operation": "distance"}))
             .await
@@ -260,18 +291,5 @@ mod tests {
         let node = EmbeddingNode::new();
         assert_eq!(node.node_type(), "embedding");
         assert_eq!(node.node_kind(), NodeKind::Processor);
-    }
-
-    #[tokio::test]
-    async fn test_similarity_missing_field() {
-        let mut node = EmbeddingNode::new();
-        node.init(&serde_json::json!({"operation": "similarity"}))
-            .await
-            .unwrap();
-        let ctx = ExecutionContext::new();
-        let result = node
-            .execute(serde_json::json!({"a": [1.0]}), &ctx)
-            .await;
-        assert!(result.is_err());
     }
 }

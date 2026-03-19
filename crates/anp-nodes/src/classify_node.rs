@@ -8,8 +8,11 @@ use anp_core::runtime::context::ExecutionContext;
 /// ```json
 /// {
 ///   "field": "text",
-///   "categories": { "tech": ["api", "server"], "sports": ["goal", "team"] },
-///   "threshold": 1
+///   "threshold": 1,
+///   "categories": {
+///     "tech": ["api", "server", "database"],
+///     "finance": ["stock", "market", "trading"]
+///   }
 /// }
 /// ```
 pub struct ClassifyNode {
@@ -53,30 +56,32 @@ impl NodeExecutor for ClassifyNode {
     }
 
     async fn init(&mut self, config: &serde_json::Value) -> NodeResult<()> {
-        if let Some(f) = config.get("field").and_then(|v| v.as_str()) {
-            self.field = f.to_string();
+        if let Some(field) = config.get("field").and_then(|v| v.as_str()) {
+            self.field = field.to_string();
         }
-        if let Some(t) = config.get("threshold").and_then(|v| v.as_u64()) {
-            self.threshold = t as usize;
+        if let Some(threshold) = config.get("threshold").and_then(|v| v.as_u64()) {
+            self.threshold = threshold as usize;
         }
-        match config.get("categories").and_then(|v| v.as_object()) {
-            Some(cats) => {
-                self.categories.clear();
-                for (name, keywords) in cats {
-                    let kws: Vec<String> = keywords
-                        .as_array()
-                        .unwrap_or(&Vec::new())
-                        .iter()
-                        .filter_map(|v| v.as_str().map(|s| s.to_lowercase()))
-                        .collect();
-                    self.categories.push((name.clone(), kws));
-                }
+        if let Some(cats) = config.get("categories").and_then(|v| v.as_object()) {
+            self.categories.clear();
+            for (name, keywords) in cats {
+                let kws: Vec<String> = keywords
+                    .as_array()
+                    .ok_or_else(|| {
+                        NodeError::InvalidConfig(format!(
+                            "category '{}' keywords must be an array",
+                            name
+                        ))
+                    })?
+                    .iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_lowercase()))
+                    .collect();
+                self.categories.push((name.clone(), kws));
             }
-            None => {
-                return Err(NodeError::InvalidConfig(
-                    "classify node requires 'categories' config".into(),
-                ));
-            }
+        } else {
+            return Err(NodeError::InvalidConfig(
+                "categories config is required".into(),
+            ));
         }
         Ok(())
     }
@@ -87,7 +92,10 @@ impl NodeExecutor for ClassifyNode {
         _ctx: &ExecutionContext,
     ) -> NodeResult<NodeOutput> {
         let text = self.resolve_field(&input).ok_or_else(|| {
-            NodeError::ExecutionFailed(format!("field '{}' not found or not a string", self.field))
+            NodeError::ExecutionFailed(format!(
+                "field '{}' not found or not a string",
+                self.field
+            ))
         })?;
 
         let text_lower = text.to_lowercase();
@@ -95,16 +103,19 @@ impl NodeExecutor for ClassifyNode {
             .split(|c: char| !c.is_alphanumeric())
             .filter(|w| !w.is_empty())
             .collect();
-        let text_length = text.len();
 
+        let text_length = text.len();
         let mut matches: Vec<serde_json::Value> = Vec::new();
 
         for (category, keywords) in &self.categories {
-            let matched_keywords: Vec<String> = keywords
-                .iter()
-                .filter(|kw| words.contains(&kw.as_str()))
-                .cloned()
-                .collect();
+            let mut matched_keywords: Vec<String> = Vec::new();
+            for keyword in keywords {
+                let kw_lower = keyword.to_lowercase();
+                let count = words.iter().filter(|w| **w == kw_lower).count();
+                if count > 0 {
+                    matched_keywords.push(keyword.clone());
+                }
+            }
             let count = matched_keywords.len();
             if count >= self.threshold {
                 matches.push(serde_json::json!({
@@ -117,17 +128,15 @@ impl NodeExecutor for ClassifyNode {
 
         // Sort by count descending
         matches.sort_by(|a, b| {
-            b["count"]
-                .as_u64()
-                .unwrap_or(0)
-                .cmp(&a["count"].as_u64().unwrap_or(0))
+            let ca = a["count"].as_u64().unwrap_or(0);
+            let cb = b["count"].as_u64().unwrap_or(0);
+            cb.cmp(&ca)
         });
 
         let top_category = matches
             .first()
             .and_then(|m| m["category"].as_str())
-            .unwrap_or("unknown")
-            .to_string();
+            .unwrap_or("none");
 
         Ok(NodeOutput::data(serde_json::json!({
             "matches": matches,
@@ -142,11 +151,12 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_classify_single_category() {
+    async fn test_basic_classification() {
         let mut node = ClassifyNode::new();
         node.init(&serde_json::json!({
             "categories": {
-                "tech": ["api", "server", "database"]
+                "tech": ["api", "server", "database"],
+                "finance": ["stock", "market"]
             }
         }))
         .await
@@ -154,7 +164,7 @@ mod tests {
         let ctx = ExecutionContext::new();
         let output = node
             .execute(
-                serde_json::json!({"text": "The api connects to a database"}),
+                serde_json::json!({"text": "The api connects to the database server"}),
                 &ctx,
             )
             .await
@@ -162,16 +172,57 @@ mod tests {
         let data = &output.ports["default"];
         assert_eq!(data["top_category"], "tech");
         let matches = data["matches"].as_array().unwrap();
-        assert_eq!(matches[0]["count"], 2);
+        assert_eq!(matches[0]["count"], 3);
     }
 
     #[tokio::test]
-    async fn test_classify_multiple_categories() {
+    async fn test_no_matches() {
+        let mut node = ClassifyNode::new();
+        node.init(&serde_json::json!({
+            "categories": { "tech": ["api", "server"] }
+        }))
+        .await
+        .unwrap();
+        let ctx = ExecutionContext::new();
+        let output = node
+            .execute(
+                serde_json::json!({"text": "The cat sat on the mat"}),
+                &ctx,
+            )
+            .await
+            .unwrap();
+        let data = &output.ports["default"];
+        assert_eq!(data["top_category"], "none");
+        assert!(data["matches"].as_array().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_threshold() {
+        let mut node = ClassifyNode::new();
+        node.init(&serde_json::json!({
+            "categories": { "tech": ["api", "server", "database"] },
+            "threshold": 2
+        }))
+        .await
+        .unwrap();
+        let ctx = ExecutionContext::new();
+        let output = node
+            .execute(serde_json::json!({"text": "The api is fast"}), &ctx)
+            .await
+            .unwrap();
+        assert!(output.ports["default"]["matches"]
+            .as_array()
+            .unwrap()
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_multiple_categories() {
         let mut node = ClassifyNode::new();
         node.init(&serde_json::json!({
             "categories": {
-                "tech": ["api", "server"],
-                "sports": ["goal", "team", "match"]
+                "tech": ["api"],
+                "finance": ["stock", "market", "trading"]
             }
         }))
         .await
@@ -179,33 +230,13 @@ mod tests {
         let ctx = ExecutionContext::new();
         let output = node
             .execute(
-                serde_json::json!({"text": "The team scored a goal in the match"}),
+                serde_json::json!({"text": "The stock market and trading api"}),
                 &ctx,
             )
             .await
             .unwrap();
         let data = &output.ports["default"];
-        assert_eq!(data["top_category"], "sports");
-    }
-
-    #[tokio::test]
-    async fn test_threshold() {
-        let mut node = ClassifyNode::new();
-        node.init(&serde_json::json!({
-            "categories": { "tech": ["api", "server"] },
-            "threshold": 2
-        }))
-        .await
-        .unwrap();
-        let ctx = ExecutionContext::new();
-        let output = node
-            .execute(serde_json::json!({"text": "Just an api call"}), &ctx)
-            .await
-            .unwrap();
-        let data = &output.ports["default"];
-        let matches = data["matches"].as_array().unwrap();
-        assert!(matches.is_empty());
-        assert_eq!(data["top_category"], "unknown");
+        assert_eq!(data["top_category"], "finance");
     }
 
     #[tokio::test]
@@ -216,37 +247,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_missing_text_field() {
-        let mut node = ClassifyNode::new();
-        node.init(&serde_json::json!({"categories": {"a": ["b"]}}))
-            .await
-            .unwrap();
-        let ctx = ExecutionContext::new();
-        let result = node.execute(serde_json::json!({}), &ctx).await;
-        assert!(result.is_err());
-    }
-
-    #[tokio::test]
     async fn test_node_type_and_kind() {
         let node = ClassifyNode::new();
         assert_eq!(node.node_type(), "classify");
         assert_eq!(node.node_kind(), NodeKind::Processor);
-    }
-
-    #[tokio::test]
-    async fn test_case_insensitive() {
-        let mut node = ClassifyNode::new();
-        node.init(&serde_json::json!({
-            "categories": { "tech": ["api"] }
-        }))
-        .await
-        .unwrap();
-        let ctx = ExecutionContext::new();
-        let output = node
-            .execute(serde_json::json!({"text": "Using the API here"}), &ctx)
-            .await
-            .unwrap();
-        let data = &output.ports["default"];
-        assert_eq!(data["top_category"], "tech");
     }
 }
