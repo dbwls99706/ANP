@@ -51,10 +51,12 @@ pub fn schedule(graph: &AnpGraph) -> Result<ExecutionPlan, ScheduleError> {
         if !node_ids.contains(edge.to_node.as_str()) {
             return Err(ScheduleError::NodeNotFound(edge.to_node.clone()));
         }
-        adj.get_mut(edge.from_node.as_str())
-            .unwrap()
-            .push(edge.to_node.as_str());
-        *in_degree.get_mut(edge.to_node.as_str()).unwrap() += 1;
+        if let Some(neighbors) = adj.get_mut(edge.from_node.as_str()) {
+            neighbors.push(edge.to_node.as_str());
+        }
+        if let Some(deg) = in_degree.get_mut(edge.to_node.as_str()) {
+            *deg += 1;
+        }
     }
 
     // Topological sort by levels (Kahn's algorithm)
@@ -76,16 +78,20 @@ pub fn schedule(graph: &AnpGraph) -> Result<ExecutionPlan, ScheduleError> {
         // All nodes in queue at this level form one stage
         let level_size = queue.len();
         for _ in 0..level_size {
-            let node_id = queue.pop_front().unwrap();
+            let node_id = match queue.pop_front() {
+                Some(id) => id,
+                None => break,
+            };
             stage_nodes.push(node_id.to_string());
             node_map.insert(node_id.to_string(), stage_idx);
             processed += 1;
 
-            for &next in adj.get(node_id).unwrap() {
-                let deg = in_degree.get_mut(next).unwrap();
-                *deg -= 1;
-                if *deg == 0 {
-                    queue.push_back(next);
+            for &next in adj.get(node_id).unwrap_or(&Vec::new()) {
+                if let Some(deg) = in_degree.get_mut(next) {
+                    *deg -= 1;
+                    if *deg == 0 {
+                        queue.push_back(next);
+                    }
                 }
             }
         }

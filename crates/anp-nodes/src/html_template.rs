@@ -53,7 +53,7 @@ fn resolve_path(value: &serde_json::Value, path: &str) -> Option<String> {
 
     match current {
         serde_json::Value::String(s) => Some(s.clone()),
-        serde_json::Value::Null => Some("".to_string()),
+        serde_json::Value::Null => Some("null".to_string()),
         other => Some(other.to_string()),
     }
 }

@@ -347,11 +347,17 @@ impl NodeExecutor for ToolRouterNode {
         let chosen_tool = self.call_llm(&prompt, &api_key).await?;
 
         // Normalize: trim, lowercase, find matching tool
+        // Priority: exact match first, then fallback to contains (prevents "search" matching "research")
         let chosen_lower = chosen_tool.to_lowercase();
-        let matched_tool = self.tools.iter().find(|t| {
-            let t_lower = t.name.to_lowercase();
-            chosen_lower == t_lower || chosen_lower.contains(&t_lower)
-        });
+        let matched_tool = self
+            .tools
+            .iter()
+            .find(|t| t.name.to_lowercase() == chosen_lower)
+            .or_else(|| {
+                self.tools
+                    .iter()
+                    .find(|t| chosen_lower.contains(&t.name.to_lowercase()))
+            });
 
         let port = match matched_tool {
             Some(tool) => tool.name.clone(),
