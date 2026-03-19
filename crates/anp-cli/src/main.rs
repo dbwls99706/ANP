@@ -79,6 +79,26 @@ enum Commands {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Formally verify an ANP graph — prove correctness
+    Verify {
+        /// Path to the .anp.json graph file
+        graph: PathBuf,
+    },
+    /// Show semantic differences between two graphs
+    Diff {
+        /// Path to the old graph
+        old_graph: PathBuf,
+        /// Path to the new graph
+        new_graph: PathBuf,
+    },
+    /// Optimize an ANP graph with compiler-like passes
+    Optimize {
+        /// Path to the .anp.json graph file
+        graph: PathBuf,
+        /// Save optimized graph to file
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+    },
 }
 
 /// Unified error type for CLI operations.
@@ -149,6 +169,12 @@ async fn main() -> ExitCode {
             instruction,
             dry_run,
         } => cmd_edit(graph, instruction, dry_run).await,
+        Commands::Verify { graph: path } => cmd_verify(path),
+        Commands::Diff {
+            old_graph,
+            new_graph,
+        } => cmd_diff(old_graph, new_graph),
+        Commands::Optimize { graph: path, output } => cmd_optimize(path, output),
     };
 
     match result {
@@ -559,6 +585,44 @@ fn cmd_init(name: String) -> CliResult {
     println!();
     println!("  cd {}", name);
     println!("  anp run main.anp.json");
+    Ok(())
+}
+
+fn cmd_verify(path: PathBuf) -> CliResult {
+    let graph = load_graph(&path)?;
+    let report = anp_core::graph::verify::verify(&graph);
+    println!("{}", report);
+    if report.overall_pass {
+        Ok(())
+    } else {
+        Err(CliError::Message("verification failed".to_string()))
+    }
+}
+
+fn cmd_diff(old_path: PathBuf, new_path: PathBuf) -> CliResult {
+    let old_graph = load_graph(&old_path)?;
+    let new_graph = load_graph(&new_path)?;
+    let diff = anp_core::graph::diff::diff(&old_graph, &new_graph);
+    if diff.summary.is_identical {
+        println!("Graphs are identical.");
+    } else {
+        println!("{}", diff);
+    }
+    Ok(())
+}
+
+fn cmd_optimize(path: PathBuf, output: Option<PathBuf>) -> CliResult {
+    let graph = load_graph(&path)?;
+    println!("Optimizer not yet available.");
+    // When anp_core::graph::optimize is implemented, this will run
+    // optimization passes and save the result.
+    if let Some(out_path) = output {
+        let json = serde_json::to_string_pretty(&graph)
+            .map_err(|e| CliError::Message(format!("Error serializing graph: {}", e)))?;
+        std::fs::write(&out_path, &json)
+            .map_err(|e| CliError::Message(format!("Error writing file: {}", e)))?;
+        println!("Graph copied to {}", out_path.display());
+    }
     Ok(())
 }
 
