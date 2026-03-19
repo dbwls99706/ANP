@@ -11,5 +11,5 @@ RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/
 COPY --from=builder /app/target/release/anp-cli /usr/local/bin/anp
 COPY examples/ /app/examples/
 WORKDIR /app
-EXPOSE 8080
-CMD ["anp", "run", "examples/fly_demo.anp.json"]
+EXPOSE 3000
+CMD ["anp", "run", "examples/rest_api_with_params.anp.json"]
