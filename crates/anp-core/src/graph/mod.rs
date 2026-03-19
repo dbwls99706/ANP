@@ -1,8 +1,10 @@
+pub mod bench;
 pub mod compile;
 pub mod diff;
 pub mod editor;
 pub mod loader;
 pub mod optimize;
 pub mod spec;
+pub mod types;
 pub mod validate;
 pub mod verify;

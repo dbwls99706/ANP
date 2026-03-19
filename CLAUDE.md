@@ -22,10 +22,10 @@ Programs are not written — they are **generated from intent**. The fundamental
 ## Architecture
 
 ```
-┌──────────┐     ┌───────────┐     ┌──────────┐
-│  Prompt   │ ──→ │  Planner  │ ──→ │  Graph   │ ──→ Runtime
-│  (human)  │     │  (LLM)    │     │  (JSON)  │
-└──────────┘     └───────────┘     └──────────┘
+┌──────────┐     ┌───────────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐
+│  Prompt   │ ──→ │  Planner  │ ──→ │  Graph   │ ──→ │  Verify  │ ──→ │ Optimize │ ──→ │  Runtime │
+│  (human)  │     │  (LLM)    │     │  (JSON)  │     │  (proof) │     │ (compile)│     │  (exec)  │
+└──────────┘     └───────────┘     └──────────┘     └──────────┘     └──────────┘     └──────────┘
 ```
 
 ### Crate Structure
@@ -157,6 +157,12 @@ Programs are not written — they are **generated from intent**. The fundamental
 - Gzip node: flate2-based gzip compression/decompression, configurable level, base64 transport encoding
 - Health Check node: K8s liveness/readiness probes, Prometheus metrics export, custom health checks, uptime/error tracking
 - Request ID node: correlation ID generation/propagation for distributed tracing, custom prefixes
+- Formal Verification (`anp verify`): reachability analysis, completeness check, determinism analysis, port coverage, termination guarantee, parallelism scoring, resource estimation — produces mathematical proof of graph correctness
+- Graph Optimizer (`anp optimize`): dead node elimination, transform fusion, unused edge pruning — compiler-like optimization passes for graphs (unprecedented in graph-based tools)
+- AOT Compilation (`anp compile`): pre-computed execution plans, FNV-1a fingerprint, template pattern extraction, binary format (.anp.compiled) — eliminates runtime scheduling overhead
+- Semantic Diffing (`anp diff`): structural graph comparison with node/edge/config/port change detection, recursive JSON diffing with dot-path notation
+- Port Type System: formal type checking for port connections (Any, String, Number, Boolean, Object, Array, Html, Binary, Union) — like TypeScript for graphs
+- Benchmark Reports (`anp bench`): scheduling metrics, complexity analysis, performance predictions, LOC equivalence comparison
 
 ## Roadmap
 
@@ -166,5 +172,6 @@ Programs are not written — they are **generated from intent**. The fundamental
 - v0.4: AI-native nodes (llm_call, http_client, template, conditional)
 - v0.5: Observability, agentic workflows, state management (memory, tool_router, NodeTrace)
 - v0.6: 92-node ecosystem — AI/ML, auth, data processing, UI, workflow nodes
-- v0.7: 103-node ecosystem — AES crypto, OAuth 2.0, SQL engine, Redis, message broker, FSM, WebSocket rooms, gzip compression, health checks, request tracing ← current
+- v0.7: 103-node ecosystem — AES crypto, OAuth 2.0, SQL engine, Redis, message broker, FSM, WebSocket rooms, gzip compression, health checks, request tracing
+- v0.8: Graph Compiler Toolchain — formal verification (`anp verify`), graph optimizer (`anp optimize`), AOT compilation (`anp compile`), semantic diffing (`anp diff`), port type system, benchmark reports ← current
 - v1.0: Plugin ecosystem, custom node types, visual graph editor

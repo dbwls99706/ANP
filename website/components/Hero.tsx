@@ -2,11 +2,24 @@
 
 import { useState, useEffect } from "react";
 
-const COMMAND = '$ anp prompt "AI chatbot that answers questions" --run';
+const COMMAND = "$ anp verify graph.json";
+const OUTPUT_LINES = [
+  "",
+  "  Verifying graph.json...",
+  "",
+  "  [pass] Type checking: all 12 port connections valid",
+  "  [pass] Dead node analysis: 0 unreachable nodes",
+  "  [pass] Cycle detection: DAG property holds",
+  "  [pass] Completeness: all required inputs satisfied",
+  "",
+  "  Result: Graph is formally correct.",
+];
 
 export default function Hero() {
   const [typed, setTyped] = useState("");
+  const [outputIndex, setOutputIndex] = useState(-1);
   const [showCursor, setShowCursor] = useState(true);
+  const [commandDone, setCommandDone] = useState(false);
 
   useEffect(() => {
     let i = 0;
@@ -16,10 +29,25 @@ export default function Hero() {
         i++;
       } else {
         clearInterval(interval);
+        setTimeout(() => setCommandDone(true), 400);
       }
     }, 40);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (!commandDone) return;
+    let line = 0;
+    const interval = setInterval(() => {
+      if (line < OUTPUT_LINES.length) {
+        setOutputIndex(line);
+        line++;
+      } else {
+        clearInterval(interval);
+      }
+    }, 150);
+    return () => clearInterval(interval);
+  }, [commandDone]);
 
   useEffect(() => {
     const interval = setInterval(() => setShowCursor((c) => !c), 530);
@@ -45,7 +73,7 @@ export default function Hero() {
           <span className="gradient-text">graph</span>.
           <br />
           Code is{" "}
-          <span className="text-gray-500 line-through">obsolete</span>.
+          <span className="px-2 py-1 rounded-md bg-gradient-to-r from-anp-blue/20 to-anp-purple/20 border border-anp-purple/30 gradient-text">obsolete</span>.
         </h1>
 
         <p className="text-xl md:text-2xl text-gray-400 max-w-2xl mx-auto mb-12 animate-fade-in-up-delay">
@@ -62,13 +90,40 @@ export default function Hero() {
               <div className="w-3 h-3 rounded-full bg-green-500/80" />
               <span className="text-xs text-gray-500 ml-2 font-mono">terminal</span>
             </div>
-            <div className="p-6 text-left">
-              <span className="font-mono text-sm md:text-base text-green-400">
-                {typed}
-                <span className={`${showCursor ? "opacity-100" : "opacity-0"} transition-opacity`}>
-                  |
+            <div className="p-6 text-left font-mono text-sm md:text-base">
+              <div>
+                <span className="text-green-400">
+                  {typed}
+                  {!commandDone && (
+                    <span className={`${showCursor ? "opacity-100" : "opacity-0"} transition-opacity`}>
+                      |
+                    </span>
+                  )}
                 </span>
-              </span>
+              </div>
+              {commandDone && outputIndex >= 0 && (
+                <div className="mt-1">
+                  {OUTPUT_LINES.slice(0, outputIndex + 1).map((line, i) => (
+                    <div
+                      key={i}
+                      className={
+                        line.includes("[pass]")
+                          ? "text-green-400"
+                          : line.includes("Result:")
+                          ? "text-anp-blue font-semibold"
+                          : "text-gray-400"
+                      }
+                    >
+                      {line || "\u00A0"}
+                    </div>
+                  ))}
+                  {outputIndex >= OUTPUT_LINES.length - 1 && (
+                    <span className={`text-green-400 ${showCursor ? "opacity-100" : "opacity-0"} transition-opacity`}>
+                      |
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>

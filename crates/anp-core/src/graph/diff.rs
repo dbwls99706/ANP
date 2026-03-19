@@ -249,8 +249,8 @@ fn edge_key(e: &Edge) -> EdgeKey {
 }
 
 fn diff_edges(old_edges: &[Edge], new_edges: &[Edge], changes: &mut Vec<GraphChange>) {
-    let old_set: HashSet<EdgeKey> = old_edges.iter().map(|e| edge_key(e)).collect();
-    let new_set: HashSet<EdgeKey> = new_edges.iter().map(|e| edge_key(e)).collect();
+    let old_set: HashSet<EdgeKey> = old_edges.iter().map(edge_key).collect();
+    let new_set: HashSet<EdgeKey> = new_edges.iter().map(edge_key).collect();
 
     for key in old_set.difference(&new_set) {
         changes.push(GraphChange::EdgeRemoved {
@@ -508,10 +508,11 @@ impl fmt::Display for GraphDiff {
                     old_value,
                     new_value,
                 } => {
-                    config_by_node
-                        .entry(node_id.clone())
-                        .or_default()
-                        .push((field.clone(), old_value.clone(), new_value.clone()));
+                    config_by_node.entry(node_id.clone()).or_default().push((
+                        field.clone(),
+                        old_value.clone(),
+                        new_value.clone(),
+                    ));
                 }
                 GraphChange::NodePortsChanged {
                     node_id,
@@ -575,19 +576,24 @@ impl fmt::Display for GraphDiff {
             parts.push(format!("+{} node{}", s.nodes_added, plural(s.nodes_added)));
         }
         if s.nodes_removed > 0 {
-            parts.push(format!("-{} node{}", s.nodes_removed, plural(s.nodes_removed)));
+            parts.push(format!(
+                "-{} node{}",
+                s.nodes_removed,
+                plural(s.nodes_removed)
+            ));
         }
         if s.nodes_modified > 0 {
-            parts.push(format!(
-                "~{} modified",
-                s.nodes_modified
-            ));
+            parts.push(format!("~{} modified", s.nodes_modified));
         }
         if s.edges_added > 0 {
             parts.push(format!("+{} edge{}", s.edges_added, plural(s.edges_added)));
         }
         if s.edges_removed > 0 {
-            parts.push(format!("-{} edge{}", s.edges_removed, plural(s.edges_removed)));
+            parts.push(format!(
+                "-{} edge{}",
+                s.edges_removed,
+                plural(s.edges_removed)
+            ));
         }
         writeln!(f, " {}", parts.join(", "))?;
 
@@ -697,7 +703,10 @@ mod tests {
         assert_eq!(d.summary.nodes_removed, 0);
         assert!(!d.summary.is_identical);
 
-        let added = d.changes.iter().find(|c| matches!(c, GraphChange::NodeAdded { .. }));
+        let added = d
+            .changes
+            .iter()
+            .find(|c| matches!(c, GraphChange::NodeAdded { .. }));
         assert!(added.is_some());
         if let Some(GraphChange::NodeAdded {
             node_id,
@@ -754,9 +763,10 @@ mod tests {
         let d = diff(&old, &new);
         assert_eq!(d.summary.nodes_modified, 1);
 
-        let type_change = d.changes.iter().find(|c| {
-            matches!(c, GraphChange::NodeTypeChanged { .. })
-        });
+        let type_change = d
+            .changes
+            .iter()
+            .find(|c| matches!(c, GraphChange::NodeTypeChanged { .. }));
         assert!(type_change.is_some());
         if let Some(GraphChange::NodeTypeChanged {
             old_type, new_type, ..
@@ -786,9 +796,10 @@ mod tests {
         );
         let d = diff(&old, &new);
 
-        let kind_change = d.changes.iter().find(|c| {
-            matches!(c, GraphChange::NodeKindChanged { .. })
-        });
+        let kind_change = d
+            .changes
+            .iter()
+            .find(|c| matches!(c, GraphChange::NodeKindChanged { .. }));
         assert!(kind_change.is_some());
         if let Some(GraphChange::NodeKindChanged {
             old_kind, new_kind, ..
@@ -830,9 +841,10 @@ mod tests {
         assert_eq!(d.summary.config_changes, 1);
         assert_eq!(d.summary.nodes_modified, 1);
 
-        let cfg = d.changes.iter().find(|c| {
-            matches!(c, GraphChange::NodeConfigChanged { field, .. } if field == "port")
-        });
+        let cfg = d
+            .changes
+            .iter()
+            .find(|c| matches!(c, GraphChange::NodeConfigChanged { field, .. } if field == "port"));
         assert!(cfg.is_some());
         if let Some(GraphChange::NodeConfigChanged {
             old_value,
@@ -1066,10 +1078,7 @@ mod tests {
             matches!(c, GraphChange::NodePortsChanged { port_type, .. } if port_type == "input")
         });
         assert!(input_change.is_some());
-        if let Some(GraphChange::NodePortsChanged {
-            added, removed, ..
-        }) = input_change
-        {
+        if let Some(GraphChange::NodePortsChanged { added, removed, .. }) = input_change {
             assert!(added.contains(&"in3".to_string()));
             assert!(removed.contains(&"in2".to_string()));
         }
@@ -1079,10 +1088,7 @@ mod tests {
             matches!(c, GraphChange::NodePortsChanged { port_type, .. } if port_type == "output")
         });
         assert!(output_change.is_some());
-        if let Some(GraphChange::NodePortsChanged {
-            added, removed, ..
-        }) = output_change
-        {
+        if let Some(GraphChange::NodePortsChanged { added, removed, .. }) = output_change {
             assert!(added.contains(&"out2".to_string()));
             assert!(removed.is_empty());
         }
@@ -1097,14 +1103,15 @@ mod tests {
         let new = make_graph("new_name", "new desc", vec![], vec![]);
         let d = diff(&old, &new);
 
-        let name_change = d.changes.iter().find(|c| {
-            matches!(c, GraphChange::MetadataChanged { field, .. } if field == "name")
-        });
+        let name_change = d
+            .changes
+            .iter()
+            .find(|c| matches!(c, GraphChange::MetadataChanged { field, .. } if field == "name"));
         assert!(name_change.is_some());
 
-        let desc_change = d.changes.iter().find(|c| {
-            matches!(c, GraphChange::MetadataChanged { field, .. } if field == "description")
-        });
+        let desc_change = d.changes.iter().find(
+            |c| matches!(c, GraphChange::MetadataChanged { field, .. } if field == "description"),
+        );
         assert!(desc_change.is_some());
     }
 

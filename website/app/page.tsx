@@ -5,6 +5,7 @@ import GraphDemo from "@/components/GraphDemo";
 import NodeCatalog from "@/components/NodeCatalog";
 import DemoSection from "@/components/DemoSection";
 import Architecture from "@/components/Architecture";
+import Research from "@/components/Research";
 import Footer from "@/components/Footer";
 
 export default function Home() {
@@ -17,6 +18,7 @@ export default function Home() {
       <NodeCatalog />
       <DemoSection />
       <Architecture />
+      <Research />
       <Footer />
     </main>
   );

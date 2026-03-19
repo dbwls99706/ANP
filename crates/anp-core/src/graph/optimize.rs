@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt;
 
-use crate::graph::spec::{AnpGraph, Edge, GraphMetadata, GraphVersion, Node, NodeKind, PortSpec};
+use crate::graph::spec::{AnpGraph, Edge, NodeKind};
 
 /// Result of running optimization passes on a graph
 #[derive(Debug)]
@@ -134,9 +134,9 @@ fn dead_node_elimination(graph: &mut AnpGraph) -> OptimizationPass {
     let original_edges = graph.edges.len();
 
     graph.nodes.retain(|n| reachable.contains(&n.id));
-    graph.edges.retain(|e| {
-        reachable.contains(&e.from_node) && reachable.contains(&e.to_node)
-    });
+    graph
+        .edges
+        .retain(|e| reachable.contains(&e.from_node) && reachable.contains(&e.to_node));
 
     let nodes_removed = original_count - graph.nodes.len();
     let edges_removed = original_edges - graph.edges.len();
@@ -303,6 +303,7 @@ fn unused_edge_pruning(graph: &mut AnpGraph) -> OptimizationPass {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::graph::spec::{GraphMetadata, GraphVersion, Node, PortSpec};
 
     fn make_graph(nodes: Vec<Node>, edges: Vec<Edge>) -> AnpGraph {
         AnpGraph {
@@ -372,10 +373,7 @@ mod tests {
 
     #[test]
     fn test_no_optimization_needed() {
-        let graph = make_graph(
-            vec![source("s"), sink("k")],
-            vec![edge("e1", "s", "k")],
-        );
+        let graph = make_graph(vec![source("s"), sink("k")], vec![edge("e1", "s", "k")]);
         let result = optimize(&graph);
         assert_eq!(result.optimized_nodes, 2);
         assert_eq!(result.optimized_edges, 1);
@@ -395,7 +393,10 @@ mod tests {
         let result = optimize(&graph);
         assert_eq!(result.optimized_nodes, 3);
         assert_eq!(result.original_nodes, 4);
-        assert!(result.passes_applied.iter().any(|p| p.name == "Dead Node Elimination"));
+        assert!(result
+            .passes_applied
+            .iter()
+            .any(|p| p.name == "Dead Node Elimination"));
     }
 
     #[test]
@@ -415,10 +416,18 @@ mod tests {
         );
         let result = optimize(&graph);
         assert_eq!(result.optimized_nodes, 3); // t1+t2 fused into one
-        assert!(result.passes_applied.iter().any(|p| p.name == "Transform Fusion"));
+        assert!(result
+            .passes_applied
+            .iter()
+            .any(|p| p.name == "Transform Fusion"));
 
         // Check fused transform has both mappings
-        let fused = result.graph.nodes.iter().find(|n| n.node_type == "transform").unwrap();
+        let fused = result
+            .graph
+            .nodes
+            .iter()
+            .find(|n| n.node_type == "transform")
+            .unwrap();
         let mapping = fused.config.get("mapping").unwrap();
         assert!(mapping.get("a").is_some());
         assert!(mapping.get("b").is_some());

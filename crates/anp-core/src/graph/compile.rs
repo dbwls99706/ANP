@@ -198,8 +198,8 @@ pub fn save(compiled: &CompiledGraph) -> Result<Vec<u8>, CompileError> {
 
 /// Load compiled graph from bytes
 pub fn load(data: &[u8]) -> Result<CompiledGraph, CompileError> {
-    let compiled: CompiledGraph =
-        serde_json::from_slice(data).map_err(|e| CompileError::SerializationError(e.to_string()))?;
+    let compiled: CompiledGraph = serde_json::from_slice(data)
+        .map_err(|e| CompileError::SerializationError(e.to_string()))?;
     if compiled.magic != "ANP_COMPILED_V1" {
         return Err(CompileError::ValidationFailed(
             "invalid magic bytes".to_string(),
@@ -209,10 +209,7 @@ pub fn load(data: &[u8]) -> Result<CompiledGraph, CompileError> {
 }
 
 /// Save compiled graph to file (.anp.compiled)
-pub fn save_to_file(
-    compiled: &CompiledGraph,
-    path: &std::path::Path,
-) -> Result<(), CompileError> {
+pub fn save_to_file(compiled: &CompiledGraph, path: &std::path::Path) -> Result<(), CompileError> {
     let data = save(compiled)?;
     std::fs::write(path, data)?;
     Ok(())
@@ -337,13 +334,11 @@ impl fmt::Display for CompiledGraph {
         writeln!(
             f,
             "Nodes: {}  Stages: {}  Depth: {}",
-            self.plan.node_count, self.plan.stages.len(), self.plan.max_depth
+            self.plan.node_count,
+            self.plan.stages.len(),
+            self.plan.max_depth
         )?;
-        write!(
-            f,
-            "Entry points: {}",
-            self.plan.entry_nodes.join(", ")
-        )?;
+        write!(f, "Entry points: {}", self.plan.entry_nodes.join(", "))?;
         if self.verified {
             write!(f, "\nPre-validated: ✓")?;
         }
