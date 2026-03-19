@@ -1,3 +1,11 @@
+pub mod diff_node;
+pub mod group_by_node;
+pub mod lookup_node;
+pub mod pivot_node;
+pub mod url_encode_node;
+pub mod toml_node;
+pub mod xml_node;
+pub mod markdown_node;
 pub mod accumulator;
 pub mod api_key_node;
 pub mod array_node;
@@ -59,6 +67,14 @@ pub mod validate_node;
 pub mod webhook_node;
 pub mod websocket_node;
 pub mod yaml_node;
+
+pub mod batch_node;
+pub mod throttle_node;
+pub mod priority_queue_node;
+pub mod aggregate_node;
+pub mod event_emitter_node;
+pub mod metrics_node;
+pub mod kv_store_node;
 
 use anp_core::graph::spec::{NodeKind, PortSpec};
 use anp_core::node::plugin::NodePlugin;
