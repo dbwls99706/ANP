@@ -284,7 +284,7 @@ fn pkcs7_pad(data: &[u8]) -> Vec<u8> {
 }
 
 fn pkcs7_unpad(data: &[u8]) -> Result<Vec<u8>, &'static str> {
-    if data.is_empty() || !data.len().is_multiple_of(16) {
+    if data.is_empty() || data.len() % 16 != 0 {
         return Err("invalid padded data");
     }
     let padding = data[data.len() - 1] as usize;
@@ -353,7 +353,7 @@ fn to_hex(data: &[u8]) -> String {
 }
 
 fn from_hex(hex: &str) -> Result<Vec<u8>, &'static str> {
-    if !hex.len().is_multiple_of(2) {
+    if hex.len() % 2 != 0 {
         return Err("odd hex length");
     }
     (0..hex.len())
@@ -387,7 +387,7 @@ fn aes256_cbc_decrypt(
     key: &[u8; 32],
     iv: &[u8; 16],
 ) -> Result<Vec<u8>, &'static str> {
-    if ciphertext.is_empty() || !ciphertext.len().is_multiple_of(16) {
+    if ciphertext.is_empty() || ciphertext.len() % 16 != 0 {
         return Err("invalid ciphertext length");
     }
     let expanded = key_expansion(key);
