@@ -271,6 +271,10 @@ fn diff_edges(old_edges: &[Edge], new_edges: &[Edge], changes: &mut Vec<GraphCha
     }
 }
 
+/// Maximum recursion depth for JSON diffing to prevent stack overflow
+/// on deeply nested or adversarial inputs.
+const MAX_DIFF_DEPTH: usize = 32;
+
 /// Recursively diff two JSON values, emitting `NodeConfigChanged` entries
 /// with dot-path notation for nested fields and bracket notation for arrays.
 fn diff_json(
@@ -280,9 +284,35 @@ fn diff_json(
     prefix: &str,
     changes: &mut Vec<GraphChange>,
 ) {
+    diff_json_values(old, new, node_id, prefix, changes, 0);
+}
+
+fn diff_json_values(
+    old: &serde_json::Value,
+    new: &serde_json::Value,
+    node_id: &str,
+    prefix: &str,
+    changes: &mut Vec<GraphChange>,
+    depth: usize,
+) {
     use serde_json::Value;
 
     if old == new {
+        return;
+    }
+
+    if depth >= MAX_DIFF_DEPTH {
+        let field = if prefix.is_empty() {
+            "<root>".to_string()
+        } else {
+            prefix.to_string()
+        };
+        changes.push(GraphChange::NodeConfigChanged {
+            node_id: node_id.to_string(),
+            field,
+            old_value: format_json_value(old),
+            new_value: format_json_value(new),
+        });
         return;
     }
 
@@ -316,12 +346,13 @@ fn diff_json(
             // Common keys — recurse
             for key in old_keys.intersection(&new_keys) {
                 let path = make_path(prefix, key);
-                diff_json(
+                diff_json_values(
                     &old_map[key.as_str()],
                     &new_map[key.as_str()],
                     node_id,
                     &path,
                     changes,
+                    depth + 1,
                 );
             }
         }
@@ -335,7 +366,7 @@ fn diff_json(
                 };
                 match (old_arr.get(i), new_arr.get(i)) {
                     (Some(o), Some(n)) => {
-                        diff_json(o, n, node_id, &path, changes);
+                        diff_json_values(o, n, node_id, &path, changes, depth + 1);
                     }
                     (Some(o), None) => {
                         changes.push(GraphChange::NodeConfigChanged {

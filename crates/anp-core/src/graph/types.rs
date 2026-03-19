@@ -247,6 +247,85 @@ pub fn get_node_signature(node_type: &str) -> NodeTypeSignature {
             inputs: HashMap::new(),
             outputs: HashMap::from([("default".into(), PortType::String)]),
         },
+        "http_client" => NodeTypeSignature {
+            inputs: HashMap::from([("default".into(), PortType::Object(None))]),
+            outputs: HashMap::from([("default".into(), PortType::Object(None))]),
+        },
+        "memory" => NodeTypeSignature {
+            inputs: HashMap::from([("default".into(), PortType::Any)]),
+            outputs: HashMap::from([("default".into(), PortType::Object(None))]),
+        },
+        "tool_router" => NodeTypeSignature {
+            inputs: HashMap::from([("default".into(), PortType::Any)]),
+            outputs: HashMap::from([("default".into(), PortType::Any)]),
+        },
+        "switch" => NodeTypeSignature {
+            inputs: HashMap::from([("default".into(), PortType::Any)]),
+            outputs: HashMap::from([("default".into(), PortType::Any)]),
+        },
+        "try_catch" => NodeTypeSignature {
+            inputs: HashMap::from([("default".into(), PortType::Any)]),
+            outputs: HashMap::from([("default".into(), PortType::Any)]),
+        },
+        "parallel" => NodeTypeSignature {
+            inputs: HashMap::from([("default".into(), PortType::Any)]),
+            outputs: HashMap::from([("default".into(), PortType::Array(None))]),
+        },
+        "accumulator" => NodeTypeSignature {
+            inputs: HashMap::from([("default".into(), PortType::Any)]),
+            outputs: HashMap::from([("default".into(), PortType::Array(None))]),
+        },
+        "sleep" => NodeTypeSignature {
+            inputs: HashMap::from([("default".into(), PortType::Any)]),
+            outputs: HashMap::from([("default".into(), PortType::Any)]),
+        },
+        "debounce" => NodeTypeSignature {
+            inputs: HashMap::from([("default".into(), PortType::Any)]),
+            outputs: HashMap::from([("default".into(), PortType::Any)]),
+        },
+        "rate_limit" => NodeTypeSignature {
+            inputs: HashMap::from([("default".into(), PortType::Any)]),
+            outputs: HashMap::from([("default".into(), PortType::Any)]),
+        },
+        "retry" => NodeTypeSignature {
+            inputs: HashMap::from([("default".into(), PortType::Any)]),
+            outputs: HashMap::from([("default".into(), PortType::Any)]),
+        },
+        "circuit_breaker" => NodeTypeSignature {
+            inputs: HashMap::from([("default".into(), PortType::Any)]),
+            outputs: HashMap::from([("default".into(), PortType::Any)]),
+        },
+        "cache" => NodeTypeSignature {
+            inputs: HashMap::from([("default".into(), PortType::Any)]),
+            outputs: HashMap::from([("default".into(), PortType::Any)]),
+        },
+        "queue" => NodeTypeSignature {
+            inputs: HashMap::from([("default".into(), PortType::Any)]),
+            outputs: HashMap::from([("default".into(), PortType::Any)]),
+        },
+        "redis" => NodeTypeSignature {
+            inputs: HashMap::from([("default".into(), PortType::Object(None))]),
+            outputs: HashMap::from([("default".into(), PortType::Object(None))]),
+        },
+        "sql_query" => NodeTypeSignature {
+            inputs: HashMap::from([("default".into(), PortType::Object(None))]),
+            outputs: HashMap::from([(
+                "default".into(),
+                PortType::Array(Some(Box::new(PortType::Object(None)))),
+            )]),
+        },
+        "jwt" => NodeTypeSignature {
+            inputs: HashMap::from([("default".into(), PortType::Object(None))]),
+            outputs: HashMap::from([("default".into(), PortType::Object(None))]),
+        },
+        "hash" => NodeTypeSignature {
+            inputs: HashMap::from([("default".into(), PortType::String)]),
+            outputs: HashMap::from([("default".into(), PortType::String)]),
+        },
+        "encrypt" => NodeTypeSignature {
+            inputs: HashMap::from([("default".into(), PortType::String)]),
+            outputs: HashMap::from([("default".into(), PortType::String)]),
+        },
         // Default: permissive signature for unknown nodes.
         _ => NodeTypeSignature {
             inputs: HashMap::from([("default".into(), PortType::Any)]),

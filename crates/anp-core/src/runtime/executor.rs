@@ -83,7 +83,13 @@ impl PipelineTriggerImpl {
         let downstream_nodes = find_downstream_from_port(source_node, port, &self.plan);
 
         // Find the source node's stage index
-        let source_stage = self.plan.node_map.get(source_node).copied().unwrap_or(0);
+        let source_stage = match self.plan.node_map.get(source_node).copied() {
+            Some(stage) => stage,
+            None => {
+                warn!(node_id = %source_node, "node not found in node_map, defaulting to stage 0");
+                0
+            }
+        };
 
         // Execute stages after the source node's stage
         let mut last_output = serde_json::Value::Null;
@@ -468,11 +474,18 @@ pub async fn execute_service(
         #[cfg(unix)]
         {
             use tokio::signal::unix::{signal, SignalKind};
-            let mut sigterm =
-                signal(SignalKind::terminate()).expect("failed to register SIGTERM handler");
-            tokio::select! {
-                _ = ctrl_c => info!("received SIGINT (Ctrl+C)"),
-                _ = sigterm.recv() => info!("received SIGTERM"),
+            match signal(SignalKind::terminate()) {
+                Ok(mut sigterm) => {
+                    tokio::select! {
+                        _ = ctrl_c => info!("received SIGINT (Ctrl+C)"),
+                        _ = sigterm.recv() => info!("received SIGTERM"),
+                    }
+                }
+                Err(e) => {
+                    warn!(error = %e, "failed to register SIGTERM handler, falling back to SIGINT only");
+                    ctrl_c.await.ok();
+                    info!("received SIGINT (Ctrl+C)");
+                }
             }
         }
 
