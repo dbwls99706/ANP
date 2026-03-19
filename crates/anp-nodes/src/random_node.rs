@@ -176,7 +176,7 @@ impl NodeExecutor for RandomNode {
                 serde_json::json!(val)
             }
             "boolean" => {
-                let val = random_u64().is_multiple_of(2);
+                let val = random_u64() % 2 == 0;
                 serde_json::json!(val)
             }
             "string" => {

@@ -71,7 +71,7 @@ fn from_base64(s: &str) -> Result<Vec<u8>, &'static str> {
         .bytes()
         .filter(|&b| b != b'\n' && b != b'\r' && b != b' ')
         .collect();
-    if !bytes.len().is_multiple_of(4) {
+    if bytes.len() % 4 != 0 {
         return Err("invalid base64 length");
     }
     fn decode_char(c: u8) -> Result<u8, &'static str> {
