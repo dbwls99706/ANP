@@ -259,3 +259,127 @@ impl NodeExecutor for CsvNode {
         Ok(NodeOutput::data(result))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anp_core::runtime::context::ExecutionContext;
+    use serde_json::json;
+
+    async fn make_node(config: serde_json::Value) -> CsvNode {
+        let mut node = CsvNode::new();
+        node.init(&config).await.unwrap();
+        node
+    }
+
+    #[tokio::test]
+    async fn test_parse_with_headers() {
+        let node = make_node(json!({"operation": "parse"})).await;
+        let ctx = ExecutionContext::new();
+        let input = json!("name,age\nAlice,30\nBob,25");
+        let output = node.execute(input, &ctx).await.unwrap();
+        let data = &output.ports["default"];
+        assert_eq!(data[0]["name"], "Alice");
+        assert_eq!(data[0]["age"], "30");
+        assert_eq!(data[1]["name"], "Bob");
+        assert_eq!(data[1]["age"], "25");
+    }
+
+    #[tokio::test]
+    async fn test_parse_without_headers() {
+        let node = make_node(json!({"operation": "parse", "headers": false})).await;
+        let ctx = ExecutionContext::new();
+        let input = json!("Alice,30\nBob,25");
+        let output = node.execute(input, &ctx).await.unwrap();
+        let data = &output.ports["default"];
+        assert_eq!(data[0], json!(["Alice", "30"]));
+        assert_eq!(data[1], json!(["Bob", "25"]));
+    }
+
+    #[tokio::test]
+    async fn test_parse_tab_delimiter() {
+        let node = make_node(json!({"operation": "parse", "delimiter": "\t"})).await;
+        let ctx = ExecutionContext::new();
+        let input = json!("name\tage\nAlice\t30");
+        let output = node.execute(input, &ctx).await.unwrap();
+        let data = &output.ports["default"];
+        assert_eq!(data[0]["name"], "Alice");
+        assert_eq!(data[0]["age"], "30");
+    }
+
+    #[tokio::test]
+    async fn test_parse_semicolon_delimiter() {
+        let node = make_node(json!({"operation": "parse", "delimiter": ";"})).await;
+        let ctx = ExecutionContext::new();
+        let input = json!("x;y\n1;2");
+        let output = node.execute(input, &ctx).await.unwrap();
+        let data = &output.ports["default"];
+        assert_eq!(data[0]["x"], "1");
+        assert_eq!(data[0]["y"], "2");
+    }
+
+    #[tokio::test]
+    async fn test_stringify_objects_with_headers() {
+        let node = make_node(json!({"operation": "stringify"})).await;
+        let ctx = ExecutionContext::new();
+        let input = json!([{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}]);
+        let output = node.execute(input, &ctx).await.unwrap();
+        let csv_str = output.ports["default"].as_str().unwrap();
+        let lines: Vec<&str> = csv_str.lines().collect();
+        assert!(lines[0].contains("name"));
+        assert!(lines[0].contains("age"));
+        assert_eq!(lines.len(), 3);
+    }
+
+    #[tokio::test]
+    async fn test_stringify_without_headers() {
+        let node = make_node(json!({"operation": "stringify", "headers": false})).await;
+        let ctx = ExecutionContext::new();
+        let input = json!([{"name": "Alice"}]);
+        let output = node.execute(input, &ctx).await.unwrap();
+        let csv_str = output.ports["default"].as_str().unwrap();
+        let lines: Vec<&str> = csv_str.lines().collect();
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0], "Alice");
+    }
+
+    #[tokio::test]
+    async fn test_stringify_arrays() {
+        let node = make_node(json!({"operation": "stringify"})).await;
+        let ctx = ExecutionContext::new();
+        let input = json!([["a", "b"], ["c", "d"]]);
+        let output = node.execute(input, &ctx).await.unwrap();
+        let csv_str = output.ports["default"].as_str().unwrap();
+        assert_eq!(csv_str, "a,b\nc,d");
+    }
+
+    #[tokio::test]
+    async fn test_parse_empty_input() {
+        let node = make_node(json!({"operation": "parse"})).await;
+        let ctx = ExecutionContext::new();
+        let input = json!("");
+        let output = node.execute(input, &ctx).await.unwrap();
+        assert_eq!(output.ports["default"], json!([]));
+    }
+
+    #[tokio::test]
+    async fn test_parse_quoted_fields() {
+        let node = make_node(json!({"operation": "parse"})).await;
+        let ctx = ExecutionContext::new();
+        let input = json!("name,desc\nAlice,\"hello, world\"");
+        let output = node.execute(input, &ctx).await.unwrap();
+        let data = &output.ports["default"];
+        assert_eq!(data[0]["desc"], "hello, world");
+    }
+
+    #[tokio::test]
+    async fn test_parse_text_field_input() {
+        let node = make_node(json!({"operation": "parse"})).await;
+        let ctx = ExecutionContext::new();
+        let input = json!({"text": "a,b\n1,2"});
+        let output = node.execute(input, &ctx).await.unwrap();
+        let data = &output.ports["default"];
+        assert_eq!(data[0]["a"], "1");
+        assert_eq!(data[0]["b"], "2");
+    }
+}

@@ -179,3 +179,115 @@ impl NodeExecutor for Base64Node {
         Ok(NodeOutput::data(result))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anp_core::node::traits::NodeExecutor;
+    use anp_core::runtime::context::ExecutionContext;
+    use serde_json::json;
+
+    async fn make_node(operation: &str, url_safe: bool) -> Base64Node {
+        let mut node = Base64Node::new();
+        node.init(&json!({ "operation": operation, "url_safe": url_safe }))
+            .await
+            .unwrap();
+        node
+    }
+
+    #[tokio::test]
+    async fn test_encode_hello() {
+        let node = make_node("encode", false).await;
+        let ctx = ExecutionContext::new();
+        let output = node.execute(json!("Hello, World!"), &ctx).await.unwrap();
+        assert_eq!(output.ports["default"], json!("SGVsbG8sIFdvcmxkIQ=="));
+    }
+
+    #[tokio::test]
+    async fn test_decode_hello() {
+        let node = make_node("decode", false).await;
+        let ctx = ExecutionContext::new();
+        let output = node
+            .execute(json!("SGVsbG8sIFdvcmxkIQ=="), &ctx)
+            .await
+            .unwrap();
+        assert_eq!(output.ports["default"], json!("Hello, World!"));
+    }
+
+    #[tokio::test]
+    async fn test_encode_empty_string() {
+        let node = make_node("encode", false).await;
+        let ctx = ExecutionContext::new();
+        let output = node.execute(json!(""), &ctx).await.unwrap();
+        assert_eq!(output.ports["default"], json!(""));
+    }
+
+    #[tokio::test]
+    async fn test_decode_empty_string() {
+        let node = make_node("decode", false).await;
+        let ctx = ExecutionContext::new();
+        let output = node.execute(json!(""), &ctx).await.unwrap();
+        assert_eq!(output.ports["default"], json!(""));
+    }
+
+    #[tokio::test]
+    async fn test_encode_url_safe() {
+        let node = make_node("encode", true).await;
+        let ctx = ExecutionContext::new();
+        // Bytes that would produce +/ in standard base64
+        let output = node.execute(json!("subjects?_d"), &ctx).await.unwrap();
+        let encoded = output.ports["default"].as_str().unwrap();
+        // URL-safe should not contain + or /
+        assert!(!encoded.contains('+'));
+        assert!(!encoded.contains('/'));
+    }
+
+    #[tokio::test]
+    async fn test_roundtrip_standard() {
+        let ctx = ExecutionContext::new();
+        let original = "The quick brown fox jumps over the lazy dog!";
+        let enc_node = make_node("encode", false).await;
+        let enc_output = enc_node.execute(json!(original), &ctx).await.unwrap();
+        let encoded = enc_output.ports["default"].as_str().unwrap().to_string();
+
+        let dec_node = make_node("decode", false).await;
+        let dec_output = dec_node.execute(json!(encoded), &ctx).await.unwrap();
+        assert_eq!(dec_output.ports["default"], json!(original));
+    }
+
+    #[tokio::test]
+    async fn test_roundtrip_url_safe() {
+        let ctx = ExecutionContext::new();
+        let original = "special chars: +/= and more???";
+        let enc_node = make_node("encode", true).await;
+        let enc_output = enc_node.execute(json!(original), &ctx).await.unwrap();
+        let encoded = enc_output.ports["default"].as_str().unwrap().to_string();
+
+        let dec_node = make_node("decode", true).await;
+        let dec_output = dec_node.execute(json!(encoded), &ctx).await.unwrap();
+        assert_eq!(dec_output.ports["default"], json!(original));
+    }
+
+    #[tokio::test]
+    async fn test_encode_special_characters() {
+        let node = make_node("encode", false).await;
+        let ctx = ExecutionContext::new();
+        let output = node
+            .execute(json!("line1\nline2\ttab"), &ctx)
+            .await
+            .unwrap();
+        // Just verify it produces a valid base64 string (no error)
+        assert!(output.ports["default"].is_string());
+    }
+
+    #[tokio::test]
+    async fn test_input_from_data_field() {
+        let node = make_node("encode", false).await;
+        let ctx = ExecutionContext::new();
+        let output = node
+            .execute(json!({"data": "test"}), &ctx)
+            .await
+            .unwrap();
+        assert_eq!(output.ports["default"], json!("dGVzdA=="));
+    }
+}

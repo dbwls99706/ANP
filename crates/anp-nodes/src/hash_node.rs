@@ -106,3 +106,103 @@ impl NodeExecutor for HashNode {
         Ok(NodeOutput::data(result))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anp_core::node::traits::NodeExecutor;
+    use anp_core::runtime::context::ExecutionContext;
+    use serde_json::json;
+
+    async fn make_node() -> HashNode {
+        let mut node = HashNode::new();
+        node.init(&json!({})).await.unwrap();
+        node
+    }
+
+    #[tokio::test]
+    async fn test_hash_string_input() {
+        let node = make_node().await;
+        let ctx = ExecutionContext::new();
+        let output = node.execute(json!("hello"), &ctx).await.unwrap();
+        let result = &output.ports["default"];
+        assert_eq!(result["algorithm"], json!("fnv1a"));
+        assert!(result["hash"].is_string());
+        assert_eq!(result["hash"].as_str().unwrap().len(), 16); // 64-bit hex = 16 chars
+    }
+
+    #[tokio::test]
+    async fn test_hash_consistent() {
+        let node = make_node().await;
+        let ctx = ExecutionContext::new();
+        let output1 = node.execute(json!("hello"), &ctx).await.unwrap();
+        let output2 = node.execute(json!("hello"), &ctx).await.unwrap();
+        assert_eq!(output1.ports["default"]["hash"], output2.ports["default"]["hash"]);
+    }
+
+    #[tokio::test]
+    async fn test_hash_different_inputs_differ() {
+        let node = make_node().await;
+        let ctx = ExecutionContext::new();
+        let output1 = node.execute(json!("hello"), &ctx).await.unwrap();
+        let output2 = node.execute(json!("world"), &ctx).await.unwrap();
+        assert_ne!(output1.ports["default"]["hash"], output2.ports["default"]["hash"]);
+    }
+
+    #[tokio::test]
+    async fn test_hash_empty_string() {
+        let node = make_node().await;
+        let ctx = ExecutionContext::new();
+        let output = node.execute(json!(""), &ctx).await.unwrap();
+        let result = &output.ports["default"];
+        assert_eq!(result["algorithm"], json!("fnv1a"));
+        // FNV-1a of empty string = offset basis = cbf29ce484222325
+        assert_eq!(result["hash"], json!("cbf29ce484222325"));
+    }
+
+    #[tokio::test]
+    async fn test_hash_data_field_input() {
+        let node = make_node().await;
+        let ctx = ExecutionContext::new();
+        let output = node
+            .execute(json!({"data": "hello"}), &ctx)
+            .await
+            .unwrap();
+        // Should produce same hash as direct string input
+        let direct_output = node.execute(json!("hello"), &ctx).await.unwrap();
+        assert_eq!(
+            output.ports["default"]["hash"],
+            direct_output.ports["default"]["hash"]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_hash_text_field_input() {
+        let node = make_node().await;
+        let ctx = ExecutionContext::new();
+        let output = node
+            .execute(json!({"text": "hello"}), &ctx)
+            .await
+            .unwrap();
+        let direct_output = node.execute(json!("hello"), &ctx).await.unwrap();
+        assert_eq!(
+            output.ports["default"]["hash"],
+            direct_output.ports["default"]["hash"]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_hash_non_string_input_fails() {
+        let node = make_node().await;
+        let ctx = ExecutionContext::new();
+        let result = node.execute(json!(42), &ctx).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_init_rejects_sha256() {
+        let mut node = HashNode::new();
+        let result = node.init(&json!({"algorithm": "sha256"})).await;
+        assert!(result.is_err());
+    }
+}

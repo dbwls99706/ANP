@@ -38,7 +38,7 @@ enum MetricData {
 }
 
 impl MetricData {
-    fn type_str(&self) -> &str {
+    fn _type_str(&self) -> &str {
         match self {
             MetricData::Counter(_) => "counter",
             MetricData::Gauge(_) => "gauge",

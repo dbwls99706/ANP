@@ -95,7 +95,7 @@ impl NodeExecutor for ThrottleNode {
                     Ok(NodeOutput::skip())
                 } else {
                     // queue mode
-                    let mut output = match input {
+                    let output = match input {
                         serde_json::Value::Object(mut map) => {
                             map.insert("_throttled".to_string(), serde_json::json!(true));
                             map.insert("_delay_ms".to_string(), serde_json::json!(remaining_ms));

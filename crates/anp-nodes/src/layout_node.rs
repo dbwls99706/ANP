@@ -1,5 +1,5 @@
 use anp_core::graph::spec::NodeKind;
-use anp_core::node::traits::{NodeError, NodeExecutor, NodeOutput, NodeResult};
+use anp_core::node::traits::{NodeExecutor, NodeOutput, NodeResult};
 use anp_core::runtime::context::ExecutionContext;
 
 /// LayoutNode — wraps HTML content in a full HTML5 page template.

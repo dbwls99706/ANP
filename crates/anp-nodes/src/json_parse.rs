@@ -225,3 +225,167 @@ impl NodeExecutor for JsonParseNode {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_parse() {
+        let mut node = JsonParseNode::new();
+        node.init(&serde_json::json!({"operation": "parse"}))
+            .await
+            .unwrap();
+        let ctx = ExecutionContext::new();
+        let output = node
+            .execute(serde_json::json!("{\"a\":1,\"b\":2}"), &ctx)
+            .await
+            .unwrap();
+        assert_eq!(
+            output.ports["default"],
+            serde_json::json!({"a": 1, "b": 2})
+        );
+    }
+
+    #[tokio::test]
+    async fn test_stringify() {
+        let mut node = JsonParseNode::new();
+        node.init(&serde_json::json!({"operation": "stringify"}))
+            .await
+            .unwrap();
+        let ctx = ExecutionContext::new();
+        let output = node
+            .execute(serde_json::json!({"x": 42}), &ctx)
+            .await
+            .unwrap();
+        let s = output.ports["default"].as_str().unwrap();
+        assert!(s.contains("\"x\""));
+        assert!(s.contains("42"));
+    }
+
+    #[tokio::test]
+    async fn test_query() {
+        let mut node = JsonParseNode::new();
+        node.init(&serde_json::json!({"operation": "query", "path": "a.b"}))
+            .await
+            .unwrap();
+        let ctx = ExecutionContext::new();
+        let output = node
+            .execute(serde_json::json!({"a": {"b": 99}}), &ctx)
+            .await
+            .unwrap();
+        assert_eq!(output.ports["default"], serde_json::json!(99));
+    }
+
+    #[tokio::test]
+    async fn test_query_missing_path() {
+        let mut node = JsonParseNode::new();
+        node.init(&serde_json::json!({"operation": "query", "path": "x.y.z"}))
+            .await
+            .unwrap();
+        let ctx = ExecutionContext::new();
+        let output = node
+            .execute(serde_json::json!({"a": 1}), &ctx)
+            .await
+            .unwrap();
+        assert_eq!(output.ports["default"], serde_json::Value::Null);
+    }
+
+    #[tokio::test]
+    async fn test_set() {
+        let mut node = JsonParseNode::new();
+        node.init(&serde_json::json!({"operation": "set", "path": "a.c", "value": "hello"}))
+            .await
+            .unwrap();
+        let ctx = ExecutionContext::new();
+        let output = node
+            .execute(serde_json::json!({"a": {"b": 1}}), &ctx)
+            .await
+            .unwrap();
+        assert_eq!(output.ports["default"]["a"]["c"], serde_json::json!("hello"));
+        assert_eq!(output.ports["default"]["a"]["b"], serde_json::json!(1));
+    }
+
+    #[tokio::test]
+    async fn test_delete() {
+        let mut node = JsonParseNode::new();
+        node.init(&serde_json::json!({"operation": "delete", "path": "b"}))
+            .await
+            .unwrap();
+        let ctx = ExecutionContext::new();
+        let output = node
+            .execute(serde_json::json!({"a": 1, "b": 2, "c": 3}), &ctx)
+            .await
+            .unwrap();
+        assert_eq!(
+            output.ports["default"],
+            serde_json::json!({"a": 1, "c": 3})
+        );
+    }
+
+    #[tokio::test]
+    async fn test_keys() {
+        let mut node = JsonParseNode::new();
+        node.init(&serde_json::json!({"operation": "keys"}))
+            .await
+            .unwrap();
+        let ctx = ExecutionContext::new();
+        let output = node
+            .execute(serde_json::json!({"x": 1, "y": 2}), &ctx)
+            .await
+            .unwrap();
+        let keys = output.ports["default"].as_array().unwrap();
+        assert_eq!(keys.len(), 2);
+        assert!(keys.contains(&serde_json::json!("x")));
+        assert!(keys.contains(&serde_json::json!("y")));
+    }
+
+    #[tokio::test]
+    async fn test_values() {
+        let mut node = JsonParseNode::new();
+        node.init(&serde_json::json!({"operation": "values"}))
+            .await
+            .unwrap();
+        let ctx = ExecutionContext::new();
+        let output = node
+            .execute(serde_json::json!({"a": 10, "b": 20}), &ctx)
+            .await
+            .unwrap();
+        let vals = output.ports["default"].as_array().unwrap();
+        assert_eq!(vals.len(), 2);
+        assert!(vals.contains(&serde_json::json!(10)));
+        assert!(vals.contains(&serde_json::json!(20)));
+    }
+
+    #[tokio::test]
+    async fn test_entries() {
+        let mut node = JsonParseNode::new();
+        node.init(&serde_json::json!({"operation": "entries"}))
+            .await
+            .unwrap();
+        let ctx = ExecutionContext::new();
+        let output = node
+            .execute(serde_json::json!({"k": "v"}), &ctx)
+            .await
+            .unwrap();
+        assert_eq!(
+            output.ports["default"],
+            serde_json::json!([{"key": "k", "value": "v"}])
+        );
+    }
+
+    #[tokio::test]
+    async fn test_flatten() {
+        let mut node = JsonParseNode::new();
+        node.init(&serde_json::json!({"operation": "flatten"}))
+            .await
+            .unwrap();
+        let ctx = ExecutionContext::new();
+        let output = node
+            .execute(serde_json::json!({"a": {"b": 1, "c": 2}}), &ctx)
+            .await
+            .unwrap();
+        assert_eq!(output.ports["default"]["a.b"], serde_json::json!(1));
+        assert_eq!(output.ports["default"]["a.c"], serde_json::json!(2));
+    }
+}

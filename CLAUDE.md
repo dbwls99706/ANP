@@ -31,7 +31,7 @@ Programs are not written — they are **generated from intent**. The fundamental
 ### Crate Structure
 
 - **anp-core**: Graph spec, validation, runtime engine, execution scheduler, GraphOp editor
-- **anp-nodes**: Built-in node implementations (console, file_io, transform, filter, database, http_server, llm_call, http_client, template, conditional, memory, tool_router, html_template, static_file, foreach, merge)
+- **anp-nodes**: 92 built-in node implementations across 10 categories (see Node Catalog below)
 - **anp-planner**: LLM integration — generates graphs from prompts, edit ops from instructions
 - **anp-cli**: CLI entry point (`anp run`, `anp prompt`, `anp edit`, etc.)
 
@@ -39,10 +39,38 @@ Programs are not written — they are **generated from intent**. The fundamental
 
 | Kind | Behavior | Example |
 |------|----------|---------|
-| Source | Produces data, no inputs, executes once | file_read |
-| Processor | Transforms data, has inputs and outputs | transform, filter, database, llm_call, http_client, template, conditional, memory, tool_router, html_template, static_file, foreach, merge |
-| Sink | Consumes data, no outputs | console, file_write |
-| Service | Long-running event loop, triggers downstream | http_server |
+| Source | Produces data, no inputs, executes once | file_read, env |
+| Processor | Transforms data, has inputs and outputs | transform, filter, template, conditional, merge, foreach, llm_call, http_client, etc. |
+| Sink | Consumes data, no outputs | console, file_write, log, email |
+| Service | Long-running event loop, triggers downstream | http_server, cron, websocket |
+
+### Node Catalog (92 nodes)
+
+**I/O & Core** (16): console, file_read, file_write, transform, filter, foreach, merge, template, template_engine, conditional, switch, try_catch, parallel, accumulator, debounce, sleep
+
+**HTTP & Networking** (8): http_server, http_client, cors, redirect, webhook, websocket, sse, static_file
+
+**Data Formats** (8): json_parse, csv, yaml, xml, toml, markdown, base64, url_encode
+
+**Data Processing** (8): diff, group_by, pivot, lookup, math, array, string, regex
+
+**AI/ML** (8): llm_call, tool_router, embedding, sentiment, summarize, classify, extract, translate
+
+**AI Workflow** (2): prompt_chain, agent_loop
+
+**Auth & Security** (7): jwt, api_key, password, totp, encrypt, hash, sanitize
+
+**State & Storage** (8): database, memory, cache, queue, priority_queue, session, kv_store, counter
+
+**Resilience & Flow** (9): rate_limit, retry, circuit_breaker, semaphore, deduplicate, throttle, batch, cron, aggregate
+
+**UI & Frontend** (8): html_template, form, chart, table, markdown_render, paginate, breadcrumb, layout, meta
+
+**Observability** (6): log, validate, random, uuid, timestamp, env
+
+**Integration** (2): email, image_resize
+
+**Advanced Workflow** (2): event_emitter, metrics
 
 ### Graph Spec (v0.1)
 
@@ -83,6 +111,37 @@ Programs are not written — they are **generated from intent**. The fundamental
 - HTTP Client: automatic retry with exponential backoff (configurable retry_count, retry_backoff_ms)
 - Pipeline timeout: 30s default per-request timeout prevents hanging pipelines
 - Graceful shutdown: SIGINT + SIGTERM handling with connection draining for container deployments
+- Embedding node: character-frequency text embeddings with cosine similarity/distance
+- Sentiment analysis: keyword-based scoring with custom positive/negative word lists
+- Summarize node: extractive summarization (sentences, truncate, keywords)
+- Classify node: rule-based text classification with configurable keyword categories
+- Extract node: pattern-based extraction (emails, URLs, numbers, dates, mentions, hashtags, IPs)
+- Translate node: text transformations (reverse, pig_latin, rot13, morse, leetspeak)
+- Prompt Chain: multi-step template chaining with context propagation
+- Agent Loop: iteration control with max_iterations and termination conditions
+- API Key node: validation, generation, and masking
+- Password node: FNV hashing, verification, and strength analysis
+- TOTP node: time-based OTP generation and verification
+- Circuit Breaker: closed/open/half_open state transitions for fault tolerance
+- Semaphore node: concurrency limiting with acquire/release/status
+- Deduplicate node: key-based deduplication with configurable window/TTL
+- Sanitize node: HTML/SQL/XSS sanitization with recursive string processing
+- XML/TOML/Markdown nodes: format conversion without external dependencies
+- Diff node: JSON diffing, patching, equality checking
+- GroupBy/Pivot/Lookup: data reshaping and join operations
+- URL Encode node: encode/decode/parse/build URL operations
+- Form node: HTML form builder with multiple field types
+- Chart node: SVG chart generation (bar, line, pie)
+- Table node: HTML table generation with XSS escaping
+- Paginate node: array pagination with page metadata
+- Breadcrumb/Layout/Meta nodes: HTML page structure generation
+- Batch/Throttle nodes: flow control for high-throughput pipelines
+- Priority Queue: priority-ordered enqueue/dequeue operations
+- Aggregate node: multi-field aggregation pipeline (sum, avg, min, max, count, concat)
+- Event Emitter: pub/sub event system within graphs
+- Metrics node: counters, gauges, histograms with percentile summaries
+- KV Store: namespaced key-value storage with CRUD operations
+- Planner catalog: auto-generated from NodeRegistry (92 nodes reflected automatically)
 
 ## Roadmap
 
@@ -90,5 +149,6 @@ Programs are not written — they are **generated from intent**. The fundamental
 - v0.2: LLM Planner (`anp prompt` command)
 - v0.3: GraphOp API + GraphEditor (`anp edit` command)
 - v0.4: AI-native nodes (llm_call, http_client, template, conditional)
-- v0.5: Observability, agentic workflows, state management (memory, tool_router, NodeTrace) ← current
+- v0.5: Observability, agentic workflows, state management (memory, tool_router, NodeTrace)
+- v0.6: 92-node ecosystem — AI/ML, auth, data processing, UI, workflow nodes ← current
 - v1.0: Plugin ecosystem, custom node types, visual graph editor

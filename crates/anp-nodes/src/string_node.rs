@@ -224,3 +224,120 @@ impl NodeExecutor for StringNode {
         Ok(NodeOutput::data(result))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anp_core::runtime::context::ExecutionContext;
+    use serde_json::json;
+
+    async fn make_node(config: serde_json::Value) -> StringNode {
+        let mut node = StringNode::new();
+        node.init(&config).await.unwrap();
+        node
+    }
+
+    #[tokio::test]
+    async fn test_split() {
+        let node = make_node(json!({"operation": "split", "delimiter": ","})).await;
+        let ctx = ExecutionContext::new();
+        let output = node.execute(json!("a,b,c"), &ctx).await.unwrap();
+        assert_eq!(output.ports["default"], json!(["a", "b", "c"]));
+    }
+
+    #[tokio::test]
+    async fn test_join() {
+        let node = make_node(json!({"operation": "join", "delimiter": "-"})).await;
+        let ctx = ExecutionContext::new();
+        let output = node.execute(json!(["x", "y", "z"]), &ctx).await.unwrap();
+        assert_eq!(output.ports["default"], "x-y-z");
+    }
+
+    #[tokio::test]
+    async fn test_trim() {
+        let node = make_node(json!({"operation": "trim"})).await;
+        let ctx = ExecutionContext::new();
+        let output = node.execute(json!("  hello  "), &ctx).await.unwrap();
+        assert_eq!(output.ports["default"], "hello");
+    }
+
+    #[tokio::test]
+    async fn test_replace() {
+        let node = make_node(json!({"operation": "replace", "from": "world", "to": "rust"})).await;
+        let ctx = ExecutionContext::new();
+        let output = node.execute(json!("hello world"), &ctx).await.unwrap();
+        assert_eq!(output.ports["default"], "hello rust");
+    }
+
+    #[tokio::test]
+    async fn test_uppercase() {
+        let node = make_node(json!({"operation": "uppercase"})).await;
+        let ctx = ExecutionContext::new();
+        let output = node.execute(json!("hello"), &ctx).await.unwrap();
+        assert_eq!(output.ports["default"], "HELLO");
+    }
+
+    #[tokio::test]
+    async fn test_lowercase() {
+        let node = make_node(json!({"operation": "lowercase"})).await;
+        let ctx = ExecutionContext::new();
+        let output = node.execute(json!("HELLO"), &ctx).await.unwrap();
+        assert_eq!(output.ports["default"], "hello");
+    }
+
+    #[tokio::test]
+    async fn test_slice() {
+        let node = make_node(json!({"operation": "slice", "start": 1, "end": 4})).await;
+        let ctx = ExecutionContext::new();
+        let output = node.execute(json!("abcdef"), &ctx).await.unwrap();
+        assert_eq!(output.ports["default"], "bcd");
+    }
+
+    #[tokio::test]
+    async fn test_slice_negative() {
+        let node = make_node(json!({"operation": "slice", "start": -3})).await;
+        let ctx = ExecutionContext::new();
+        let output = node.execute(json!("abcdef"), &ctx).await.unwrap();
+        assert_eq!(output.ports["default"], "def");
+    }
+
+    #[tokio::test]
+    async fn test_contains_true() {
+        let node = make_node(json!({"operation": "contains", "search": "ell"})).await;
+        let ctx = ExecutionContext::new();
+        let output = node.execute(json!("hello"), &ctx).await.unwrap();
+        assert_eq!(output.ports["default"], true);
+    }
+
+    #[tokio::test]
+    async fn test_contains_false() {
+        let node = make_node(json!({"operation": "contains", "search": "xyz"})).await;
+        let ctx = ExecutionContext::new();
+        let output = node.execute(json!("hello"), &ctx).await.unwrap();
+        assert_eq!(output.ports["default"], false);
+    }
+
+    #[tokio::test]
+    async fn test_reverse() {
+        let node = make_node(json!({"operation": "reverse"})).await;
+        let ctx = ExecutionContext::new();
+        let output = node.execute(json!("abcd"), &ctx).await.unwrap();
+        assert_eq!(output.ports["default"], "dcba");
+    }
+
+    #[tokio::test]
+    async fn test_length() {
+        let node = make_node(json!({"operation": "length"})).await;
+        let ctx = ExecutionContext::new();
+        let output = node.execute(json!("hello"), &ctx).await.unwrap();
+        assert_eq!(output.ports["default"], 5);
+    }
+
+    #[tokio::test]
+    async fn test_substring() {
+        let node = make_node(json!({"operation": "substring", "start": 2, "length": 3})).await;
+        let ctx = ExecutionContext::new();
+        let output = node.execute(json!("abcdefgh"), &ctx).await.unwrap();
+        assert_eq!(output.ports["default"], "cde");
+    }
+}

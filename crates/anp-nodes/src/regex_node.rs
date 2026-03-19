@@ -82,7 +82,7 @@ mod simple_regex {
             results
         }
 
-        pub fn is_match(&self, text: &str) -> bool {
+        pub fn _is_match(&self, text: &str) -> bool {
             !self.find_all(text).is_empty()
         }
 
@@ -360,5 +360,98 @@ impl NodeExecutor for RegexNode {
         };
 
         Ok(NodeOutput::data(result))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anp_core::runtime::context::ExecutionContext;
+    use serde_json::json;
+
+    async fn make_node(config: serde_json::Value) -> RegexNode {
+        let mut node = RegexNode::new();
+        node.init(&config).await.unwrap();
+        node
+    }
+
+    #[tokio::test]
+    async fn test_match_literal_found() {
+        let node = make_node(json!({"pattern": "hello", "operation": "match"})).await;
+        let ctx = ExecutionContext::new();
+        let output = node.execute(json!("say hello world"), &ctx).await.unwrap();
+        let data = &output.ports["default"];
+        assert_eq!(data["matched"], true);
+        assert_eq!(data["captures"][0], "hello");
+    }
+
+    #[tokio::test]
+    async fn test_match_not_found() {
+        let node = make_node(json!({"pattern": "xyz", "operation": "match"})).await;
+        let ctx = ExecutionContext::new();
+        let output = node.execute(json!("hello world"), &ctx).await.unwrap();
+        let data = &output.ports["default"];
+        assert_eq!(data["matched"], false);
+        assert_eq!(data["captures"], json!([]));
+    }
+
+    #[tokio::test]
+    async fn test_extract_digits() {
+        let node = make_node(json!({"pattern": "\\d+", "operation": "extract"})).await;
+        let ctx = ExecutionContext::new();
+        let output = node.execute(json!("abc 123 def 456"), &ctx).await.unwrap();
+        let data = &output.ports["default"];
+        assert_eq!(data, &json!(["123", "456"]));
+    }
+
+    #[tokio::test]
+    async fn test_replace_literal() {
+        let node = make_node(json!({"pattern": "world", "operation": "replace", "replacement": "rust"})).await;
+        let ctx = ExecutionContext::new();
+        let output = node.execute(json!("hello world"), &ctx).await.unwrap();
+        assert_eq!(output.ports["default"], "hello rust");
+    }
+
+    #[tokio::test]
+    async fn test_replace_pattern() {
+        let node = make_node(json!({"pattern": "\\d+", "operation": "replace", "replacement": "N"})).await;
+        let ctx = ExecutionContext::new();
+        let output = node.execute(json!("a1b2c3"), &ctx).await.unwrap();
+        assert_eq!(output.ports["default"], "aNbNcN");
+    }
+
+    #[tokio::test]
+    async fn test_split_literal() {
+        let node = make_node(json!({"pattern": ",", "operation": "split"})).await;
+        let ctx = ExecutionContext::new();
+        let output = node.execute(json!("a,b,c"), &ctx).await.unwrap();
+        assert_eq!(output.ports["default"], json!(["a", "b", "c"]));
+    }
+
+    #[tokio::test]
+    async fn test_split_whitespace() {
+        let node = make_node(json!({"pattern": "\\s+", "operation": "split"})).await;
+        let ctx = ExecutionContext::new();
+        let output = node.execute(json!("one  two   three"), &ctx).await.unwrap();
+        assert_eq!(output.ports["default"], json!(["one", "two", "three"]));
+    }
+
+    #[tokio::test]
+    async fn test_match_with_text_object() {
+        let node = make_node(json!({"pattern": "foo", "operation": "match"})).await;
+        let ctx = ExecutionContext::new();
+        let output = node.execute(json!({"text": "foobar"}), &ctx).await.unwrap();
+        assert_eq!(output.ports["default"]["matched"], true);
+    }
+
+    #[tokio::test]
+    async fn test_extract_dot_wildcard() {
+        let node = make_node(json!({"pattern": "h.llo", "operation": "extract"})).await;
+        let ctx = ExecutionContext::new();
+        let output = node.execute(json!("hello hallo"), &ctx).await.unwrap();
+        let data = &output.ports["default"];
+        assert_eq!(data.as_array().unwrap().len(), 2);
+        assert_eq!(data[0], "hello");
+        assert_eq!(data[1], "hallo");
     }
 }

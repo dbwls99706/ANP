@@ -51,9 +51,31 @@ mod tests {
         let mut registry = NodeRegistry::new();
         anp_nodes::register_all(&mut registry);
         let catalog = build_catalog(&registry);
+        // Core nodes
         assert!(catalog.contains("http_server"));
         assert!(catalog.contains("database"));
         assert!(catalog.contains("console"));
         assert!(catalog.contains("service"));
+        // New v0.6 nodes
+        assert!(catalog.contains("embedding"));
+        assert!(catalog.contains("sentiment"));
+        assert!(catalog.contains("chart"));
+        assert!(catalog.contains("form"));
+        assert!(catalog.contains("batch"));
+        assert!(catalog.contains("kv_store"));
+        assert!(catalog.contains("circuit_breaker"));
+        assert!(catalog.contains("xml"));
+    }
+
+    #[test]
+    fn test_catalog_has_92_nodes() {
+        let mut registry = NodeRegistry::new();
+        anp_nodes::register_all(&mut registry);
+        let types = registry.node_types();
+        assert!(
+            types.len() >= 92,
+            "Expected at least 92 node types, got {}",
+            types.len()
+        );
     }
 }

@@ -191,3 +191,182 @@ impl NodeExecutor for MathNode {
         Ok(NodeOutput::data(serde_json::json!(result)))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_add() {
+        let mut node = MathNode::new();
+        node.init(&serde_json::json!({"operation": "add", "value": 5.0}))
+            .await
+            .unwrap();
+        let ctx = ExecutionContext::new();
+        let output = node.execute(serde_json::json!(10.0), &ctx).await.unwrap();
+        assert_eq!(output.ports["default"], serde_json::json!(15.0));
+    }
+
+    #[tokio::test]
+    async fn test_subtract() {
+        let mut node = MathNode::new();
+        node.init(&serde_json::json!({"operation": "subtract", "value": 3.0}))
+            .await
+            .unwrap();
+        let ctx = ExecutionContext::new();
+        let output = node.execute(serde_json::json!(10.0), &ctx).await.unwrap();
+        assert_eq!(output.ports["default"], serde_json::json!(7.0));
+    }
+
+    #[tokio::test]
+    async fn test_multiply() {
+        let mut node = MathNode::new();
+        node.init(&serde_json::json!({"operation": "multiply", "value": 4.0}))
+            .await
+            .unwrap();
+        let ctx = ExecutionContext::new();
+        let output = node.execute(serde_json::json!(3.0), &ctx).await.unwrap();
+        assert_eq!(output.ports["default"], serde_json::json!(12.0));
+    }
+
+    #[tokio::test]
+    async fn test_divide() {
+        let mut node = MathNode::new();
+        node.init(&serde_json::json!({"operation": "divide", "value": 4.0}))
+            .await
+            .unwrap();
+        let ctx = ExecutionContext::new();
+        let output = node.execute(serde_json::json!(20.0), &ctx).await.unwrap();
+        assert_eq!(output.ports["default"], serde_json::json!(5.0));
+    }
+
+    #[tokio::test]
+    async fn test_divide_by_zero() {
+        let mut node = MathNode::new();
+        node.init(&serde_json::json!({"operation": "divide", "value": 0.0}))
+            .await
+            .unwrap();
+        let ctx = ExecutionContext::new();
+        let result = node.execute(serde_json::json!(10.0), &ctx).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_modulo() {
+        let mut node = MathNode::new();
+        node.init(&serde_json::json!({"operation": "modulo", "value": 3.0}))
+            .await
+            .unwrap();
+        let ctx = ExecutionContext::new();
+        let output = node.execute(serde_json::json!(10.0), &ctx).await.unwrap();
+        assert_eq!(output.ports["default"], serde_json::json!(1.0));
+    }
+
+    #[tokio::test]
+    async fn test_abs() {
+        let mut node = MathNode::new();
+        node.init(&serde_json::json!({"operation": "abs"}))
+            .await
+            .unwrap();
+        let ctx = ExecutionContext::new();
+        let output = node.execute(serde_json::json!(-7.5), &ctx).await.unwrap();
+        assert_eq!(output.ports["default"], serde_json::json!(7.5));
+    }
+
+    #[tokio::test]
+    async fn test_floor() {
+        let mut node = MathNode::new();
+        node.init(&serde_json::json!({"operation": "floor"}))
+            .await
+            .unwrap();
+        let ctx = ExecutionContext::new();
+        let output = node.execute(serde_json::json!(3.7), &ctx).await.unwrap();
+        assert_eq!(output.ports["default"], serde_json::json!(3.0));
+    }
+
+    #[tokio::test]
+    async fn test_ceil() {
+        let mut node = MathNode::new();
+        node.init(&serde_json::json!({"operation": "ceil"}))
+            .await
+            .unwrap();
+        let ctx = ExecutionContext::new();
+        let output = node.execute(serde_json::json!(3.2), &ctx).await.unwrap();
+        assert_eq!(output.ports["default"], serde_json::json!(4.0));
+    }
+
+    #[tokio::test]
+    async fn test_round() {
+        let mut node = MathNode::new();
+        node.init(&serde_json::json!({"operation": "round"}))
+            .await
+            .unwrap();
+        let ctx = ExecutionContext::new();
+        let output = node.execute(serde_json::json!(3.5), &ctx).await.unwrap();
+        assert_eq!(output.ports["default"], serde_json::json!(4.0));
+    }
+
+    #[tokio::test]
+    async fn test_sum() {
+        let mut node = MathNode::new();
+        node.init(&serde_json::json!({"operation": "sum"}))
+            .await
+            .unwrap();
+        let ctx = ExecutionContext::new();
+        let output = node
+            .execute(serde_json::json!([1.0, 2.0, 3.0, 4.0]), &ctx)
+            .await
+            .unwrap();
+        assert_eq!(output.ports["default"], serde_json::json!(10.0));
+    }
+
+    #[tokio::test]
+    async fn test_avg() {
+        let mut node = MathNode::new();
+        node.init(&serde_json::json!({"operation": "avg"}))
+            .await
+            .unwrap();
+        let ctx = ExecutionContext::new();
+        let output = node
+            .execute(serde_json::json!([2.0, 4.0, 6.0]), &ctx)
+            .await
+            .unwrap();
+        assert_eq!(output.ports["default"], serde_json::json!(4.0));
+    }
+
+    #[tokio::test]
+    async fn test_sqrt() {
+        let mut node = MathNode::new();
+        node.init(&serde_json::json!({"operation": "sqrt"}))
+            .await
+            .unwrap();
+        let ctx = ExecutionContext::new();
+        let output = node.execute(serde_json::json!(25.0), &ctx).await.unwrap();
+        assert_eq!(output.ports["default"], serde_json::json!(5.0));
+    }
+
+    #[tokio::test]
+    async fn test_sqrt_negative() {
+        let mut node = MathNode::new();
+        node.init(&serde_json::json!({"operation": "sqrt"}))
+            .await
+            .unwrap();
+        let ctx = ExecutionContext::new();
+        let result = node.execute(serde_json::json!(-4.0), &ctx).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_input_as_object_with_value() {
+        let mut node = MathNode::new();
+        node.init(&serde_json::json!({"operation": "abs"}))
+            .await
+            .unwrap();
+        let ctx = ExecutionContext::new();
+        let output = node
+            .execute(serde_json::json!({"value": -10.0}), &ctx)
+            .await
+            .unwrap();
+        assert_eq!(output.ports["default"], serde_json::json!(10.0));
+    }
+}

@@ -47,8 +47,8 @@ fn format_timestamp(epoch_secs: u64) -> String {
     let mut remaining = epoch_secs as i64;
 
     let secs_per_minute = 60i64;
-    let secs_per_hour = 3600i64;
-    let secs_per_day = 86400i64;
+    let _secs_per_hour = 3600i64;
+    let _secs_per_day = 86400i64;
 
     let second = remaining % secs_per_minute;
     remaining /= secs_per_minute;

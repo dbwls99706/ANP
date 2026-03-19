@@ -387,3 +387,100 @@ impl NodeExecutor for YamlNode {
         Ok(NodeOutput::data(result))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anp_core::node::traits::NodeExecutor;
+    use anp_core::runtime::context::ExecutionContext;
+    use serde_json::json;
+
+    async fn make_node(operation: &str) -> YamlNode {
+        let mut node = YamlNode::new();
+        node.init(&json!({ "operation": operation })).await.unwrap();
+        node
+    }
+
+    #[tokio::test]
+    async fn test_parse_simple_object() {
+        let node = make_node("parse").await;
+        let ctx = ExecutionContext::new();
+        let input = json!("name: Alice\nage: 30");
+        let output = node.execute(input, &ctx).await.unwrap();
+        assert_eq!(output.ports["default"], json!({"name": "Alice", "age": 30}));
+    }
+
+    #[tokio::test]
+    async fn test_parse_nested_object() {
+        let node = make_node("parse").await;
+        let ctx = ExecutionContext::new();
+        let input = json!("person:\n  name: Bob\n  age: 25");
+        let output = node.execute(input, &ctx).await.unwrap();
+        assert_eq!(
+            output.ports["default"],
+            json!({"person": {"name": "Bob", "age": 25}})
+        );
+    }
+
+    #[tokio::test]
+    async fn test_parse_array() {
+        let node = make_node("parse").await;
+        let ctx = ExecutionContext::new();
+        let input = json!("- hello\n- world\n- 42");
+        let output = node.execute(input, &ctx).await.unwrap();
+        assert_eq!(output.ports["default"], json!(["hello", "world", 42]));
+    }
+
+    #[tokio::test]
+    async fn test_parse_boolean_and_null() {
+        let node = make_node("parse").await;
+        let ctx = ExecutionContext::new();
+        let input = json!("active: true\ndeleted: false\nvalue: null");
+        let output = node.execute(input, &ctx).await.unwrap();
+        assert_eq!(
+            output.ports["default"],
+            json!({"active": true, "deleted": false, "value": null})
+        );
+    }
+
+    #[tokio::test]
+    async fn test_parse_empty_input() {
+        let node = make_node("parse").await;
+        let ctx = ExecutionContext::new();
+        let input = json!("");
+        let output = node.execute(input, &ctx).await.unwrap();
+        assert_eq!(output.ports["default"], json!(null));
+    }
+
+    #[tokio::test]
+    async fn test_stringify_simple_object() {
+        let node = make_node("stringify").await;
+        let ctx = ExecutionContext::new();
+        let input = json!({"name": "Alice", "age": 30});
+        let output = node.execute(input, &ctx).await.unwrap();
+        let yaml_str = output.ports["default"].as_str().unwrap();
+        assert!(yaml_str.contains("name: Alice"));
+        assert!(yaml_str.contains("age: 30"));
+    }
+
+    #[tokio::test]
+    async fn test_stringify_array() {
+        let node = make_node("stringify").await;
+        let ctx = ExecutionContext::new();
+        let input = json!([1, 2, 3]);
+        let output = node.execute(input, &ctx).await.unwrap();
+        let yaml_str = output.ports["default"].as_str().unwrap();
+        assert!(yaml_str.contains("- 1"));
+        assert!(yaml_str.contains("- 2"));
+        assert!(yaml_str.contains("- 3"));
+    }
+
+    #[tokio::test]
+    async fn test_parse_non_string_input_fails() {
+        let node = make_node("parse").await;
+        let ctx = ExecutionContext::new();
+        let input = json!(42);
+        let result = node.execute(input, &ctx).await;
+        assert!(result.is_err());
+    }
+}
