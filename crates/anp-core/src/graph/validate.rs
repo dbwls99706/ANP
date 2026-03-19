@@ -83,8 +83,7 @@ fn check_port_references(graph: &AnpGraph, errors: &mut Vec<ValidationError>) {
     for edge in &graph.edges {
         // Check from_port exists on source node's outputs
         if let Some(node) = node_map.get(edge.from_node.as_str()) {
-            if edge.from_port != "default"
-                && !node.outputs.iter().any(|p| p.name == edge.from_port)
+            if edge.from_port != "default" && !node.outputs.iter().any(|p| p.name == edge.from_port)
             {
                 errors.push(ValidationError::InvalidPortRef {
                     edge_id: edge.id.clone(),
@@ -96,9 +95,7 @@ fn check_port_references(graph: &AnpGraph, errors: &mut Vec<ValidationError>) {
 
         // Check to_port exists on target node's inputs
         if let Some(node) = node_map.get(edge.to_node.as_str()) {
-            if edge.to_port != "default"
-                && !node.inputs.iter().any(|p| p.name == edge.to_port)
-            {
+            if edge.to_port != "default" && !node.inputs.iter().any(|p| p.name == edge.to_port) {
                 errors.push(ValidationError::InvalidPortRef {
                     edge_id: edge.id.clone(),
                     node_id: edge.to_node.clone(),
@@ -259,22 +256,20 @@ mod tests {
 
     #[test]
     fn test_duplicate_node_id() {
-        let graph = make_graph(
-            vec![source_node("a"), source_node("a")],
-            vec![],
-        );
+        let graph = make_graph(vec![source_node("a"), source_node("a")], vec![]);
         let errs = validate(&graph).unwrap_err();
-        assert!(errs.iter().any(|e| matches!(e, ValidationError::DuplicateNodeId(id) if id == "a")));
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::DuplicateNodeId(id) if id == "a")));
     }
 
     #[test]
     fn test_invalid_node_ref() {
-        let graph = make_graph(
-            vec![source_node("a")],
-            vec![edge("e1", "a", "nonexistent")],
-        );
+        let graph = make_graph(vec![source_node("a")], vec![edge("e1", "a", "nonexistent")]);
         let errs = validate(&graph).unwrap_err();
-        assert!(errs.iter().any(|e| matches!(e, ValidationError::InvalidNodeRef { .. })));
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::InvalidNodeRef { .. })));
     }
 
     #[test]
@@ -284,7 +279,9 @@ mod tests {
             vec![edge("e1", "s", "p")],
         );
         let errs = validate(&graph).unwrap_err();
-        assert!(errs.iter().any(|e| matches!(e, ValidationError::SinkHasOutput(_))));
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::SinkHasOutput(_))));
     }
 
     #[test]
@@ -294,6 +291,8 @@ mod tests {
             vec![edge("e1", "a", "b"), edge("e2", "b", "a")],
         );
         let errs = validate(&graph).unwrap_err();
-        assert!(errs.iter().any(|e| matches!(e, ValidationError::CycleDetected(_))));
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::CycleDetected(_))));
     }
 }

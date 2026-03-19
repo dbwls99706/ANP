@@ -210,10 +210,7 @@ mod tests {
         node.init(&serde_json::json!({})).await.unwrap();
 
         let ctx = ExecutionContext::new();
-        let output = node
-            .execute(serde_json::json!([]), &ctx)
-            .await
-            .unwrap();
+        let output = node.execute(serde_json::json!([]), &ctx).await.unwrap();
 
         let result = &output.ports["default"];
         assert_eq!(result["count"], 0);

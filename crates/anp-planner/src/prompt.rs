@@ -172,11 +172,7 @@ pub fn build_edit_user_prompt(instruction: &str, current_graph: &str) -> String 
 }
 
 /// Build a fix prompt when validation fails.
-pub fn build_fix_prompt(
-    original_prompt: &str,
-    previous_graph: &str,
-    errors: &[String],
-) -> String {
+pub fn build_fix_prompt(original_prompt: &str, previous_graph: &str, errors: &[String]) -> String {
     format!(
         r#"The previous graph is invalid.
 

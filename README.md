@@ -22,6 +22,8 @@ AI coding tools: Prompt → Code → Compile → Run
 ANP:             Prompt → Graph → Run
 ```
 
+**Why write code if AI generates it?** If an AI is producing the program, there's no reason to output C++, Python, or JavaScript as an intermediate step. The AI can directly produce an executable graph that the runtime interprets — skipping the entire compile/interpret cycle. The graph *is* the executable.
+
 The key insight: **AI calling AI**. An `llm_call` node lets graphs contain intelligence. A `tool_router` node lets AI choose its own actions. A `memory` node gives graphs persistent state. Programs that think, reason, remember, and act autonomously — all as a graph.
 
 ## Demo: Hello World
@@ -200,28 +202,37 @@ anp edit <graph> <instruction>  # Edit graph with natural language
 | `console` | Sink | Print to stdout |
 | `file_read` | Source | Read file content |
 | `file_write` | Sink | Write data to file |
-| `http_server` | Service | HTTP server with route-based output ports |
+| `http_server` | Service | HTTP server with route-based ports, path params (`/users/:id`), query params |
 
 ### Data Processing
 
 | Node | Kind | Description |
 |------|------|-------------|
-| `transform` | Processor | Dot-path field mapping |
+| `transform` | Processor | Dot-path field mapping + literal values (`'text'`, `42`, `true`) |
 | `filter` | Processor | Condition-based filtering (eq, gt, lt, contains...) |
 | `database` | Processor | In-memory key-value store (get/set/delete/list) |
 | `template` | Processor | String templates with `{{variable}}` placeholders |
 | `conditional` | Processor | Routes data to different ports based on conditions |
+| `foreach` | Processor | **Graph-native iteration** — replaces for-loops without code |
+| `merge` | Processor | Combines multiple JSON objects (shallow, deep, or array strategy) |
 
 ### AI & Network
 
 | Node | Kind | Description |
 |------|------|-------------|
 | `llm_call` | Processor | Calls OpenAI or Anthropic LLMs — **AI invoking AI** |
-| `http_client` | Processor | Outbound HTTP requests (GET, POST, PUT, DELETE...) |
+| `http_client` | Processor | Outbound HTTP with **automatic retry** + exponential backoff |
 | `tool_router` | Processor | **LLM-powered agentic routing** — AI decides which tool to use |
 | `memory` | Processor | Session-based conversation history and key-value state |
 
-**13 nodes** that compose into any application — from data pipelines to AI agents to REST APIs.
+### Frontend
+
+| Node | Kind | Description |
+|------|------|-------------|
+| `html_template` | Processor | Full HTML rendering with `{{variable}}` placeholders, XSS-safe |
+| `static_file` | Processor | Serves CSS/JS/images with auto content-type detection |
+
+**16 nodes** that compose into any application — from data pipelines to AI agents to REST APIs to full-stack web apps.
 
 ## How It Works
 
@@ -275,7 +286,7 @@ No compilation. No source code. Just a graph and a runtime.
 └──────┬──────┘
        ↓
 ┌──────┴──────┐
-│    Nodes     │  13 built-in nodes (AI, agents, network, data, I/O)
+│    Nodes     │  16 built-in nodes (AI, agents, network, data, frontend, I/O)
 └─────────────┘
 ```
 
@@ -291,7 +302,7 @@ No compilation. No source code. Just a graph and a runtime.
 | Kind | Description | Examples |
 |------|-------------|----------|
 | **Source** | Produces data (runs once) | `file_read` |
-| **Processor** | Transforms data | `transform`, `filter`, `database`, `llm_call`, `http_client`, `template`, `conditional`, `memory`, `tool_router` |
+| **Processor** | Transforms data | `transform`, `filter`, `database`, `llm_call`, `http_client`, `template`, `conditional`, `memory`, `tool_router`, `html_template`, `static_file`, `foreach`, `merge` |
 | **Sink** | Consumes data | `console`, `file_write` |
 | **Service** | Long-running event loop | `http_server` |
 
@@ -300,15 +311,20 @@ No compilation. No source code. Just a graph and a runtime.
 - **AI-in-the-graph** — `llm_call` node enables graphs that think and reason
 - **Agentic workflows** — `tool_router` lets AI choose its own actions autonomously
 - **Stateful sessions** — `memory` node provides conversation history and persistent state
+- **Full-stack web apps** — `html_template` + `static_file` + `http_server` = frontend without code
+- **Graph-native iteration** — `foreach` replaces for-loops, `merge` combines results
 - **Execution tracing** — per-node timing, success/failure tracking (NodeTrace)
 - **Event-driven runtime** — Service nodes trigger downstream pipelines per-event
 - **Parallel pipeline execution** — independent stages run concurrently
 - **Conditional routing** — branch data to different ports based on conditions
 - **Template engine** — `{{variable}}` interpolation with dot-path support
-- **HTTP client** — call external APIs from within graphs
+- **HTTP client** — call external APIs with automatic retry + exponential backoff
+- **Path & query params** — `http_server` supports `/users/:id` and `?key=val`
 - **Transactional graph editing** — 6 atomic GraphOps with rollback on failure
 - **LLM Planner** — generate graphs from natural language prompts
-- **Security** — SSRF protection, path traversal guard, URL validation, body size limits
+- **Pipeline timeout** — 30s default prevents hanging requests
+- **Graceful shutdown** — SIGINT + SIGTERM handling for container deployments
+- **Security** — SSRF protection, XSS escaping, path traversal guard, URL validation, body size limits
 
 ## Examples
 
@@ -321,6 +337,9 @@ No compilation. No source code. Just a graph and a runtime.
 | [`smart_api.anp.json`](examples/smart_api.anp.json) | **Smart API** — REST endpoints with AI-powered analysis |
 | [`data_pipeline.anp.json`](examples/data_pipeline.anp.json) | **Data pipeline** — file_read → transform → filter → template → console |
 | [`ai_agent.anp.json`](examples/ai_agent.anp.json) | **AI Agent** — tool_router → multiple LLM tools (autonomous routing) |
+| [`landing_page.anp.json`](examples/landing_page.anp.json) | **Landing Page** — http_server → transform → html_template (zero frontend code) |
+| [`rest_api_with_params.anp.json`](examples/rest_api_with_params.anp.json) | **REST API** — path params (`/users/:id`) + HTML home page |
+| [`data_processor.anp.json`](examples/data_processor.anp.json) | **Data Processor** — file_read → foreach → filter → template → console |
 
 ## Project Structure
 
@@ -328,7 +347,7 @@ No compilation. No source code. Just a graph and a runtime.
 ANP/
 ├── crates/
 │   ├── anp-core/      # Graph spec, runtime engine, node system, GraphOp editor, execution tracing
-│   ├── anp-nodes/     # 13 built-in node implementations
+│   ├── anp-nodes/     # 16 built-in node implementations
 │   ├── anp-planner/   # LLM-powered graph generation
 │   └── anp-cli/       # CLI interface
 ├── examples/          # Example ANP graph files

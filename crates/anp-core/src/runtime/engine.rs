@@ -71,12 +71,12 @@ impl AnpEngine {
                 .create_node(&node_spec.node_type)
                 .ok_or_else(|| EngineError::UnknownNodeType(node_spec.node_type.clone()))?;
 
-            node.init(&node_spec.config).await.map_err(|e| {
-                EngineError::NodeInit {
+            node.init(&node_spec.config)
+                .await
+                .map_err(|e| EngineError::NodeInit {
                     node_id: node_spec.id.clone(),
                     message: e.to_string(),
-                }
-            })?;
+                })?;
 
             nodes.insert(node_spec.id.clone(), node);
         }
@@ -90,10 +90,7 @@ impl AnpEngine {
         );
 
         // Detect mode: if any Service node exists → service mode
-        let has_service = graph
-            .nodes
-            .iter()
-            .any(|n| n.kind == NodeKind::Service);
+        let has_service = graph.nodes.iter().any(|n| n.kind == NodeKind::Service);
 
         let ctx = ExecutionContext::new();
 

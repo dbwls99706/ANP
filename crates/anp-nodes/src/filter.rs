@@ -156,14 +156,15 @@ impl NodeExecutor for FilterNode {
                 .collect();
 
             let count = filtered.len();
-            return Ok(NodeOutput::data(serde_json::Value::Array(filtered))
-                .with_log(format!(
+            return Ok(
+                NodeOutput::data(serde_json::Value::Array(filtered)).with_log(format!(
                     "filtered {} -> {} items (field={}, op={:?})",
                     items.len(),
                     count,
                     self.field,
                     self.op
-                )));
+                )),
+            );
         }
 
         // Single value: pass or skip

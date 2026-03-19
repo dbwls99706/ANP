@@ -67,7 +67,7 @@ fn render_template(template: &str, data: &serde_json::Value) -> (String, Vec<Str
     while let Some(ch) = chars.next() {
         if ch == '{' && chars.peek() == Some(&'{') {
             chars.next(); // consume second '{'
-            // Read until '}}'
+                          // Read until '}}'
             let mut key = String::new();
             let mut found_close = false;
             while let Some(c) = chars.next() {
@@ -118,9 +118,7 @@ impl NodeExecutor for TemplateNode {
         self.template = config
             .get("template")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| {
-                NodeError::InvalidConfig("missing 'template' string in config".into())
-            })?
+            .ok_or_else(|| NodeError::InvalidConfig("missing 'template' string in config".into()))?
             .to_string();
 
         if self.template.is_empty() {
@@ -157,7 +155,10 @@ impl NodeExecutor for TemplateNode {
             if !all_unresolved.is_empty() {
                 all_unresolved.sort();
                 all_unresolved.dedup();
-                output = output.with_log(format!("unresolved placeholders: {}", all_unresolved.join(", ")));
+                output = output.with_log(format!(
+                    "unresolved placeholders: {}",
+                    all_unresolved.join(", ")
+                ));
             }
             return Ok(output);
         }
@@ -166,7 +167,10 @@ impl NodeExecutor for TemplateNode {
 
         let mut output = NodeOutput::data(serde_json::Value::String(rendered));
         if !unresolved.is_empty() {
-            output = output.with_log(format!("unresolved placeholders: {}", unresolved.join(", ")));
+            output = output.with_log(format!(
+                "unresolved placeholders: {}",
+                unresolved.join(", ")
+            ));
         }
         Ok(output)
     }

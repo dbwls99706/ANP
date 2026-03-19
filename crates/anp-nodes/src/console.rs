@@ -130,10 +130,7 @@ mod tests {
         node.init(&serde_json::json!({})).await.unwrap();
 
         let ctx = ExecutionContext::new();
-        let output = node
-            .execute(serde_json::Value::Null, &ctx)
-            .await
-            .unwrap();
+        let output = node.execute(serde_json::Value::Null, &ctx).await.unwrap();
         assert!(output.ports["default"].is_null());
     }
 

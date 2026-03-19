@@ -5,8 +5,8 @@ use anp_core::node::traits::{NodeError, NodeExecutor, NodeOutput, NodeResult, Pi
 use anp_core::runtime::context::ExecutionContext;
 use axum::body::Bytes;
 use axum::extract::State;
-use axum::http::{Method, StatusCode};
 use axum::http::HeaderValue;
+use axum::http::{Method, StatusCode};
 use axum::response::IntoResponse;
 use axum::Router;
 use serde::Deserialize;
@@ -64,10 +64,7 @@ impl NodeExecutor for HttpServerNode {
     }
 
     async fn init(&mut self, config: &serde_json::Value) -> NodeResult<()> {
-        let port_val = config
-            .get("port")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(3000);
+        let port_val = config.get("port").and_then(|v| v.as_u64()).unwrap_or(3000);
 
         if port_val > u16::MAX as u64 {
             return Err(NodeError::InvalidConfig(format!(
@@ -201,8 +198,8 @@ async fn handle_request(
     // Find matching route — supports exact match and path params (e.g., /users/:id)
     let mut path_params = serde_json::Map::new();
     let matched_route = state.routes.iter().find(|r| {
-        let method_match = r.method.eq_ignore_ascii_case("ANY")
-            || r.method.eq_ignore_ascii_case(method_str);
+        let method_match =
+            r.method.eq_ignore_ascii_case("ANY") || r.method.eq_ignore_ascii_case(method_str);
         if !method_match {
             return false;
         }
@@ -299,8 +296,7 @@ async fn handle_request(
                 if let Some((key, value)) = pair.split_once('=') {
                     let decoded_key = percent_decode(key);
                     let decoded_value = percent_decode(value);
-                    query_map
-                        .insert(decoded_key, serde_json::Value::String(decoded_value));
+                    query_map.insert(decoded_key, serde_json::Value::String(decoded_value));
                 }
             }
             if !query_map.is_empty() {
@@ -319,9 +315,17 @@ async fn handle_request(
             // (e.g., html_template node sets _content_type to "text/html")
             if let Some(content_type) = result.get("_content_type").and_then(|v| v.as_str()) {
                 let body = if content_type.starts_with("text/html") {
-                    result.get("html").and_then(|v| v.as_str()).unwrap_or("").to_string()
+                    result
+                        .get("html")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string()
                 } else {
-                    result.get("body").and_then(|v| v.as_str()).unwrap_or("").to_string()
+                    result
+                        .get("body")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string()
                 };
 
                 let mut response = axum::response::Response::new(axum::body::Body::from(body));

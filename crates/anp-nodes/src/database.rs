@@ -221,10 +221,7 @@ mod tests {
 
         // GET without key should infer "list"
         let result = db
-            .execute(
-                serde_json::json!({ "_method": "GET" }),
-                &ctx,
-            )
+            .execute(serde_json::json!({ "_method": "GET" }), &ctx)
             .await
             .unwrap();
         assert_eq!(result.ports["default"]["op"], "list");

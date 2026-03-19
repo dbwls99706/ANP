@@ -49,9 +49,7 @@ fn deep_merge(base: &mut serde_json::Value, overlay: serde_json::Value) {
     match (base, overlay) {
         (serde_json::Value::Object(base_map), serde_json::Value::Object(overlay_map)) => {
             for (key, value) in overlay_map {
-                let entry = base_map
-                    .entry(key)
-                    .or_insert(serde_json::Value::Null);
+                let entry = base_map.entry(key).or_insert(serde_json::Value::Null);
                 deep_merge(entry, value);
             }
         }
@@ -81,12 +79,10 @@ impl NodeExecutor for MergeNode {
                 "deep" => MergeStrategy::Deep,
                 "array" => MergeStrategy::Array,
                 other => {
-                    return Err(anp_core::node::traits::NodeError::InvalidConfig(
-                        format!(
-                            "unknown merge strategy '{}', expected: shallow, deep, array",
-                            other
-                        ),
-                    ))
+                    return Err(anp_core::node::traits::NodeError::InvalidConfig(format!(
+                        "unknown merge strategy '{}', expected: shallow, deep, array",
+                        other
+                    )))
                 }
             };
         }

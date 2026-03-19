@@ -66,7 +66,7 @@ fn is_private_ip(ip: &IpAddr) -> bool {
                 || v4.is_link_local()  // 169.254.0.0/16
                 || v4.is_broadcast()   // 255.255.255.255
                 || v4.is_unspecified() // 0.0.0.0
-                || v4.octets()[0] == 100 && (v4.octets()[1] & 0xC0) == 64  // 100.64.0.0/10 (CGN)
+                || v4.octets()[0] == 100 && (v4.octets()[1] & 0xC0) == 64 // 100.64.0.0/10 (CGN)
         }
         IpAddr::V6(v6) => {
             v6.is_loopback()           // ::1
@@ -323,10 +323,7 @@ impl NodeExecutor for HttpClientNode {
                         .unwrap_or_default();
 
                     let body_bytes = response.bytes().await.map_err(|e| {
-                        NodeError::ExecutionFailed(format!(
-                            "failed to read response body: {}",
-                            e
-                        ))
+                        NodeError::ExecutionFailed(format!("failed to read response body: {}", e))
                     })?;
 
                     if body_bytes.len() > MAX_RESPONSE_BYTES {
@@ -338,8 +335,7 @@ impl NodeExecutor for HttpClientNode {
                     }
 
                     let resp_body = if content_type.contains("application/json") {
-                        serde_json::from_slice(&body_bytes)
-                            .unwrap_or(serde_json::Value::Null)
+                        serde_json::from_slice(&body_bytes).unwrap_or(serde_json::Value::Null)
                     } else {
                         let text = String::from_utf8_lossy(&body_bytes).into_owned();
                         serde_json::Value::String(text)
@@ -523,7 +519,9 @@ mod tests {
     #[tokio::test]
     async fn test_init_rejects_private_url() {
         let mut node = HttpClientNode::new();
-        let result = node.init(&serde_json::json!({ "url": "http://127.0.0.1:9200" })).await;
+        let result = node
+            .init(&serde_json::json!({ "url": "http://127.0.0.1:9200" }))
+            .await;
         assert!(result.is_err());
     }
 
@@ -543,9 +541,7 @@ mod tests {
     #[tokio::test]
     async fn test_init_retry_count_too_high() {
         let mut node = HttpClientNode::new();
-        let result = node
-            .init(&serde_json::json!({"retry_count": 99}))
-            .await;
+        let result = node.init(&serde_json::json!({"retry_count": 99})).await;
         assert!(result.is_err());
     }
 

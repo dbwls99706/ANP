@@ -75,9 +75,9 @@ impl NodeExecutor for FileReadNode {
         _input: serde_json::Value,
         _ctx: &ExecutionContext,
     ) -> NodeResult<NodeOutput> {
-        let content = tokio::fs::read_to_string(&self.path)
-            .await
-            .map_err(|e| NodeError::ExecutionFailed(format!("failed to read '{}': {}", self.path, e)))?;
+        let content = tokio::fs::read_to_string(&self.path).await.map_err(|e| {
+            NodeError::ExecutionFailed(format!("failed to read '{}': {}", self.path, e))
+        })?;
 
         let len = content.len();
         Ok(NodeOutput::data(serde_json::Value::String(content))
@@ -136,9 +136,9 @@ impl NodeExecutor for FileWriteNode {
                 .map_err(|e| NodeError::ExecutionFailed(e.to_string()))?,
         };
 
-        tokio::fs::write(&self.path, &content)
-            .await
-            .map_err(|e| NodeError::ExecutionFailed(format!("failed to write '{}': {}", self.path, e)))?;
+        tokio::fs::write(&self.path, &content).await.map_err(|e| {
+            NodeError::ExecutionFailed(format!("failed to write '{}': {}", self.path, e))
+        })?;
 
         Ok(NodeOutput::data(serde_json::json!({
             "path": self.path,

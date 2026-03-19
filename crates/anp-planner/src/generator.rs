@@ -170,7 +170,11 @@ impl AnpPlanner {
             // Parse as Vec<GraphOp>
             match serde_json::from_str::<Vec<GraphOp>>(&json_str) {
                 Ok(ops) => {
-                    info!(ops = ops.len(), attempts = attempt + 1, "edit ops generated successfully");
+                    info!(
+                        ops = ops.len(),
+                        attempts = attempt + 1,
+                        "edit ops generated successfully"
+                    );
                     return Ok(ops);
                 }
                 Err(e) => {

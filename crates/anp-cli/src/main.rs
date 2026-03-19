@@ -116,7 +116,8 @@ fn require_llm_client() -> Result<Box<dyn anp_planner::llm::LlmClient>, CliError
 }
 
 fn load_graph(path: &std::path::Path) -> Result<AnpGraph, CliError> {
-    loader::load_from_file(path).map_err(|e| CliError::Message(format!("Error loading graph: {}", e)))
+    loader::load_from_file(path)
+        .map_err(|e| CliError::Message(format!("Error loading graph: {}", e)))
 }
 
 #[tokio::main]
@@ -168,7 +169,12 @@ async fn cmd_run(path: PathBuf) -> CliResult {
         .map_err(|e| CliError::Message(e.to_string()))
 }
 
-async fn cmd_prompt(prompt: String, output: Option<PathBuf>, run: bool, explain: bool) -> CliResult {
+async fn cmd_prompt(
+    prompt: String,
+    output: Option<PathBuf>,
+    run: bool,
+    explain: bool,
+) -> CliResult {
     let client = require_llm_client()?;
     let registry = create_registry();
     let planner = AnpPlanner::new(client, &registry);
@@ -358,13 +364,32 @@ fn cmd_explain(path: PathBuf) -> CliResult {
     }
     println!();
 
-    let services: Vec<_> = graph.nodes.iter().filter(|n| n.kind == NodeKind::Service).collect();
-    let sources: Vec<_> = graph.nodes.iter().filter(|n| n.kind == NodeKind::Source).collect();
-    let processors: Vec<_> = graph.nodes.iter().filter(|n| n.kind == NodeKind::Processor).collect();
-    let sinks: Vec<_> = graph.nodes.iter().filter(|n| n.kind == NodeKind::Sink).collect();
+    let services: Vec<_> = graph
+        .nodes
+        .iter()
+        .filter(|n| n.kind == NodeKind::Service)
+        .collect();
+    let sources: Vec<_> = graph
+        .nodes
+        .iter()
+        .filter(|n| n.kind == NodeKind::Source)
+        .collect();
+    let processors: Vec<_> = graph
+        .nodes
+        .iter()
+        .filter(|n| n.kind == NodeKind::Processor)
+        .collect();
+    let sinks: Vec<_> = graph
+        .nodes
+        .iter()
+        .filter(|n| n.kind == NodeKind::Sink)
+        .collect();
 
     for node in &services {
-        println!("  [service] {} starts as a long-running service", describe_node(node));
+        println!(
+            "  [service] {} starts as a long-running service",
+            describe_node(node)
+        );
     }
     for node in &sources {
         println!("  [source] {} produces data", describe_node(node));
@@ -403,23 +428,43 @@ fn cmd_explain(path: PathBuf) -> CliResult {
 fn describe_node(node: &anp_core::graph::spec::Node) -> String {
     match node.node_type.as_str() {
         "http_server" => {
-            let port = node.config.get("port").and_then(|v| v.as_u64()).unwrap_or(3000);
+            let port = node
+                .config
+                .get("port")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(3000);
             format!("HTTP server (port {})", port)
         }
         "database" => "In-memory database".to_string(),
         "console" => "Console output".to_string(),
         "file_read" => {
-            let path = node.config.get("path").and_then(|v| v.as_str()).unwrap_or("?");
+            let path = node
+                .config
+                .get("path")
+                .and_then(|v| v.as_str())
+                .unwrap_or("?");
             format!("File reader ({})", path)
         }
         "file_write" => {
-            let path = node.config.get("path").and_then(|v| v.as_str()).unwrap_or("?");
+            let path = node
+                .config
+                .get("path")
+                .and_then(|v| v.as_str())
+                .unwrap_or("?");
             format!("File writer ({})", path)
         }
         "transform" => "Data transformer".to_string(),
         "filter" => {
-            let field = node.config.get("field").and_then(|v| v.as_str()).unwrap_or("?");
-            let op = node.config.get("op").and_then(|v| v.as_str()).unwrap_or("?");
+            let field = node
+                .config
+                .get("field")
+                .and_then(|v| v.as_str())
+                .unwrap_or("?");
+            let op = node
+                .config
+                .get("op")
+                .and_then(|v| v.as_str())
+                .unwrap_or("?");
             format!("Filter ({} {})", field, op)
         }
         other => format!("'{}' node", other),
@@ -512,15 +557,9 @@ fn cmd_graph(path: PathBuf) -> CliResult {
         let label = if edge.from_port == "default" && edge.to_port == "default" {
             String::new()
         } else {
-            format!(
-                " [label=\"{} -> {}\"]",
-                edge.from_port, edge.to_port
-            )
+            format!(" [label=\"{} -> {}\"]", edge.from_port, edge.to_port)
         };
-        println!(
-            "  \"{}\" -> \"{}\"{};",
-            edge.from_node, edge.to_node, label
-        );
+        println!("  \"{}\" -> \"{}\"{};", edge.from_node, edge.to_node, label);
     }
 
     println!("}}");

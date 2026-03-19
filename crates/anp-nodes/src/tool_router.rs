@@ -73,9 +73,7 @@ impl ToolRouterNode {
                 )))
             }
         };
-        std::env::var(var_name).map_err(|_| {
-            NodeError::InitFailed(format!("{} not set", var_name))
-        })
+        std::env::var(var_name).map_err(|_| NodeError::InitFailed(format!("{} not set", var_name)))
     }
 
     fn build_routing_prompt(&self, input: &serde_json::Value) -> String {
@@ -111,7 +109,9 @@ impl ToolRouterNode {
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(self.timeout_secs))
             .build()
-            .map_err(|e| NodeError::ExecutionFailed(format!("failed to build HTTP client: {}", e)))?;
+            .map_err(|e| {
+                NodeError::ExecutionFailed(format!("failed to build HTTP client: {}", e))
+            })?;
 
         let response_text = match self.provider.as_str() {
             "openai" => {
@@ -141,7 +141,9 @@ impl ToolRouterNode {
                     .json(&body)
                     .send()
                     .await
-                    .map_err(|e| NodeError::ExecutionFailed(format!("HTTP request failed: {}", e)))?;
+                    .map_err(|e| {
+                        NodeError::ExecutionFailed(format!("HTTP request failed: {}", e))
+                    })?;
 
                 let status = resp.status();
                 let resp_body: serde_json::Value = resp
@@ -191,7 +193,9 @@ impl ToolRouterNode {
                     .json(&body)
                     .send()
                     .await
-                    .map_err(|e| NodeError::ExecutionFailed(format!("HTTP request failed: {}", e)))?;
+                    .map_err(|e| {
+                        NodeError::ExecutionFailed(format!("HTTP request failed: {}", e))
+                    })?;
 
                 let status = resp.status();
                 let resp_body: serde_json::Value = resp
@@ -279,9 +283,7 @@ impl NodeExecutor for ToolRouterNode {
             let name = tool
                 .get("name")
                 .and_then(|v| v.as_str())
-                .ok_or_else(|| {
-                    NodeError::InvalidConfig(format!("tool {} missing 'name'", i))
-                })?;
+                .ok_or_else(|| NodeError::InvalidConfig(format!("tool {} missing 'name'", i)))?;
             if name.is_empty() {
                 return Err(NodeError::InvalidConfig(format!(
                     "tool {} has empty name",
@@ -346,29 +348,24 @@ impl NodeExecutor for ToolRouterNode {
 
         // Normalize: trim, lowercase, find matching tool
         let chosen_lower = chosen_tool.to_lowercase();
-        let matched_tool = self
-            .tools
-            .iter()
-            .find(|t| {
-                let t_lower = t.name.to_lowercase();
-                chosen_lower == t_lower || chosen_lower.contains(&t_lower)
-            });
+        let matched_tool = self.tools.iter().find(|t| {
+            let t_lower = t.name.to_lowercase();
+            chosen_lower == t_lower || chosen_lower.contains(&t_lower)
+        });
 
         let port = match matched_tool {
             Some(tool) => tool.name.clone(),
             None => {
                 // LLM returned something we don't recognize — use default
-                return Ok(
-                    NodeOutput::data(serde_json::json!({
-                        "routed_to": "default",
-                        "llm_response": chosen_tool,
-                        "data": input
-                    }))
-                    .with_log(format!(
-                        "tool_router: LLM chose '{}' which didn't match any tool, using default",
-                        chosen_tool
-                    )),
-                );
+                return Ok(NodeOutput::data(serde_json::json!({
+                    "routed_to": "default",
+                    "llm_response": chosen_tool,
+                    "data": input
+                }))
+                .with_log(format!(
+                    "tool_router: LLM chose '{}' which didn't match any tool, using default",
+                    chosen_tool
+                )));
             }
         };
 
@@ -381,10 +378,7 @@ impl NodeExecutor for ToolRouterNode {
             }),
         );
 
-        Ok(
-            NodeOutput::multi(ports)
-                .with_log(format!("tool_router: LLM chose tool '{}'", port)),
-        )
+        Ok(NodeOutput::multi(ports).with_log(format!("tool_router: LLM chose tool '{}'", port)))
     }
 }
 

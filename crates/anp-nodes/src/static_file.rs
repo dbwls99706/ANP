@@ -69,12 +69,12 @@ fn content_type_for(path: &str) -> &'static str {
 /// Validate that the resolved path doesn't escape the base directory (path traversal prevention)
 fn validate_path(base: &Path, requested: &str) -> Result<PathBuf, NodeError> {
     let resolved = base.join(requested);
-    let canonical_base = base.canonicalize().map_err(|e| {
-        NodeError::ExecutionFailed(format!("cannot resolve base directory: {}", e))
-    })?;
-    let canonical_path = resolved.canonicalize().map_err(|e| {
-        NodeError::ExecutionFailed(format!("cannot resolve file path: {}", e))
-    })?;
+    let canonical_base = base
+        .canonicalize()
+        .map_err(|e| NodeError::ExecutionFailed(format!("cannot resolve base directory: {}", e)))?;
+    let canonical_path = resolved
+        .canonicalize()
+        .map_err(|e| NodeError::ExecutionFailed(format!("cannot resolve file path: {}", e)))?;
 
     if !canonical_path.starts_with(&canonical_base) {
         return Err(NodeError::ExecutionFailed(
@@ -118,9 +118,7 @@ impl NodeExecutor for StaticFileNode {
             .as_deref()
             .or_else(|| input.get("path").and_then(|v| v.as_str()))
             .ok_or_else(|| {
-                NodeError::MissingInput(
-                    "no file path provided in config or input".into(),
-                )
+                NodeError::MissingInput("no file path provided in config or input".into())
             })?;
 
         // Resolve and validate path
@@ -141,11 +139,7 @@ impl NodeExecutor for StaticFileNode {
 
         // Read file
         let body = tokio::fs::read_to_string(&resolved).await.map_err(|e| {
-            NodeError::ExecutionFailed(format!(
-                "failed to read '{}': {}",
-                resolved.display(),
-                e
-            ))
+            NodeError::ExecutionFailed(format!("failed to read '{}': {}", resolved.display(), e))
         })?;
 
         Ok(NodeOutput::data(serde_json::json!({
@@ -206,9 +200,7 @@ mod tests {
         node.init(&serde_json::json!({})).await.unwrap();
 
         let ctx = ExecutionContext::new();
-        let result = node
-            .execute(serde_json::json!({}), &ctx)
-            .await;
+        let result = node.execute(serde_json::json!({}), &ctx).await;
         assert!(result.is_err());
     }
 }

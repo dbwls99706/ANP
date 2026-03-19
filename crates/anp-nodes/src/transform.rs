@@ -79,16 +79,12 @@ impl NodeExecutor for TransformNode {
         let mapping = config
             .get("mapping")
             .and_then(|v| v.as_object())
-            .ok_or_else(|| {
-                NodeError::InvalidConfig("missing 'mapping' object in config".into())
-            })?;
+            .ok_or_else(|| NodeError::InvalidConfig("missing 'mapping' object in config".into()))?;
 
         for (key, value) in mapping {
-            let path = value
-                .as_str()
-                .ok_or_else(|| {
-                    NodeError::InvalidConfig(format!("mapping value for '{}' must be a string", key))
-                })?;
+            let path = value.as_str().ok_or_else(|| {
+                NodeError::InvalidConfig(format!("mapping value for '{}' must be a string", key))
+            })?;
             self.mapping.insert(key.clone(), path.to_string());
         }
 
@@ -120,9 +116,13 @@ impl NodeExecutor for TransformNode {
         let (result, missing) = transform_single_with_report(&input, &self.mapping);
 
         let mut output = NodeOutput::data(result);
-        output.logs.push(format!("transformed with {} mappings", self.mapping.len()));
+        output
+            .logs
+            .push(format!("transformed with {} mappings", self.mapping.len()));
         if !missing.is_empty() {
-            output.logs.push(format!("unresolved paths: {}", missing.join(", ")));
+            output
+                .logs
+                .push(format!("unresolved paths: {}", missing.join(", ")));
         }
         Ok(output)
     }
