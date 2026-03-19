@@ -79,6 +79,37 @@ enum Commands {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Formally verify an ANP graph — prove correctness
+    Verify {
+        /// Path to the .anp.json graph file
+        graph: PathBuf,
+    },
+    /// Show semantic differences between two graphs
+    Diff {
+        /// Path to the old graph
+        old_graph: PathBuf,
+        /// Path to the new graph
+        new_graph: PathBuf,
+    },
+    /// Optimize an ANP graph with compiler-like passes
+    Optimize {
+        /// Path to the .anp.json graph file
+        graph: PathBuf,
+        /// Save optimized graph to file
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+    },
+    /// Compile a graph to optimized binary format (.anp.compiled)
+    Compile {
+        /// Path to the .anp.json graph file
+        graph: PathBuf,
+        /// Output path for compiled graph
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+        /// Optimization level: none, basic, full
+        #[arg(long, default_value = "full")]
+        opt: String,
+    },
 }
 
 /// Unified error type for CLI operations.
@@ -149,6 +180,17 @@ async fn main() -> ExitCode {
             instruction,
             dry_run,
         } => cmd_edit(graph, instruction, dry_run).await,
+        Commands::Verify { graph: path } => cmd_verify(path),
+        Commands::Diff {
+            old_graph,
+            new_graph,
+        } => cmd_diff(old_graph, new_graph),
+        Commands::Optimize { graph: path, output } => cmd_optimize(path, output),
+        Commands::Compile {
+            graph: path,
+            output,
+            opt,
+        } => cmd_compile(path, output, opt),
     };
 
     match result {
@@ -559,6 +601,75 @@ fn cmd_init(name: String) -> CliResult {
     println!();
     println!("  cd {}", name);
     println!("  anp run main.anp.json");
+    Ok(())
+}
+
+fn cmd_verify(path: PathBuf) -> CliResult {
+    let graph = load_graph(&path)?;
+    let report = anp_core::graph::verify::verify(&graph);
+    println!("{}", report);
+    if report.overall_pass {
+        Ok(())
+    } else {
+        Err(CliError::Message("verification failed".to_string()))
+    }
+}
+
+fn cmd_diff(old_path: PathBuf, new_path: PathBuf) -> CliResult {
+    let old_graph = load_graph(&old_path)?;
+    let new_graph = load_graph(&new_path)?;
+    let diff = anp_core::graph::diff::diff(&old_graph, &new_graph);
+    if diff.summary.is_identical {
+        println!("Graphs are identical.");
+    } else {
+        println!("{}", diff);
+    }
+    Ok(())
+}
+
+fn cmd_optimize(path: PathBuf, output: Option<PathBuf>) -> CliResult {
+    let graph = load_graph(&path)?;
+    let result = anp_core::graph::optimize::optimize(&graph);
+    println!("{}", result);
+
+    if let Some(out_path) = output {
+        let json = serde_json::to_string_pretty(&result.graph)
+            .map_err(|e| CliError::Message(format!("Error serializing graph: {}", e)))?;
+        std::fs::write(&out_path, &json)
+            .map_err(|e| CliError::Message(format!("Error writing file: {}", e)))?;
+        println!("Optimized graph saved to {}", out_path.display());
+    }
+    Ok(())
+}
+
+fn cmd_compile(path: PathBuf, output: Option<PathBuf>, opt: String) -> CliResult {
+    let graph = load_graph(&path)?;
+
+    let opt_level = match opt.as_str() {
+        "none" => anp_core::graph::compile::OptLevel::None,
+        "basic" => anp_core::graph::compile::OptLevel::Basic,
+        _ => anp_core::graph::compile::OptLevel::Full,
+    };
+
+    let compiled = anp_core::graph::compile::compile(
+        &graph,
+        Some(&path.display().to_string()),
+        opt_level,
+    )
+    .map_err(|e| CliError::Message(format!("Compilation failed: {}", e)))?;
+
+    println!("{}", compiled);
+
+    let out_path = output.unwrap_or_else(|| {
+        let mut p = path.clone();
+        p.set_extension("compiled");
+        p
+    });
+
+    anp_core::graph::compile::save_to_file(&compiled, &out_path)
+        .map_err(|e| CliError::Message(format!("Error saving compiled graph: {}", e)))?;
+
+    println!("\nSaved to {}", out_path.display());
     Ok(())
 }
 
