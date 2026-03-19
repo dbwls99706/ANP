@@ -1,0 +1,59 @@
+{
+  "version": "0.1",
+  "metadata": {
+    "name": "rest-api-with-params",
+    "description": "REST API with path parameters and query support — /users/:id returns user data"
+  },
+  "nodes": [
+    {
+      "id": "server",
+      "node_type": "http_server",
+      "kind": "service",
+      "config": {
+        "port": 3000,
+        "routes": [
+          { "path": "/", "method": "GET", "output_port": "home" },
+          { "path": "/users", "method": "GET", "output_port": "list_users" },
+          { "path": "/users/:id", "method": "GET", "output_port": "get_user" },
+          { "path": "/users", "method": "POST", "output_port": "create_user" }
+        ]
+      },
+      "outputs": [
+        { "name": "home" },
+        { "name": "list_users" },
+        { "name": "get_user" },
+        { "name": "create_user" }
+      ]
+    },
+    {
+      "id": "home_page",
+      "node_type": "html_template",
+      "kind": "processor",
+      "config": {
+        "html": "<!DOCTYPE html><html><body><h1>User API</h1><ul><li>GET /users — list all</li><li>GET /users/:id — get one</li><li>POST /users — create</li></ul></body></html>"
+      },
+      "inputs": [{ "name": "default" }],
+      "outputs": [{ "name": "default" }]
+    },
+    {
+      "id": "db",
+      "node_type": "database",
+      "kind": "processor",
+      "config": {
+        "initial": {
+          "user:1": { "id": 1, "name": "Alice", "email": "alice@example.com" },
+          "user:2": { "id": 2, "name": "Bob", "email": "bob@example.com" },
+          "user:3": { "id": 3, "name": "Charlie", "email": "charlie@example.com" }
+        }
+      },
+      "inputs": [{ "name": "default" }],
+      "outputs": [{ "name": "default" }]
+    }
+  ],
+  "edges": [
+    { "id": "e1", "from_node": "server", "from_port": "home", "to_node": "home_page" },
+    { "id": "e2", "from_node": "server", "from_port": "list_users", "to_node": "db" },
+    { "id": "e3", "from_node": "server", "from_port": "get_user", "to_node": "db" },
+    { "id": "e4", "from_node": "server", "from_port": "create_user", "to_node": "db" }
+  ]
+}

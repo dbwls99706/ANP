@@ -66,15 +66,47 @@ fn content_type_for(path: &str) -> &'static str {
     }
 }
 
-/// Validate that the resolved path doesn't escape the base directory (path traversal prevention)
+/// Validate that the resolved path doesn't escape the base directory (path traversal prevention).
+/// Also rejects symlinks that point outside the base directory.
 fn validate_path(base: &Path, requested: &str) -> Result<PathBuf, NodeError> {
+    // Reject path components that could escape
+    if requested.contains("..") {
+        return Err(NodeError::ExecutionFailed(
+            "path traversal denied: '..' not allowed".into(),
+        ));
+    }
+
     let resolved = base.join(requested);
-    let canonical_base = base.canonicalize().map_err(|e| {
-        NodeError::ExecutionFailed(format!("cannot resolve base directory: {}", e))
-    })?;
-    let canonical_path = resolved.canonicalize().map_err(|e| {
-        NodeError::ExecutionFailed(format!("cannot resolve file path: {}", e))
-    })?;
+
+    // Check if the file is a symlink pointing outside base_dir
+    if resolved.is_symlink() {
+        let link_target = std::fs::read_link(&resolved)
+            .map_err(|e| NodeError::ExecutionFailed(format!("cannot read symlink: {}", e)))?;
+        // If symlink target is relative, resolve it relative to the symlink's parent
+        let absolute_target = if link_target.is_relative() {
+            resolved.parent().unwrap_or(base).join(&link_target)
+        } else {
+            link_target
+        };
+        let canonical_target = absolute_target.canonicalize().map_err(|e| {
+            NodeError::ExecutionFailed(format!("cannot resolve symlink target: {}", e))
+        })?;
+        let canonical_base = base.canonicalize().map_err(|e| {
+            NodeError::ExecutionFailed(format!("cannot resolve base directory: {}", e))
+        })?;
+        if !canonical_target.starts_with(&canonical_base) {
+            return Err(NodeError::ExecutionFailed(
+                "path traversal denied: symlink target is outside base directory".into(),
+            ));
+        }
+    }
+
+    let canonical_base = base
+        .canonicalize()
+        .map_err(|e| NodeError::ExecutionFailed(format!("cannot resolve base directory: {}", e)))?;
+    let canonical_path = resolved
+        .canonicalize()
+        .map_err(|e| NodeError::ExecutionFailed(format!("cannot resolve file path: {}", e)))?;
 
     if !canonical_path.starts_with(&canonical_base) {
         return Err(NodeError::ExecutionFailed(
@@ -118,9 +150,7 @@ impl NodeExecutor for StaticFileNode {
             .as_deref()
             .or_else(|| input.get("path").and_then(|v| v.as_str()))
             .ok_or_else(|| {
-                NodeError::MissingInput(
-                    "no file path provided in config or input".into(),
-                )
+                NodeError::MissingInput("no file path provided in config or input".into())
             })?;
 
         // Resolve and validate path
@@ -141,11 +171,7 @@ impl NodeExecutor for StaticFileNode {
 
         // Read file
         let body = tokio::fs::read_to_string(&resolved).await.map_err(|e| {
-            NodeError::ExecutionFailed(format!(
-                "failed to read '{}': {}",
-                resolved.display(),
-                e
-            ))
+            NodeError::ExecutionFailed(format!("failed to read '{}': {}", resolved.display(), e))
         })?;
 
         Ok(NodeOutput::data(serde_json::json!({
@@ -206,9 +232,7 @@ mod tests {
         node.init(&serde_json::json!({})).await.unwrap();
 
         let ctx = ExecutionContext::new();
-        let result = node
-            .execute(serde_json::json!({}), &ctx)
-            .await;
+        let result = node.execute(serde_json::json!({}), &ctx).await;
         assert!(result.is_err());
     }
 }

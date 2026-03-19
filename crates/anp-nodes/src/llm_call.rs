@@ -154,7 +154,10 @@ impl LlmCallNode {
             })?
             .to_string();
 
-        let usage = resp_body.get("usage").cloned().unwrap_or(serde_json::Value::Null);
+        let usage = resp_body
+            .get("usage")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null);
 
         Ok(serde_json::json!({
             "response": content,
@@ -222,7 +225,10 @@ impl LlmCallNode {
             })?
             .to_string();
 
-        let usage = resp_body.get("usage").cloned().unwrap_or(serde_json::Value::Null);
+        let usage = resp_body
+            .get("usage")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null);
 
         Ok(serde_json::json!({
             "response": content,
@@ -330,8 +336,9 @@ impl NodeExecutor for LlmCallNode {
         } else if let Some(s) = input.as_str() {
             s.to_string()
         } else {
-            serde_json::to_string(&input)
-                .map_err(|e| NodeError::ExecutionFailed(format!("failed to serialize input: {}", e)))?
+            serde_json::to_string(&input).map_err(|e| {
+                NodeError::ExecutionFailed(format!("failed to serialize input: {}", e))
+            })?
         };
 
         if user_message.is_empty() {
@@ -386,7 +393,9 @@ mod tests {
     #[tokio::test]
     async fn test_init_invalid_provider() {
         let mut node = LlmCallNode::new();
-        let result = node.init(&serde_json::json!({ "provider": "gemini" })).await;
+        let result = node
+            .init(&serde_json::json!({ "provider": "gemini" }))
+            .await;
         assert!(result.is_err());
     }
 

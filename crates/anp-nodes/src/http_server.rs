@@ -5,8 +5,8 @@ use anp_core::node::traits::{NodeError, NodeExecutor, NodeOutput, NodeResult, Pi
 use anp_core::runtime::context::ExecutionContext;
 use axum::body::Bytes;
 use axum::extract::State;
-use axum::http::{Method, StatusCode};
 use axum::http::HeaderValue;
+use axum::http::{Method, StatusCode};
 use axum::response::IntoResponse;
 use axum::Router;
 use serde::Deserialize;
@@ -64,10 +64,7 @@ impl NodeExecutor for HttpServerNode {
     }
 
     async fn init(&mut self, config: &serde_json::Value) -> NodeResult<()> {
-        let port_val = config
-            .get("port")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(3000);
+        let port_val = config.get("port").and_then(|v| v.as_u64()).unwrap_or(3000);
 
         if port_val > u16::MAX as u64 {
             return Err(NodeError::InvalidConfig(format!(
@@ -161,6 +158,33 @@ impl NodeExecutor for HttpServerNode {
     }
 }
 
+/// Simple percent-decoding for query parameters
+fn percent_decode(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut chars = s.bytes();
+    while let Some(b) = chars.next() {
+        if b == b'%' {
+            let hi = chars.next().unwrap_or(b'0');
+            let lo = chars.next().unwrap_or(b'0');
+            let hex = [hi, lo];
+            if let Ok(s) = std::str::from_utf8(&hex) {
+                if let Ok(val) = u8::from_str_radix(s, 16) {
+                    result.push(val as char);
+                    continue;
+                }
+            }
+            result.push('%');
+            result.push(hi as char);
+            result.push(lo as char);
+        } else if b == b'+' {
+            result.push(' ');
+        } else {
+            result.push(b as char);
+        }
+    }
+    result
+}
+
 /// Handle all incoming HTTP requests by matching against configured routes
 async fn handle_request(
     State(state): State<AppState>,
@@ -171,12 +195,38 @@ async fn handle_request(
     let path = uri.path();
     let method_str = method.as_str();
 
-    // Find matching route
+    // Find matching route — supports exact match and path params (e.g., /users/:id)
+    let mut path_params = serde_json::Map::new();
     let matched_route = state.routes.iter().find(|r| {
-        let path_match = r.path == path;
-        let method_match = r.method.eq_ignore_ascii_case("ANY")
-            || r.method.eq_ignore_ascii_case(method_str);
-        path_match && method_match
+        let method_match =
+            r.method.eq_ignore_ascii_case("ANY") || r.method.eq_ignore_ascii_case(method_str);
+        if !method_match {
+            return false;
+        }
+
+        // Exact match
+        if r.path == path {
+            return true;
+        }
+
+        // Path parameter matching (e.g., /users/:id matches /users/42)
+        let route_parts: Vec<&str> = r.path.split('/').collect();
+        let path_parts: Vec<&str> = path.split('/').collect();
+        if route_parts.len() != path_parts.len() {
+            return false;
+        }
+
+        let mut params = serde_json::Map::new();
+        for (route_part, path_part) in route_parts.iter().zip(path_parts.iter()) {
+            if let Some(param_name) = route_part.strip_prefix(':') {
+                params.insert(param_name.to_string(), serde_json::json!(path_part));
+            } else if route_part != path_part {
+                return false;
+            }
+        }
+
+        path_params = params;
+        true
     });
 
     let output_port = match matched_route {
@@ -226,17 +276,56 @@ async fn handle_request(
         obj.insert("_method".to_string(), serde_json::json!(method_str));
         obj.insert("_path".to_string(), serde_json::json!(path));
         obj.insert("_port".to_string(), serde_json::json!(output_port));
+
+        // Add path parameters (e.g., /users/:id → {"_params": {"id": "42"}})
+        if !path_params.is_empty() {
+            // Also inject path params at top level for easy access
+            for (k, v) in &path_params {
+                obj.insert(k.clone(), v.clone());
+            }
+            obj.insert(
+                "_params".to_string(),
+                serde_json::Value::Object(path_params),
+            );
+        }
+
+        // Parse query parameters (e.g., ?page=1&limit=10)
+        if let Some(query) = uri.query() {
+            let mut query_map = serde_json::Map::new();
+            for pair in query.split('&') {
+                if let Some((key, value)) = pair.split_once('=') {
+                    let decoded_key = percent_decode(key);
+                    let decoded_value = percent_decode(value);
+                    query_map.insert(decoded_key, serde_json::Value::String(decoded_value));
+                }
+            }
+            if !query_map.is_empty() {
+                obj.insert("_query".to_string(), serde_json::Value::Object(query_map));
+            }
+        }
     }
 
-    match state.trigger.trigger(&state.node_id, &output_port, trigger_data).await {
+    match state
+        .trigger
+        .trigger(&state.node_id, &output_port, trigger_data)
+        .await
+    {
         Ok(result) => {
             // Check if the pipeline result requests a specific content type
             // (e.g., html_template node sets _content_type to "text/html")
             if let Some(content_type) = result.get("_content_type").and_then(|v| v.as_str()) {
                 let body = if content_type.starts_with("text/html") {
-                    result.get("html").and_then(|v| v.as_str()).unwrap_or("").to_string()
+                    result
+                        .get("html")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string()
                 } else {
-                    result.get("body").and_then(|v| v.as_str()).unwrap_or("").to_string()
+                    result
+                        .get("body")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string()
                 };
 
                 let mut response = axum::response::Response::new(axum::body::Body::from(body));
@@ -256,5 +345,149 @@ async fn handle_request(
             )
                 .into_response()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_init_default_port() {
+        let mut node = HttpServerNode::new();
+        node.init(&serde_json::json!({})).await.unwrap();
+        assert_eq!(node.port, 3000);
+    }
+
+    #[tokio::test]
+    async fn test_init_custom_port() {
+        let mut node = HttpServerNode::new();
+        node.init(&serde_json::json!({"port": 8080})).await.unwrap();
+        assert_eq!(node.port, 8080);
+    }
+
+    #[tokio::test]
+    async fn test_init_port_too_large() {
+        let mut node = HttpServerNode::new();
+        let result = node.init(&serde_json::json!({"port": 99999})).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_init_routes() {
+        let mut node = HttpServerNode::new();
+        node.init(&serde_json::json!({
+            "routes": [
+                {"path": "/api", "method": "GET", "output_port": "api"},
+                {"path": "/data", "output_port": "data"}
+            ]
+        }))
+        .await
+        .unwrap();
+        assert_eq!(node.routes.len(), 2);
+        assert_eq!(node.routes[0].path, "/api");
+        assert_eq!(node.routes[0].method, "GET");
+        assert_eq!(node.routes[1].method, "ANY"); // default
+    }
+
+    #[tokio::test]
+    async fn test_init_empty_output_port() {
+        let mut node = HttpServerNode::new();
+        let result = node
+            .init(&serde_json::json!({
+                "routes": [{"path": "/", "output_port": ""}]
+            }))
+            .await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_execute_batch_mode() {
+        let mut node = HttpServerNode::new();
+        node.init(&serde_json::json!({
+            "port": 4000,
+            "routes": [{"path": "/", "output_port": "page"}]
+        }))
+        .await
+        .unwrap();
+
+        let ctx = ExecutionContext::new();
+        let output = node.execute(serde_json::json!({}), &ctx).await.unwrap();
+        let result = &output.ports["default"];
+        assert_eq!(result["type"], "http_server");
+        assert_eq!(result["port"], 4000);
+        assert_eq!(result["status"], "mock");
+        assert_eq!(result["routes"][0]["path"], "/");
+    }
+
+    #[test]
+    fn test_percent_decode_basic() {
+        assert_eq!(percent_decode("hello%20world"), "hello world");
+        assert_eq!(percent_decode("foo+bar"), "foo bar");
+        assert_eq!(percent_decode("100%25"), "100%");
+        assert_eq!(percent_decode("no+encoding"), "no encoding");
+    }
+
+    #[test]
+    fn test_percent_decode_special_chars() {
+        assert_eq!(percent_decode("%3C%3E"), "<>");
+        assert_eq!(percent_decode("a%26b"), "a&b");
+    }
+
+    #[test]
+    fn test_path_param_matching() {
+        // Test the path parameter pattern matching logic
+        let route = RouteConfig {
+            path: "/users/:id".to_string(),
+            method: "GET".to_string(),
+            output_port: "get_user".to_string(),
+        };
+
+        let route_parts: Vec<&str> = route.path.split('/').collect();
+        let path_parts: Vec<&str> = "/users/42".split('/').collect();
+        assert_eq!(route_parts.len(), path_parts.len());
+
+        let mut params = serde_json::Map::new();
+        let mut matches = true;
+        for (rp, pp) in route_parts.iter().zip(path_parts.iter()) {
+            if let Some(param_name) = rp.strip_prefix(':') {
+                params.insert(param_name.to_string(), serde_json::json!(pp));
+            } else if rp != pp {
+                matches = false;
+            }
+        }
+        assert!(matches);
+        assert_eq!(params["id"], "42");
+    }
+
+    #[test]
+    fn test_path_param_multiple() {
+        let route_path = "/api/:version/users/:id";
+        let request_path = "/api/v2/users/99";
+
+        let route_parts: Vec<&str> = route_path.split('/').collect();
+        let path_parts: Vec<&str> = request_path.split('/').collect();
+        assert_eq!(route_parts.len(), path_parts.len());
+
+        let mut params = serde_json::Map::new();
+        for (rp, pp) in route_parts.iter().zip(path_parts.iter()) {
+            if let Some(param_name) = rp.strip_prefix(':') {
+                params.insert(param_name.to_string(), serde_json::json!(pp));
+            }
+        }
+        assert_eq!(params["version"], "v2");
+        assert_eq!(params["id"], "99");
+    }
+
+    #[test]
+    fn test_route_config_deserialization() {
+        let json = serde_json::json!({
+            "path": "/test",
+            "output_port": "out"
+        });
+        let route: RouteConfig = serde_json::from_value(json).unwrap();
+        assert_eq!(route.path, "/test");
+        assert_eq!(route.method, "ANY");
+        assert_eq!(route.output_port, "out");
     }
 }

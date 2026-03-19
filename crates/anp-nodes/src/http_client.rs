@@ -31,6 +31,8 @@ pub struct HttpClientNode {
     method: String,
     headers: HashMap<String, String>,
     timeout_secs: u64,
+    retry_count: u32,
+    retry_backoff_ms: u64,
 }
 
 /// Maximum response body size: 1MB
@@ -49,6 +51,8 @@ impl HttpClientNode {
             method: "GET".to_string(),
             headers: HashMap::new(),
             timeout_secs: 30,
+            retry_count: 2,
+            retry_backoff_ms: 500,
         }
     }
 }
@@ -62,7 +66,7 @@ fn is_private_ip(ip: &IpAddr) -> bool {
                 || v4.is_link_local()  // 169.254.0.0/16
                 || v4.is_broadcast()   // 255.255.255.255
                 || v4.is_unspecified() // 0.0.0.0
-                || v4.octets()[0] == 100 && (v4.octets()[1] & 0xC0) == 64  // 100.64.0.0/10 (CGN)
+                || v4.octets()[0] == 100 && (v4.octets()[1] & 0xC0) == 64 // 100.64.0.0/10 (CGN)
         }
         IpAddr::V6(v6) => {
             v6.is_loopback()           // ::1
@@ -195,6 +199,24 @@ impl NodeExecutor for HttpClientNode {
             self.timeout_secs = timeout;
         }
 
+        if let Some(retry) = config.get("retry_count").and_then(|v| v.as_u64()) {
+            if retry > 10 {
+                return Err(NodeError::InvalidConfig(
+                    "retry_count must be between 0 and 10".into(),
+                ));
+            }
+            self.retry_count = retry as u32;
+        }
+
+        if let Some(backoff) = config.get("retry_backoff_ms").and_then(|v| v.as_u64()) {
+            if backoff > 30000 {
+                return Err(NodeError::InvalidConfig(
+                    "retry_backoff_ms must be between 0 and 30000".into(),
+                ));
+            }
+            self.retry_backoff_ms = backoff;
+        }
+
         Ok(())
     }
 
@@ -233,88 +255,122 @@ impl NodeExecutor for HttpClientNode {
 
         let body = input.get("body").cloned();
 
-        // Disable auto-redirects to prevent SSRF via redirect to internal IPs
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(self.timeout_secs))
-            .redirect(reqwest::redirect::Policy::none())
-            .build()
-            .map_err(|e| NodeError::ExecutionFailed(format!("failed to build HTTP client: {}", e)))?;
-
-        let mut request = match method.as_str() {
-            "GET" => client.get(&url),
-            "POST" => client.post(&url),
-            "PUT" => client.put(&url),
-            "PATCH" => client.patch(&url),
-            "DELETE" => client.delete(&url),
-            "HEAD" => client.head(&url),
-            _ => {
-                return Err(NodeError::ExecutionFailed(format!(
-                    "unsupported method: '{}'",
-                    method
-                )));
+        // Retry loop with exponential backoff
+        let max_attempts = self.retry_count + 1;
+        let mut last_err = String::new();
+        for attempt in 0..max_attempts {
+            if attempt > 0 {
+                let delay = self.retry_backoff_ms * 2u64.pow(attempt - 1);
+                tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
             }
-        };
+            // Build a fresh client+request each attempt (request builder is consumed by send)
+            let client = reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(self.timeout_secs))
+                .redirect(reqwest::redirect::Policy::none())
+                .build()
+                .map_err(|e| {
+                    NodeError::ExecutionFailed(format!("failed to build HTTP client: {}", e))
+                })?;
 
-        for (k, v) in &headers {
-            request = request.header(k.as_str(), v.as_str());
+            let mut request = match method.as_str() {
+                "GET" => client.get(&url),
+                "POST" => client.post(&url),
+                "PUT" => client.put(&url),
+                "PATCH" => client.patch(&url),
+                "DELETE" => client.delete(&url),
+                "HEAD" => client.head(&url),
+                _ => {
+                    return Err(NodeError::ExecutionFailed(format!(
+                        "unsupported method: '{}'",
+                        method
+                    )));
+                }
+            };
+
+            for (k, v) in &headers {
+                request = request.header(k.as_str(), v.as_str());
+            }
+
+            if let Some(body_val) = &body {
+                request = request
+                    .header("Content-Type", "application/json")
+                    .json(body_val);
+            }
+
+            match request.send().await {
+                Ok(response) => {
+                    let status_code = response.status();
+
+                    // Retry on 5xx server errors (not 4xx client errors)
+                    if status_code.is_server_error() && attempt < max_attempts - 1 {
+                        last_err = format!("server error: {}", status_code.as_u16());
+                        continue;
+                    }
+
+                    // Success path — process response
+                    let status = status_code.as_u16();
+                    let resp_headers: HashMap<String, String> = response
+                        .headers()
+                        .iter()
+                        .filter_map(|(k, v)| {
+                            v.to_str().ok().map(|val| (k.to_string(), val.to_string()))
+                        })
+                        .collect();
+
+                    let content_type = resp_headers
+                        .get("content-type")
+                        .cloned()
+                        .unwrap_or_default();
+
+                    let body_bytes = response.bytes().await.map_err(|e| {
+                        NodeError::ExecutionFailed(format!("failed to read response body: {}", e))
+                    })?;
+
+                    if body_bytes.len() > MAX_RESPONSE_BYTES {
+                        return Err(NodeError::ExecutionFailed(format!(
+                            "response body too large: {} bytes (limit: {} bytes)",
+                            body_bytes.len(),
+                            MAX_RESPONSE_BYTES
+                        )));
+                    }
+
+                    let resp_body = if content_type.contains("application/json") {
+                        serde_json::from_slice(&body_bytes).unwrap_or(serde_json::Value::Null)
+                    } else {
+                        let text = String::from_utf8_lossy(&body_bytes).into_owned();
+                        serde_json::Value::String(text)
+                    };
+
+                    let output = serde_json::json!({
+                        "status": status,
+                        "headers": resp_headers,
+                        "body": resp_body
+                    });
+
+                    let mut node_output = NodeOutput::data(output)
+                        .with_log(format!("{} {} -> {}", method, url, status));
+                    if attempt > 0 {
+                        node_output = node_output
+                            .with_log(format!("succeeded after {} attempts", attempt + 1));
+                    }
+                    return Ok(node_output);
+                }
+                Err(e) => {
+                    last_err = e.to_string();
+                    if attempt == max_attempts - 1 {
+                        return Err(NodeError::ExecutionFailed(format!(
+                            "HTTP request failed after {} attempts: {}",
+                            max_attempts, last_err
+                        )));
+                    }
+                }
+            }
         }
 
-        if let Some(body_val) = body {
-            request = request.header("Content-Type", "application/json").json(&body_val);
-        }
-
-        let response = request
-            .send()
-            .await
-            .map_err(|e| NodeError::ExecutionFailed(format!("HTTP request failed: {}", e)))?;
-
-        let status = response.status().as_u16();
-
-        // Collect response headers before consuming body
-        let resp_headers: HashMap<String, String> = response
-            .headers()
-            .iter()
-            .filter_map(|(k, v)| {
-                v.to_str().ok().map(|val| (k.to_string(), val.to_string()))
-            })
-            .collect();
-
-        let content_type = resp_headers
-            .get("content-type")
-            .cloned()
-            .unwrap_or_default();
-
-        // Read response body with size limit (1MB)
-        let body_bytes = response
-            .bytes()
-            .await
-            .map_err(|e| NodeError::ExecutionFailed(format!("failed to read response body: {}", e)))?;
-
-        if body_bytes.len() > MAX_RESPONSE_BYTES {
-            return Err(NodeError::ExecutionFailed(format!(
-                "response body too large: {} bytes (limit: {} bytes)",
-                body_bytes.len(),
-                MAX_RESPONSE_BYTES
-            )));
-        }
-
-        let resp_body = if content_type.contains("application/json") {
-            serde_json::from_slice(&body_bytes).unwrap_or(serde_json::Value::Null)
-        } else {
-            let text = String::from_utf8_lossy(&body_bytes).into_owned();
-            serde_json::Value::String(text)
-        };
-
-        let output = serde_json::json!({
-            "status": status,
-            "headers": resp_headers,
-            "body": resp_body
-        });
-
-        Ok(
-            NodeOutput::data(output)
-                .with_log(format!("{} {} -> {}", method, url, status)),
-        )
+        Err(NodeError::ExecutionFailed(format!(
+            "HTTP request failed after {} attempts: {}",
+            max_attempts, last_err
+        )))
     }
 }
 
@@ -463,7 +519,29 @@ mod tests {
     #[tokio::test]
     async fn test_init_rejects_private_url() {
         let mut node = HttpClientNode::new();
-        let result = node.init(&serde_json::json!({ "url": "http://127.0.0.1:9200" })).await;
+        let result = node
+            .init(&serde_json::json!({ "url": "http://127.0.0.1:9200" }))
+            .await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_init_retry_config() {
+        let mut node = HttpClientNode::new();
+        node.init(&serde_json::json!({
+            "retry_count": 5,
+            "retry_backoff_ms": 1000
+        }))
+        .await
+        .unwrap();
+        assert_eq!(node.retry_count, 5);
+        assert_eq!(node.retry_backoff_ms, 1000);
+    }
+
+    #[tokio::test]
+    async fn test_init_retry_count_too_high() {
+        let mut node = HttpClientNode::new();
+        let result = node.init(&serde_json::json!({"retry_count": 99})).await;
         assert!(result.is_err());
     }
 

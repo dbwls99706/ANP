@@ -5,7 +5,9 @@ use std::time::Instant;
 use tracing::{debug, error, info, warn};
 
 use crate::graph::spec::{AnpGraph, NodeKind};
-use crate::node::traits::{NodeError, NodeExecutor, NodeOutput, NodeResult, NodeStatus, PipelineTrigger};
+use crate::node::traits::{
+    NodeError, NodeExecutor, NodeOutput, NodeResult, NodeStatus, PipelineTrigger,
+};
 use crate::runtime::context::{ExecutionContext, NodeTrace};
 use crate::runtime::scheduler::ExecutionPlan;
 
@@ -22,17 +24,48 @@ pub enum ExecutionError {
     ServiceInBatchMode(String),
 }
 
+/// Default pipeline timeout: 30 seconds per request
+const DEFAULT_PIPELINE_TIMEOUT_SECS: u64 = 30;
+
 /// Runtime implementation of PipelineTrigger.
 /// Service nodes use this to execute downstream pipeline on each event.
 pub struct PipelineTriggerImpl {
     pub plan: Arc<ExecutionPlan>,
     pub nodes: Arc<HashMap<String, Box<dyn NodeExecutor>>>,
     pub ctx: Arc<ExecutionContext>,
+    pub pipeline_timeout_secs: u64,
 }
 
 #[async_trait::async_trait]
 impl PipelineTrigger for PipelineTriggerImpl {
     async fn trigger(
+        &self,
+        source_node: &str,
+        port: &str,
+        data: serde_json::Value,
+    ) -> NodeResult<serde_json::Value> {
+        let timeout = std::time::Duration::from_secs(self.pipeline_timeout_secs);
+
+        match tokio::time::timeout(timeout, self.execute_pipeline(source_node, port, data)).await {
+            Ok(result) => result,
+            Err(_) => {
+                error!(
+                    source = %source_node,
+                    port = %port,
+                    timeout_secs = self.pipeline_timeout_secs,
+                    "pipeline timed out"
+                );
+                Err(NodeError::ExecutionFailed(format!(
+                    "pipeline timed out after {}s",
+                    self.pipeline_timeout_secs
+                )))
+            }
+        }
+    }
+}
+
+impl PipelineTriggerImpl {
+    async fn execute_pipeline(
         &self,
         source_node: &str,
         port: &str,
@@ -71,7 +104,9 @@ impl PipelineTrigger for PipelineTriggerImpl {
             }
 
             for node_id in &stage_nodes {
-                match execute_single_node(node_id, &self.plan, &self.nodes, &self.ctx, &run_id).await {
+                match execute_single_node(node_id, &self.plan, &self.nodes, &self.ctx, &run_id)
+                    .await
+                {
                     Ok(val) => {
                         last_output = val;
                     }
@@ -171,39 +206,48 @@ async fn execute_single_node(
 
             match output.status {
                 NodeStatus::Ok => {
-                    ctx.record_trace(run_id, NodeTrace {
-                        node_id: node_id.to_string(),
-                        node_type,
-                        duration_us,
-                        success: true,
-                        error: None,
-                        output_ports,
-                    });
+                    ctx.record_trace(
+                        run_id,
+                        NodeTrace {
+                            node_id: node_id.to_string(),
+                            node_type,
+                            duration_us,
+                            success: true,
+                            error: None,
+                            output_ports,
+                        },
+                    );
                     let stored = store_output(node_id, &output, plan, ctx, run_id);
                     Ok(stored)
                 }
                 NodeStatus::Skip => {
-                    ctx.record_trace(run_id, NodeTrace {
-                        node_id: node_id.to_string(),
-                        node_type,
-                        duration_us,
-                        success: true,
-                        error: None,
-                        output_ports: vec!["skip".to_string()],
-                    });
+                    ctx.record_trace(
+                        run_id,
+                        NodeTrace {
+                            node_id: node_id.to_string(),
+                            node_type,
+                            duration_us,
+                            success: true,
+                            error: None,
+                            output_ports: vec!["skip".to_string()],
+                        },
+                    );
                     info!(node_id = %node_id, "node returned Skip");
                     Ok(serde_json::Value::Null)
                 }
                 NodeStatus::Error => {
                     let err_msg = output.error.clone();
-                    ctx.record_trace(run_id, NodeTrace {
-                        node_id: node_id.to_string(),
-                        node_type,
-                        duration_us,
-                        success: false,
-                        error: err_msg.clone(),
-                        output_ports,
-                    });
+                    ctx.record_trace(
+                        run_id,
+                        NodeTrace {
+                            node_id: node_id.to_string(),
+                            node_type,
+                            duration_us,
+                            success: false,
+                            error: err_msg.clone(),
+                            output_ports,
+                        },
+                    );
                     error!(
                         node_id = %node_id,
                         error = ?err_msg,
@@ -219,14 +263,17 @@ async fn execute_single_node(
         }
         Err(e) => {
             let duration_us = start.elapsed().as_micros() as u64;
-            ctx.record_trace(run_id, NodeTrace {
-                node_id: node_id.to_string(),
-                node_type,
-                duration_us,
-                success: false,
-                error: Some(e.to_string()),
-                output_ports: vec![],
-            });
+            ctx.record_trace(
+                run_id,
+                NodeTrace {
+                    node_id: node_id.to_string(),
+                    node_type,
+                    duration_us,
+                    success: false,
+                    error: Some(e.to_string()),
+                    output_ports: vec![],
+                },
+            );
             error!(node_id = %node_id, error = %e, "node execution failed");
             Err(e)
         }
@@ -293,37 +340,46 @@ pub async fn execute_batch(
 
                     match output.status {
                         NodeStatus::Ok => {
-                            ctx.record_trace(&run_id, NodeTrace {
-                                node_id: node_id.clone(),
-                                node_type: node_type_str,
-                                duration_us,
-                                success: true,
-                                error: None,
-                                output_ports,
-                            });
+                            ctx.record_trace(
+                                &run_id,
+                                NodeTrace {
+                                    node_id: node_id.clone(),
+                                    node_type: node_type_str,
+                                    duration_us,
+                                    success: true,
+                                    error: None,
+                                    output_ports,
+                                },
+                            );
                             store_output(node_id, &output, plan, ctx, &run_id);
                         }
                         NodeStatus::Skip => {
-                            ctx.record_trace(&run_id, NodeTrace {
-                                node_id: node_id.clone(),
-                                node_type: node_type_str,
-                                duration_us,
-                                success: true,
-                                error: None,
-                                output_ports: vec!["skip".to_string()],
-                            });
+                            ctx.record_trace(
+                                &run_id,
+                                NodeTrace {
+                                    node_id: node_id.clone(),
+                                    node_type: node_type_str,
+                                    duration_us,
+                                    success: true,
+                                    error: None,
+                                    output_ports: vec!["skip".to_string()],
+                                },
+                            );
                             info!(node_id = %node_id, "node returned Skip, stopping pipeline branch");
                         }
                         NodeStatus::Error => {
                             let err_msg = output.error.clone();
-                            ctx.record_trace(&run_id, NodeTrace {
-                                node_id: node_id.clone(),
-                                node_type: node_type_str,
-                                duration_us,
-                                success: false,
-                                error: err_msg.clone(),
-                                output_ports,
-                            });
+                            ctx.record_trace(
+                                &run_id,
+                                NodeTrace {
+                                    node_id: node_id.clone(),
+                                    node_type: node_type_str,
+                                    duration_us,
+                                    success: false,
+                                    error: err_msg.clone(),
+                                    output_ports,
+                                },
+                            );
                             error!(
                                 node_id = %node_id,
                                 error = ?err_msg,
@@ -335,14 +391,17 @@ pub async fn execute_batch(
                 }
                 Err(e) => {
                     let duration_us = start.elapsed().as_micros() as u64;
-                    ctx.record_trace(&run_id, NodeTrace {
-                        node_id: node_id.clone(),
-                        node_type: node_type_str,
-                        duration_us,
-                        success: false,
-                        error: Some(e.to_string()),
-                        output_ports: vec![],
-                    });
+                    ctx.record_trace(
+                        &run_id,
+                        NodeTrace {
+                            node_id: node_id.clone(),
+                            node_type: node_type_str,
+                            duration_us,
+                            success: false,
+                            error: Some(e.to_string()),
+                            output_ports: vec![],
+                        },
+                    );
                     error!(node_id = %node_id, error = %e, "node execution failed");
                     return Err(ExecutionError::NodeFailed {
                         node_id: node_id.clone(),
@@ -418,6 +477,7 @@ pub async fn execute_service(
         plan: Arc::clone(&plan),
         nodes: Arc::clone(&nodes),
         ctx: Arc::clone(&ctx),
+        pipeline_timeout_secs: DEFAULT_PIPELINE_TIMEOUT_SECS,
     });
 
     // Start all Service nodes
@@ -435,18 +495,42 @@ pub async fn execute_service(
         }
     }
 
-    info!("all service nodes started, waiting for Ctrl+C...");
+    info!("all service nodes started, waiting for shutdown signal...");
 
-    // Wait for Ctrl+C
-    if let Err(e) = tokio::signal::ctrl_c().await {
-        error!(error = %e, "failed to listen for shutdown signal");
-        return Err(ExecutionError::NodeFailed {
-            node_id: "runtime".to_string(),
-            message: format!("signal handler failed: {}", e),
-        });
-    }
+    // Wait for Ctrl+C (SIGINT) or SIGTERM for container environments
+    let shutdown = async {
+        let ctrl_c = tokio::signal::ctrl_c();
 
-    info!("shutdown signal received");
+        #[cfg(unix)]
+        {
+            use tokio::signal::unix::{signal, SignalKind};
+            let mut sigterm =
+                signal(SignalKind::terminate()).expect("failed to register SIGTERM handler");
+            tokio::select! {
+                _ = ctrl_c => info!("received SIGINT (Ctrl+C)"),
+                _ = sigterm.recv() => info!("received SIGTERM"),
+            }
+        }
+
+        #[cfg(not(unix))]
+        {
+            ctrl_c.await.ok();
+            info!("received Ctrl+C");
+        }
+    };
+
+    shutdown.await;
+
+    info!("shutdown signal received, draining connections...");
+
+    // Give in-flight requests a grace period to complete (5 seconds)
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+
+    // Shutdown all service nodes
+    // Note: nodes are behind Arc<HashMap> so we can't call &mut shutdown().
+    // The tokio tasks spawned by service nodes will be dropped when the process exits.
+
+    info!("shutdown complete");
 
     Ok(())
 }
@@ -537,4 +621,1002 @@ fn store_error_output(
 
     ctx.set_node_output(run_id, node_id, error_val);
     warn!(node_id = %node_id, error = ?output.error, "no error port found, error logged");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::graph::spec::*;
+    use crate::node::traits::*;
+    use crate::runtime::context::ExecutionContext;
+    use crate::runtime::scheduler;
+
+    /// Mock node that returns configurable output
+    struct MockNode {
+        kind: NodeKind,
+        output: serde_json::Value,
+    }
+
+    #[async_trait::async_trait]
+    impl NodeExecutor for MockNode {
+        fn node_type(&self) -> &str {
+            "mock"
+        }
+        fn node_kind(&self) -> NodeKind {
+            self.kind
+        }
+        async fn init(&mut self, _config: &serde_json::Value) -> NodeResult<()> {
+            Ok(())
+        }
+        async fn execute(
+            &self,
+            input: serde_json::Value,
+            _ctx: &ExecutionContext,
+        ) -> NodeResult<NodeOutput> {
+            if self.output.is_null() {
+                // Echo node: passes input through
+                Ok(NodeOutput::data(input))
+            } else {
+                Ok(NodeOutput::data(self.output.clone()))
+            }
+        }
+    }
+
+    /// Mock node that always fails
+    struct FailNode;
+
+    #[async_trait::async_trait]
+    impl NodeExecutor for FailNode {
+        fn node_type(&self) -> &str {
+            "fail"
+        }
+        fn node_kind(&self) -> NodeKind {
+            NodeKind::Processor
+        }
+        async fn init(&mut self, _config: &serde_json::Value) -> NodeResult<()> {
+            Ok(())
+        }
+        async fn execute(
+            &self,
+            _input: serde_json::Value,
+            _ctx: &ExecutionContext,
+        ) -> NodeResult<NodeOutput> {
+            Err(NodeError::ExecutionFailed("mock failure".into()))
+        }
+    }
+
+    /// Mock node that returns multi-port output
+    struct MultiPortNode;
+
+    #[async_trait::async_trait]
+    impl NodeExecutor for MultiPortNode {
+        fn node_type(&self) -> &str {
+            "multi"
+        }
+        fn node_kind(&self) -> NodeKind {
+            NodeKind::Processor
+        }
+        async fn init(&mut self, _config: &serde_json::Value) -> NodeResult<()> {
+            Ok(())
+        }
+        async fn execute(
+            &self,
+            _input: serde_json::Value,
+            _ctx: &ExecutionContext,
+        ) -> NodeResult<NodeOutput> {
+            let mut ports = HashMap::new();
+            ports.insert("port_a".to_string(), serde_json::json!("data_a"));
+            ports.insert("port_b".to_string(), serde_json::json!("data_b"));
+            Ok(NodeOutput::multi(ports))
+        }
+    }
+
+    /// Mock node that returns skip status
+    struct SkipNode;
+
+    #[async_trait::async_trait]
+    impl NodeExecutor for SkipNode {
+        fn node_type(&self) -> &str {
+            "skip"
+        }
+        fn node_kind(&self) -> NodeKind {
+            NodeKind::Processor
+        }
+        async fn init(&mut self, _config: &serde_json::Value) -> NodeResult<()> {
+            Ok(())
+        }
+        async fn execute(
+            &self,
+            _input: serde_json::Value,
+            _ctx: &ExecutionContext,
+        ) -> NodeResult<NodeOutput> {
+            Ok(NodeOutput::skip())
+        }
+    }
+
+    /// Mock node that returns error status (not Err)
+    struct ErrorStatusNode;
+
+    #[async_trait::async_trait]
+    impl NodeExecutor for ErrorStatusNode {
+        fn node_type(&self) -> &str {
+            "error_status"
+        }
+        fn node_kind(&self) -> NodeKind {
+            NodeKind::Processor
+        }
+        async fn init(&mut self, _config: &serde_json::Value) -> NodeResult<()> {
+            Ok(())
+        }
+        async fn execute(
+            &self,
+            _input: serde_json::Value,
+            _ctx: &ExecutionContext,
+        ) -> NodeResult<NodeOutput> {
+            Ok(NodeOutput::error("soft error"))
+        }
+    }
+
+    fn make_graph(nodes: Vec<Node>, edges: Vec<Edge>) -> AnpGraph {
+        AnpGraph {
+            version: GraphVersion::V0_1,
+            metadata: GraphMetadata {
+                name: "test".into(),
+                description: String::new(),
+            },
+            nodes,
+            edges,
+        }
+    }
+
+    // -- gather_input tests --
+
+    #[test]
+    fn test_gather_input_no_upstream() {
+        let graph = make_graph(
+            vec![Node {
+                id: "s".into(),
+                node_type: "mock".into(),
+                kind: NodeKind::Source,
+                config: serde_json::Value::Null,
+                inputs: vec![],
+                outputs: vec![PortSpec::new("default")],
+            }],
+            vec![],
+        );
+        let plan = scheduler::schedule(&graph).unwrap();
+        let ctx = ExecutionContext::new();
+        let run_id = "test-run";
+        ctx.start_run(run_id.into(), "s".into());
+
+        let input = gather_input("s", &plan, &ctx, run_id);
+        assert_eq!(input, serde_json::Value::Null);
+    }
+
+    #[test]
+    fn test_gather_input_single_upstream() {
+        let graph = make_graph(
+            vec![
+                Node {
+                    id: "s".into(),
+                    node_type: "mock".into(),
+                    kind: NodeKind::Source,
+                    config: serde_json::Value::Null,
+                    inputs: vec![],
+                    outputs: vec![PortSpec::new("default")],
+                },
+                Node {
+                    id: "p".into(),
+                    node_type: "mock".into(),
+                    kind: NodeKind::Processor,
+                    config: serde_json::Value::Null,
+                    inputs: vec![PortSpec::new("default")],
+                    outputs: vec![PortSpec::new("default")],
+                },
+            ],
+            vec![Edge {
+                id: "e1".into(),
+                from_node: "s".into(),
+                from_port: "default".into(),
+                to_node: "p".into(),
+                to_port: "default".into(),
+            }],
+        );
+        let plan = scheduler::schedule(&graph).unwrap();
+        let ctx = ExecutionContext::new();
+        let run_id = "test-run";
+        ctx.start_run(run_id.into(), "s".into());
+        ctx.set_node_output(run_id, "s", serde_json::json!({"value": 42}));
+
+        let input = gather_input("p", &plan, &ctx, run_id);
+        assert_eq!(input, serde_json::json!({"value": 42}));
+    }
+
+    #[test]
+    fn test_gather_input_multiple_upstream() {
+        let graph = make_graph(
+            vec![
+                Node {
+                    id: "s1".into(),
+                    node_type: "mock".into(),
+                    kind: NodeKind::Source,
+                    config: serde_json::Value::Null,
+                    inputs: vec![],
+                    outputs: vec![PortSpec::new("default")],
+                },
+                Node {
+                    id: "s2".into(),
+                    node_type: "mock".into(),
+                    kind: NodeKind::Source,
+                    config: serde_json::Value::Null,
+                    inputs: vec![],
+                    outputs: vec![PortSpec::new("default")],
+                },
+                Node {
+                    id: "p".into(),
+                    node_type: "mock".into(),
+                    kind: NodeKind::Processor,
+                    config: serde_json::Value::Null,
+                    inputs: vec![PortSpec::new("default")],
+                    outputs: vec![PortSpec::new("default")],
+                },
+            ],
+            vec![
+                Edge {
+                    id: "e1".into(),
+                    from_node: "s1".into(),
+                    from_port: "default".into(),
+                    to_node: "p".into(),
+                    to_port: "default".into(),
+                },
+                Edge {
+                    id: "e2".into(),
+                    from_node: "s2".into(),
+                    from_port: "default".into(),
+                    to_node: "p".into(),
+                    to_port: "default".into(),
+                },
+            ],
+        );
+        let plan = scheduler::schedule(&graph).unwrap();
+        let ctx = ExecutionContext::new();
+        let run_id = "test-run";
+        ctx.start_run(run_id.into(), "s1".into());
+        ctx.set_node_output(run_id, "s1", serde_json::json!("a"));
+        ctx.set_node_output(run_id, "s2", serde_json::json!("b"));
+
+        let input = gather_input("p", &plan, &ctx, run_id);
+        // Multiple upstream → Array
+        assert!(input.is_array());
+        let arr = input.as_array().unwrap();
+        assert_eq!(arr.len(), 2);
+    }
+
+    // -- store_output tests --
+
+    #[test]
+    fn test_store_output_default_port() {
+        let graph = make_graph(
+            vec![Node {
+                id: "s".into(),
+                node_type: "mock".into(),
+                kind: NodeKind::Source,
+                config: serde_json::Value::Null,
+                inputs: vec![],
+                outputs: vec![PortSpec::new("default")],
+            }],
+            vec![],
+        );
+        let plan = scheduler::schedule(&graph).unwrap();
+        let ctx = ExecutionContext::new();
+        let run_id = "test-run";
+        ctx.start_run(run_id.into(), "s".into());
+
+        let output = NodeOutput::data(serde_json::json!({"result": "ok"}));
+        let stored = store_output("s", &output, &plan, &ctx, run_id);
+        assert_eq!(stored, serde_json::json!({"result": "ok"}));
+
+        // Verify it's in the context
+        let from_ctx = ctx.get_node_output(run_id, "s").unwrap();
+        assert_eq!(from_ctx, serde_json::json!({"result": "ok"}));
+    }
+
+    #[test]
+    fn test_store_output_multi_port() {
+        let graph = make_graph(
+            vec![Node {
+                id: "p".into(),
+                node_type: "mock".into(),
+                kind: NodeKind::Processor,
+                config: serde_json::Value::Null,
+                inputs: vec![PortSpec::new("default")],
+                outputs: vec![PortSpec::new("a"), PortSpec::new("b")],
+            }],
+            vec![],
+        );
+        let plan = scheduler::schedule(&graph).unwrap();
+        let ctx = ExecutionContext::new();
+        let run_id = "test-run";
+        ctx.start_run(run_id.into(), "p".into());
+
+        let mut ports = HashMap::new();
+        ports.insert("a".to_string(), serde_json::json!("val_a"));
+        ports.insert("b".to_string(), serde_json::json!("val_b"));
+        let output = NodeOutput::multi(ports);
+        let stored = store_output("p", &output, &plan, &ctx, run_id);
+        // Multi-port without "default" → Object with both ports
+        assert!(stored.is_object());
+        let obj = stored.as_object().unwrap();
+        assert_eq!(obj.get("a").unwrap(), &serde_json::json!("val_a"));
+        assert_eq!(obj.get("b").unwrap(), &serde_json::json!("val_b"));
+    }
+
+    #[test]
+    fn test_store_output_empty_ports() {
+        let graph = make_graph(
+            vec![Node {
+                id: "p".into(),
+                node_type: "mock".into(),
+                kind: NodeKind::Processor,
+                config: serde_json::Value::Null,
+                inputs: vec![PortSpec::new("default")],
+                outputs: vec![],
+            }],
+            vec![],
+        );
+        let plan = scheduler::schedule(&graph).unwrap();
+        let ctx = ExecutionContext::new();
+        let run_id = "test-run";
+        ctx.start_run(run_id.into(), "p".into());
+
+        let output = NodeOutput {
+            ports: HashMap::new(),
+            status: NodeStatus::Ok,
+            logs: vec![],
+            error: None,
+        };
+        let stored = store_output("p", &output, &plan, &ctx, run_id);
+        assert_eq!(stored, serde_json::Value::Null);
+    }
+
+    // -- find_downstream_from_port tests --
+
+    #[test]
+    fn test_find_downstream_linear() {
+        let graph = make_graph(
+            vec![
+                Node {
+                    id: "a".into(),
+                    node_type: "mock".into(),
+                    kind: NodeKind::Source,
+                    config: serde_json::Value::Null,
+                    inputs: vec![],
+                    outputs: vec![PortSpec::new("default")],
+                },
+                Node {
+                    id: "b".into(),
+                    node_type: "mock".into(),
+                    kind: NodeKind::Processor,
+                    config: serde_json::Value::Null,
+                    inputs: vec![PortSpec::new("default")],
+                    outputs: vec![PortSpec::new("default")],
+                },
+                Node {
+                    id: "c".into(),
+                    node_type: "mock".into(),
+                    kind: NodeKind::Sink,
+                    config: serde_json::Value::Null,
+                    inputs: vec![PortSpec::new("default")],
+                    outputs: vec![],
+                },
+            ],
+            vec![
+                Edge {
+                    id: "e1".into(),
+                    from_node: "a".into(),
+                    from_port: "default".into(),
+                    to_node: "b".into(),
+                    to_port: "default".into(),
+                },
+                Edge {
+                    id: "e2".into(),
+                    from_node: "b".into(),
+                    from_port: "default".into(),
+                    to_node: "c".into(),
+                    to_port: "default".into(),
+                },
+            ],
+        );
+        let plan = scheduler::schedule(&graph).unwrap();
+        let downstream = find_downstream_from_port("a", "default", &plan);
+        assert!(downstream.contains("b"));
+        assert!(downstream.contains("c"));
+        assert_eq!(downstream.len(), 2);
+    }
+
+    #[test]
+    fn test_find_downstream_branching() {
+        let graph = make_graph(
+            vec![
+                Node {
+                    id: "a".into(),
+                    node_type: "mock".into(),
+                    kind: NodeKind::Source,
+                    config: serde_json::Value::Null,
+                    inputs: vec![],
+                    outputs: vec![PortSpec::new("left"), PortSpec::new("right")],
+                },
+                Node {
+                    id: "b".into(),
+                    node_type: "mock".into(),
+                    kind: NodeKind::Processor,
+                    config: serde_json::Value::Null,
+                    inputs: vec![PortSpec::new("default")],
+                    outputs: vec![],
+                },
+                Node {
+                    id: "c".into(),
+                    node_type: "mock".into(),
+                    kind: NodeKind::Processor,
+                    config: serde_json::Value::Null,
+                    inputs: vec![PortSpec::new("default")],
+                    outputs: vec![],
+                },
+            ],
+            vec![
+                Edge {
+                    id: "e1".into(),
+                    from_node: "a".into(),
+                    from_port: "left".into(),
+                    to_node: "b".into(),
+                    to_port: "default".into(),
+                },
+                Edge {
+                    id: "e2".into(),
+                    from_node: "a".into(),
+                    from_port: "right".into(),
+                    to_node: "c".into(),
+                    to_port: "default".into(),
+                },
+            ],
+        );
+        let plan = scheduler::schedule(&graph).unwrap();
+
+        // Only "left" port → only b
+        let left = find_downstream_from_port("a", "left", &plan);
+        assert!(left.contains("b"));
+        assert!(!left.contains("c"));
+
+        // Only "right" port → only c
+        let right = find_downstream_from_port("a", "right", &plan);
+        assert!(right.contains("c"));
+        assert!(!right.contains("b"));
+    }
+
+    #[test]
+    fn test_find_downstream_nonexistent_port() {
+        let graph = make_graph(
+            vec![Node {
+                id: "a".into(),
+                node_type: "mock".into(),
+                kind: NodeKind::Source,
+                config: serde_json::Value::Null,
+                inputs: vec![],
+                outputs: vec![PortSpec::new("default")],
+            }],
+            vec![],
+        );
+        let plan = scheduler::schedule(&graph).unwrap();
+        let downstream = find_downstream_from_port("a", "nonexistent", &plan);
+        assert!(downstream.is_empty());
+    }
+
+    // -- execute_single_node tests --
+
+    #[tokio::test]
+    async fn test_execute_single_node_ok() {
+        let graph = make_graph(
+            vec![Node {
+                id: "s".into(),
+                node_type: "mock".into(),
+                kind: NodeKind::Source,
+                config: serde_json::Value::Null,
+                inputs: vec![],
+                outputs: vec![PortSpec::new("default")],
+            }],
+            vec![],
+        );
+        let plan = scheduler::schedule(&graph).unwrap();
+        let mut nodes: HashMap<String, Box<dyn NodeExecutor>> = HashMap::new();
+        nodes.insert(
+            "s".into(),
+            Box::new(MockNode::source(serde_json::json!("test_output"))),
+        );
+        let ctx = ExecutionContext::new();
+        let run_id = "run-1";
+        ctx.start_run(run_id.into(), "s".into());
+
+        let result = execute_single_node("s", &plan, &nodes, &ctx, run_id).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), serde_json::json!("test_output"));
+
+        // Verify trace recorded
+        let traces = ctx.get_traces(run_id);
+        assert_eq!(traces.len(), 1);
+        assert!(traces[0].success);
+        assert_eq!(traces[0].node_id, "s");
+    }
+
+    #[tokio::test]
+    async fn test_execute_single_node_failure() {
+        let graph = make_graph(
+            vec![Node {
+                id: "f".into(),
+                node_type: "fail".into(),
+                kind: NodeKind::Processor,
+                config: serde_json::Value::Null,
+                inputs: vec![PortSpec::new("default")],
+                outputs: vec![PortSpec::new("default")],
+            }],
+            vec![],
+        );
+        let plan = scheduler::schedule(&graph).unwrap();
+        let mut nodes: HashMap<String, Box<dyn NodeExecutor>> = HashMap::new();
+        nodes.insert("f".into(), Box::new(FailNode));
+        let ctx = ExecutionContext::new();
+        let run_id = "run-1";
+        ctx.start_run(run_id.into(), "f".into());
+
+        let result = execute_single_node("f", &plan, &nodes, &ctx, run_id).await;
+        assert!(result.is_err());
+
+        // Verify trace recorded with failure
+        let traces = ctx.get_traces(run_id);
+        assert_eq!(traces.len(), 1);
+        assert!(!traces[0].success);
+        assert!(traces[0].error.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_execute_single_node_skip() {
+        let graph = make_graph(
+            vec![Node {
+                id: "s".into(),
+                node_type: "skip".into(),
+                kind: NodeKind::Processor,
+                config: serde_json::Value::Null,
+                inputs: vec![PortSpec::new("default")],
+                outputs: vec![PortSpec::new("default")],
+            }],
+            vec![],
+        );
+        let plan = scheduler::schedule(&graph).unwrap();
+        let mut nodes: HashMap<String, Box<dyn NodeExecutor>> = HashMap::new();
+        nodes.insert("s".into(), Box::new(SkipNode));
+        let ctx = ExecutionContext::new();
+        let run_id = "run-1";
+        ctx.start_run(run_id.into(), "s".into());
+
+        let result = execute_single_node("s", &plan, &nodes, &ctx, run_id).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), serde_json::Value::Null);
+    }
+
+    #[tokio::test]
+    async fn test_execute_single_node_error_status() {
+        let graph = make_graph(
+            vec![Node {
+                id: "e".into(),
+                node_type: "error_status".into(),
+                kind: NodeKind::Processor,
+                config: serde_json::Value::Null,
+                inputs: vec![PortSpec::new("default")],
+                outputs: vec![PortSpec::new("default")],
+            }],
+            vec![],
+        );
+        let plan = scheduler::schedule(&graph).unwrap();
+        let mut nodes: HashMap<String, Box<dyn NodeExecutor>> = HashMap::new();
+        nodes.insert("e".into(), Box::new(ErrorStatusNode));
+        let ctx = ExecutionContext::new();
+        let run_id = "run-1";
+        ctx.start_run(run_id.into(), "e".into());
+
+        // Error status returns Ok with error payload (soft error)
+        let result = execute_single_node("e", &plan, &nodes, &ctx, run_id).await;
+        assert!(result.is_ok());
+        let val = result.unwrap();
+        assert_eq!(val["error"], "soft error");
+    }
+
+    #[tokio::test]
+    async fn test_execute_single_node_multi_port() {
+        let graph = make_graph(
+            vec![Node {
+                id: "m".into(),
+                node_type: "multi".into(),
+                kind: NodeKind::Processor,
+                config: serde_json::Value::Null,
+                inputs: vec![PortSpec::new("default")],
+                outputs: vec![PortSpec::new("port_a"), PortSpec::new("port_b")],
+            }],
+            vec![],
+        );
+        let plan = scheduler::schedule(&graph).unwrap();
+        let mut nodes: HashMap<String, Box<dyn NodeExecutor>> = HashMap::new();
+        nodes.insert("m".into(), Box::new(MultiPortNode));
+        let ctx = ExecutionContext::new();
+        let run_id = "run-1";
+        ctx.start_run(run_id.into(), "m".into());
+
+        let result = execute_single_node("m", &plan, &nodes, &ctx, run_id).await;
+        assert!(result.is_ok());
+        let val = result.unwrap();
+        // Multi-port output stored as object
+        assert!(val.is_object());
+    }
+
+    #[tokio::test]
+    async fn test_execute_single_node_not_found() {
+        let graph = make_graph(
+            vec![Node {
+                id: "s".into(),
+                node_type: "mock".into(),
+                kind: NodeKind::Source,
+                config: serde_json::Value::Null,
+                inputs: vec![],
+                outputs: vec![PortSpec::new("default")],
+            }],
+            vec![],
+        );
+        let plan = scheduler::schedule(&graph).unwrap();
+        let nodes: HashMap<String, Box<dyn NodeExecutor>> = HashMap::new(); // empty!
+        let ctx = ExecutionContext::new();
+        let run_id = "run-1";
+        ctx.start_run(run_id.into(), "s".into());
+
+        let result = execute_single_node("s", &plan, &nodes, &ctx, run_id).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_execute_single_node_service_skipped() {
+        let graph = make_graph(
+            vec![Node {
+                id: "srv".into(),
+                node_type: "mock".into(),
+                kind: NodeKind::Service,
+                config: serde_json::Value::Null,
+                inputs: vec![],
+                outputs: vec![PortSpec::new("default")],
+            }],
+            vec![],
+        );
+        let plan = scheduler::schedule(&graph).unwrap();
+        let mut nodes: HashMap<String, Box<dyn NodeExecutor>> = HashMap::new();
+        nodes.insert(
+            "srv".into(),
+            Box::new(MockNode {
+                kind: NodeKind::Service,
+                output: serde_json::json!("should not execute"),
+            }),
+        );
+        let ctx = ExecutionContext::new();
+        let run_id = "run-1";
+        ctx.start_run(run_id.into(), "srv".into());
+
+        // Service nodes return Null without executing
+        let result = execute_single_node("srv", &plan, &nodes, &ctx, run_id).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), serde_json::Value::Null);
+    }
+
+    // -- execute_batch tests --
+
+    #[tokio::test]
+    async fn test_execute_batch_linear_pipeline() {
+        let graph = make_graph(
+            vec![
+                Node {
+                    id: "s".into(),
+                    node_type: "mock".into(),
+                    kind: NodeKind::Source,
+                    config: serde_json::Value::Null,
+                    inputs: vec![],
+                    outputs: vec![PortSpec::new("default")],
+                },
+                Node {
+                    id: "p".into(),
+                    node_type: "mock".into(),
+                    kind: NodeKind::Processor,
+                    config: serde_json::Value::Null,
+                    inputs: vec![PortSpec::new("default")],
+                    outputs: vec![PortSpec::new("default")],
+                },
+                Node {
+                    id: "k".into(),
+                    node_type: "mock".into(),
+                    kind: NodeKind::Sink,
+                    config: serde_json::Value::Null,
+                    inputs: vec![PortSpec::new("default")],
+                    outputs: vec![],
+                },
+            ],
+            vec![
+                Edge {
+                    id: "e1".into(),
+                    from_node: "s".into(),
+                    from_port: "default".into(),
+                    to_node: "p".into(),
+                    to_port: "default".into(),
+                },
+                Edge {
+                    id: "e2".into(),
+                    from_node: "p".into(),
+                    from_port: "default".into(),
+                    to_node: "k".into(),
+                    to_port: "default".into(),
+                },
+            ],
+        );
+        let plan = scheduler::schedule(&graph).unwrap();
+        let mut nodes: HashMap<String, Box<dyn NodeExecutor>> = HashMap::new();
+        nodes.insert(
+            "s".into(),
+            Box::new(MockNode::source(serde_json::json!("start"))),
+        );
+        nodes.insert(
+            "p".into(),
+            Box::new(MockNode::processor(serde_json::Value::Null)),
+        ); // echo
+        nodes.insert("k".into(), Box::new(MockNode::sink()));
+        let ctx = ExecutionContext::new();
+
+        let result = execute_batch(&graph, &plan, &nodes, &ctx).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_execute_batch_node_failure_stops_pipeline() {
+        let graph = make_graph(
+            vec![
+                Node {
+                    id: "s".into(),
+                    node_type: "mock".into(),
+                    kind: NodeKind::Source,
+                    config: serde_json::Value::Null,
+                    inputs: vec![],
+                    outputs: vec![PortSpec::new("default")],
+                },
+                Node {
+                    id: "fail".into(),
+                    node_type: "fail".into(),
+                    kind: NodeKind::Processor,
+                    config: serde_json::Value::Null,
+                    inputs: vec![PortSpec::new("default")],
+                    outputs: vec![PortSpec::new("default")],
+                },
+                Node {
+                    id: "k".into(),
+                    node_type: "mock".into(),
+                    kind: NodeKind::Sink,
+                    config: serde_json::Value::Null,
+                    inputs: vec![PortSpec::new("default")],
+                    outputs: vec![],
+                },
+            ],
+            vec![
+                Edge {
+                    id: "e1".into(),
+                    from_node: "s".into(),
+                    from_port: "default".into(),
+                    to_node: "fail".into(),
+                    to_port: "default".into(),
+                },
+                Edge {
+                    id: "e2".into(),
+                    from_node: "fail".into(),
+                    from_port: "default".into(),
+                    to_node: "k".into(),
+                    to_port: "default".into(),
+                },
+            ],
+        );
+        let plan = scheduler::schedule(&graph).unwrap();
+        let mut nodes: HashMap<String, Box<dyn NodeExecutor>> = HashMap::new();
+        nodes.insert(
+            "s".into(),
+            Box::new(MockNode::source(serde_json::json!("data"))),
+        );
+        nodes.insert("fail".into(), Box::new(FailNode));
+        nodes.insert("k".into(), Box::new(MockNode::sink()));
+        let ctx = ExecutionContext::new();
+
+        let result = execute_batch(&graph, &plan, &nodes, &ctx).await;
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ExecutionError::NodeFailed { node_id, .. } => assert_eq!(node_id, "fail"),
+            e => panic!("expected NodeFailed, got {:?}", e),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_execute_batch_no_entry_nodes() {
+        // A graph with only a processor (no source/service) → error
+        let graph = make_graph(
+            vec![Node {
+                id: "p".into(),
+                node_type: "mock".into(),
+                kind: NodeKind::Processor,
+                config: serde_json::Value::Null,
+                inputs: vec![PortSpec::new("default")],
+                outputs: vec![PortSpec::new("default")],
+            }],
+            vec![],
+        );
+        let plan = scheduler::schedule(&graph).unwrap();
+        let mut nodes: HashMap<String, Box<dyn NodeExecutor>> = HashMap::new();
+        nodes.insert(
+            "p".into(),
+            Box::new(MockNode::processor(serde_json::Value::Null)),
+        );
+        let ctx = ExecutionContext::new();
+
+        let result = execute_batch(&graph, &plan, &nodes, &ctx).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_execute_batch_data_flows_through() {
+        // Source → Echo processor → Sink: verify data passes through context
+        let graph = make_graph(
+            vec![
+                Node {
+                    id: "s".into(),
+                    node_type: "mock".into(),
+                    kind: NodeKind::Source,
+                    config: serde_json::Value::Null,
+                    inputs: vec![],
+                    outputs: vec![PortSpec::new("default")],
+                },
+                Node {
+                    id: "echo".into(),
+                    node_type: "mock".into(),
+                    kind: NodeKind::Processor,
+                    config: serde_json::Value::Null,
+                    inputs: vec![PortSpec::new("default")],
+                    outputs: vec![PortSpec::new("default")],
+                },
+            ],
+            vec![Edge {
+                id: "e1".into(),
+                from_node: "s".into(),
+                from_port: "default".into(),
+                to_node: "echo".into(),
+                to_port: "default".into(),
+            }],
+        );
+        let plan = scheduler::schedule(&graph).unwrap();
+        let mut nodes: HashMap<String, Box<dyn NodeExecutor>> = HashMap::new();
+        nodes.insert(
+            "s".into(),
+            Box::new(MockNode::source(serde_json::json!({"msg": "hello"}))),
+        );
+        // Echo node (output is null → echoes input)
+        nodes.insert(
+            "echo".into(),
+            Box::new(MockNode::processor(serde_json::Value::Null)),
+        );
+        let ctx = ExecutionContext::new();
+
+        let result = execute_batch(&graph, &plan, &nodes, &ctx).await;
+        assert!(result.is_ok());
+    }
+
+    // -- PipelineTriggerImpl tests --
+
+    #[tokio::test]
+    async fn test_pipeline_trigger_timeout() {
+        // Create a trigger with very short timeout
+        use std::sync::Arc;
+
+        /// Mock node that sleeps forever
+        struct SlowNode;
+
+        #[async_trait::async_trait]
+        impl NodeExecutor for SlowNode {
+            fn node_type(&self) -> &str {
+                "slow"
+            }
+            fn node_kind(&self) -> NodeKind {
+                NodeKind::Processor
+            }
+            async fn init(&mut self, _config: &serde_json::Value) -> NodeResult<()> {
+                Ok(())
+            }
+            async fn execute(
+                &self,
+                _input: serde_json::Value,
+                _ctx: &ExecutionContext,
+            ) -> NodeResult<NodeOutput> {
+                tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+                Ok(NodeOutput::data(serde_json::json!("never")))
+            }
+        }
+
+        let graph = make_graph(
+            vec![
+                Node {
+                    id: "srv".into(),
+                    node_type: "mock".into(),
+                    kind: NodeKind::Service,
+                    config: serde_json::Value::Null,
+                    inputs: vec![],
+                    outputs: vec![PortSpec::new("default")],
+                },
+                Node {
+                    id: "slow".into(),
+                    node_type: "slow".into(),
+                    kind: NodeKind::Processor,
+                    config: serde_json::Value::Null,
+                    inputs: vec![PortSpec::new("default")],
+                    outputs: vec![PortSpec::new("default")],
+                },
+            ],
+            vec![Edge {
+                id: "e1".into(),
+                from_node: "srv".into(),
+                from_port: "default".into(),
+                to_node: "slow".into(),
+                to_port: "default".into(),
+            }],
+        );
+        let plan = Arc::new(scheduler::schedule(&graph).unwrap());
+        let mut nodes: HashMap<String, Box<dyn NodeExecutor>> = HashMap::new();
+        nodes.insert(
+            "srv".into(),
+            Box::new(MockNode {
+                kind: NodeKind::Service,
+                output: serde_json::Value::Null,
+            }),
+        );
+        nodes.insert("slow".into(), Box::new(SlowNode));
+        let nodes = Arc::new(nodes);
+        let ctx = Arc::new(ExecutionContext::new());
+
+        let trigger = PipelineTriggerImpl {
+            plan,
+            nodes,
+            ctx,
+            pipeline_timeout_secs: 1, // 1 second timeout
+        };
+
+        let result = trigger
+            .trigger("srv", "default", serde_json::json!("go"))
+            .await;
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("timed out"));
+    }
+
+    impl MockNode {
+        fn source(output: serde_json::Value) -> Self {
+            Self {
+                kind: NodeKind::Source,
+                output,
+            }
+        }
+        fn processor(output: serde_json::Value) -> Self {
+            Self {
+                kind: NodeKind::Processor,
+                output,
+            }
+        }
+        fn sink() -> Self {
+            Self {
+                kind: NodeKind::Sink,
+                output: serde_json::Value::Null,
+            }
+        }
+    }
 }

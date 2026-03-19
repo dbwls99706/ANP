@@ -3,18 +3,39 @@ pub mod console;
 pub mod database;
 pub mod file_io;
 pub mod filter;
+pub mod foreach;
 pub mod html_template;
 pub mod http_client;
 pub mod http_server;
 pub mod llm_call;
 pub mod memory;
+pub mod merge;
 pub mod static_file;
 pub mod template;
 pub mod tool_router;
 pub mod transform;
 
 use anp_core::graph::spec::{NodeKind, PortSpec};
+use anp_core::node::plugin::NodePlugin;
 use anp_core::node::registry::{NodeInfo, NodeRegistry, NodeSchema};
+
+/// Built-in node plugin that ships with ANP.
+/// Implements `NodePlugin` trait for clean registration.
+pub struct BuiltinPlugin;
+
+impl NodePlugin for BuiltinPlugin {
+    fn name(&self) -> &str {
+        "anp-builtins"
+    }
+
+    fn version(&self) -> &str {
+        env!("CARGO_PKG_VERSION")
+    }
+
+    fn register(&self, registry: &mut NodeRegistry) {
+        register_all(registry);
+    }
+}
 
 /// Register all built-in nodes with the registry
 pub fn register_all(registry: &mut NodeRegistry) {
@@ -124,7 +145,7 @@ pub fn register_all(registry: &mut NodeRegistry) {
         schema: NodeSchema {
             node_type: "http_server".to_string(),
             kind: NodeKind::Service,
-            description: "HTTP server with route-based output ports".to_string(),
+            description: "HTTP server with route-based output ports. Supports path params (/users/:id), query params (?key=val), and HTML responses via _content_type.".to_string(),
             inputs: vec![],
             outputs: vec![PortSpec::new("default")],
             config_schema: serde_json::json!({
@@ -316,6 +337,43 @@ pub fn register_all(registry: &mut NodeRegistry) {
                 "properties": {
                     "path": { "type": "string", "description": "File path to serve" },
                     "base_dir": { "type": "string", "description": "Base directory for path resolution (security boundary)" }
+                }
+            }),
+        },
+    });
+
+    // ForEach (Processor) — iterates over arrays (graph-native loop)
+    registry.register(NodeInfo {
+        factory: || Box::new(foreach::ForEachNode::new()),
+        schema: NodeSchema {
+            node_type: "foreach".to_string(),
+            kind: NodeKind::Processor,
+            description: "Iterates over arrays — the graph-native replacement for for-loops. Extracts array from input field and emits items for downstream processing.".to_string(),
+            inputs: vec![PortSpec::new("default")],
+            outputs: vec![PortSpec::new("default")],
+            config_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "field": { "type": "string", "description": "Dot-path to the array field (optional, input is used directly if omitted)" },
+                    "collect": { "type": "boolean", "default": true, "description": "If true, wraps items with {items, count} metadata" }
+                }
+            }),
+        },
+    });
+
+    // Merge (Processor) — combines multiple inputs into one
+    registry.register(NodeInfo {
+        factory: || Box::new(merge::MergeNode::new()),
+        schema: NodeSchema {
+            node_type: "merge".to_string(),
+            kind: NodeKind::Processor,
+            description: "Merges multiple JSON objects into one. Strategies: shallow (top-level merge), deep (recursive merge, arrays concatenated), array (wrap in array).".to_string(),
+            inputs: vec![PortSpec::new("default")],
+            outputs: vec![PortSpec::new("default")],
+            config_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "strategy": { "type": "string", "enum": ["shallow", "deep", "array"], "default": "shallow" }
                 }
             }),
         },

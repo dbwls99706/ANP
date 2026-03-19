@@ -12,11 +12,12 @@ Programs are not written — they are **generated from intent**. The fundamental
 
 ## Philosophy
 
-- **Graphs are the program.** A JSON graph definition replaces traditional source code.
+- **Why write code if AI generates it?** If an AI is producing the program, there's no reason to output C++, Python, or JavaScript as an intermediate step. The AI can directly produce an executable graph that the runtime interprets — skipping the entire compile/interpret cycle of traditional languages. The graph *is* the executable.
+- **Graphs are the program.** A JSON graph definition replaces traditional source code. No syntax to learn, no boilerplate to write.
 - **Intent-first development.** Describe what you want; the LLM generates the executable graph.
-- **Prompt → Graph → Run.** The entire dev cycle is: describe intent, generate graph, execute.
+- **Prompt → Graph → Run.** The entire dev cycle is: describe intent, generate graph, execute. No compilation, no deployment pipeline.
 - **No compilation.** Graphs are interpreted directly by the ANP runtime.
-- **Composable nodes.** All behavior comes from composing typed, port-connected nodes.
+- **Composable nodes.** All behavior comes from composing typed, port-connected nodes. Each node does one thing well — the graph wires them together.
 
 ## Architecture
 
@@ -30,7 +31,7 @@ Programs are not written — they are **generated from intent**. The fundamental
 ### Crate Structure
 
 - **anp-core**: Graph spec, validation, runtime engine, execution scheduler, GraphOp editor
-- **anp-nodes**: Built-in node implementations (console, file_io, transform, filter, database, http_server, llm_call, http_client, template, conditional, memory, tool_router, html_template, static_file)
+- **anp-nodes**: Built-in node implementations (console, file_io, transform, filter, database, http_server, llm_call, http_client, template, conditional, memory, tool_router, html_template, static_file, foreach, merge)
 - **anp-planner**: LLM integration — generates graphs from prompts, edit ops from instructions
 - **anp-cli**: CLI entry point (`anp run`, `anp prompt`, `anp edit`, etc.)
 
@@ -39,7 +40,7 @@ Programs are not written — they are **generated from intent**. The fundamental
 | Kind | Behavior | Example |
 |------|----------|---------|
 | Source | Produces data, no inputs, executes once | file_read |
-| Processor | Transforms data, has inputs and outputs | transform, filter, database, llm_call, http_client, template, conditional, memory, tool_router, html_template, static_file |
+| Processor | Transforms data, has inputs and outputs | transform, filter, database, llm_call, http_client, template, conditional, memory, tool_router, html_template, static_file, foreach, merge |
 | Sink | Consumes data, no outputs | console, file_write |
 | Service | Long-running event loop, triggers downstream | http_server |
 
@@ -75,6 +76,13 @@ Programs are not written — they are **generated from intent**. The fundamental
 - HTML Template node: full HTML rendering with `{{variable}}` placeholders, XSS-safe escaping, `{{{raw}}}` for unescaped output
 - Static File node: serves CSS/JS/images with auto content-type detection, path traversal prevention
 - HTTP Server: supports HTML responses via `_content_type` field from pipeline results
+- HTTP Server: path parameters (`/users/:id` → `{"id": "42"}`) and query params (`?key=val` → `{"_query": {"key": "val"}}`)
+- ForEach node: graph-native iteration over arrays — replaces for-loops without code
+- Merge node: combines multiple JSON objects (shallow, deep, or array strategy)
+- Transform node: supports literal values (`'text'`, `42`, `true`, `null`) in addition to dot-paths
+- HTTP Client: automatic retry with exponential backoff (configurable retry_count, retry_backoff_ms)
+- Pipeline timeout: 30s default per-request timeout prevents hanging pipelines
+- Graceful shutdown: SIGINT + SIGTERM handling with connection draining for container deployments
 
 ## Roadmap
 

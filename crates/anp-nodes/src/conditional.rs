@@ -147,9 +147,10 @@ impl NodeExecutor for ConditionalNode {
 
         self.branches = Vec::with_capacity(branches.len());
         for (i, branch) in branches.iter().enumerate() {
-            let op_str = branch.get("op").and_then(|v| v.as_str()).ok_or_else(|| {
-                NodeError::InvalidConfig(format!("branch {} missing 'op'", i))
-            })?;
+            let op_str = branch
+                .get("op")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| NodeError::InvalidConfig(format!("branch {} missing 'op'", i)))?;
             let op = parse_op(op_str)?;
 
             let value = branch
@@ -160,9 +161,7 @@ impl NodeExecutor for ConditionalNode {
             let port = branch
                 .get("port")
                 .and_then(|v| v.as_str())
-                .ok_or_else(|| {
-                    NodeError::InvalidConfig(format!("branch {} missing 'port'", i))
-                })?;
+                .ok_or_else(|| NodeError::InvalidConfig(format!("branch {} missing 'port'", i)))?;
             if port.is_empty() {
                 return Err(NodeError::InvalidConfig(format!(
                     "branch {} has empty 'port' name",
@@ -192,15 +191,16 @@ impl NodeExecutor for ConditionalNode {
         for branch in &self.branches {
             let matches = match &field_value {
                 Some(actual) => evaluate(actual, &branch.op, &branch.value),
-                None => matches!(branch.op, CondOp::Exists) && branch.value == serde_json::json!(false),
+                None => {
+                    matches!(branch.op, CondOp::Exists) && branch.value == serde_json::json!(false)
+                }
             };
 
             if matches {
                 let mut ports = HashMap::new();
                 ports.insert(branch.port.clone(), input);
                 return Ok(
-                    NodeOutput::multi(ports)
-                        .with_log(format!("routed to port '{}'", branch.port)),
+                    NodeOutput::multi(ports).with_log(format!("routed to port '{}'", branch.port))
                 );
             }
         }
@@ -208,10 +208,10 @@ impl NodeExecutor for ConditionalNode {
         // No branch matched — route to default
         let mut ports = HashMap::new();
         ports.insert(self.default_port.clone(), input);
-        Ok(
-            NodeOutput::multi(ports)
-                .with_log(format!("no branch matched, routed to default port '{}'", self.default_port)),
-        )
+        Ok(NodeOutput::multi(ports).with_log(format!(
+            "no branch matched, routed to default port '{}'",
+            self.default_port
+        )))
     }
 }
 
@@ -281,15 +281,24 @@ mod tests {
         let ctx = ExecutionContext::new();
 
         // High score
-        let out = node.execute(serde_json::json!({"score": 95}), &ctx).await.unwrap();
+        let out = node
+            .execute(serde_json::json!({"score": 95}), &ctx)
+            .await
+            .unwrap();
         assert!(out.ports.contains_key("high"));
 
         // Medium score
-        let out = node.execute(serde_json::json!({"score": 75}), &ctx).await.unwrap();
+        let out = node
+            .execute(serde_json::json!({"score": 75}), &ctx)
+            .await
+            .unwrap();
         assert!(out.ports.contains_key("medium"));
 
         // Low score
-        let out = node.execute(serde_json::json!({"score": 30}), &ctx).await.unwrap();
+        let out = node
+            .execute(serde_json::json!({"score": 30}), &ctx)
+            .await
+            .unwrap();
         assert!(out.ports.contains_key("low"));
     }
 

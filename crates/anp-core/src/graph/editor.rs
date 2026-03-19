@@ -30,10 +30,7 @@ pub enum GraphOp {
     },
 
     /// Remove all edges between two nodes.
-    Disconnect {
-        from_node: String,
-        to_node: String,
-    },
+    Disconnect { from_node: String, to_node: String },
 
     /// Update a config key on a node.
     UpdateConfig {
@@ -58,7 +55,9 @@ impl fmt::Display for GraphOp {
                 write!(f, "add_node({}, type={})", id, node_type)
             }
             GraphOp::RemoveNode { id } => write!(f, "remove_node({})", id),
-            GraphOp::Connect { from_node, to_node, .. } => {
+            GraphOp::Connect {
+                from_node, to_node, ..
+            } => {
                 write!(f, "connect({} -> {})", from_node, to_node)
             }
             GraphOp::Disconnect { from_node, to_node } => {
@@ -67,8 +66,16 @@ impl fmt::Display for GraphOp {
             GraphOp::UpdateConfig { node_id, key, .. } => {
                 write!(f, "update_config({}.{})", node_id, key)
             }
-            GraphOp::InsertAfter { target, new_id, node_type } => {
-                write!(f, "insert_after({}, new={}, type={})", target, new_id, node_type)
+            GraphOp::InsertAfter {
+                target,
+                new_id,
+                node_type,
+            } => {
+                write!(
+                    f,
+                    "insert_after({}, new={}, type={})",
+                    target, new_id, node_type
+                )
             }
         }
     }
@@ -112,10 +119,7 @@ impl<'a> GraphEditor<'a> {
         let edge_counter = graph
             .edges
             .iter()
-            .filter_map(|e| {
-                e.id.strip_prefix('e')
-                    .and_then(|n| n.parse::<usize>().ok())
-            })
+            .filter_map(|e| e.id.strip_prefix('e').and_then(|n| n.parse::<usize>().ok()))
             .max()
             .unwrap_or(0);
 
@@ -141,10 +145,7 @@ impl<'a> GraphEditor<'a> {
                 to_node,
                 to_port,
             } => self.connect(&from_node, from_port, &to_node, to_port),
-            GraphOp::Disconnect {
-                from_node,
-                to_node,
-            } => self.disconnect(&from_node, &to_node),
+            GraphOp::Disconnect { from_node, to_node } => self.disconnect(&from_node, &to_node),
             GraphOp::UpdateConfig {
                 node_id,
                 key,
@@ -316,12 +317,7 @@ impl<'a> GraphEditor<'a> {
         Ok(())
     }
 
-    fn insert_after(
-        &mut self,
-        target: &str,
-        new_id: String,
-        node_type: String,
-    ) -> EditResult<()> {
+    fn insert_after(&mut self, target: &str, new_id: String, node_type: String) -> EditResult<()> {
         // Verify target exists
         if !self.graph.nodes.iter().any(|n| n.id == target) {
             return Err(EditError::NodeNotFound(target.to_string()));
@@ -346,12 +342,7 @@ impl<'a> GraphEditor<'a> {
         self.connect(target, None, &new_id, None)?;
 
         for edge in outgoing {
-            self.connect(
-                &new_id,
-                None,
-                &edge.to_node,
-                Some(edge.to_port),
-            )?;
+            self.connect(&new_id, None, &edge.to_node, Some(edge.to_port))?;
         }
 
         Ok(())
@@ -399,15 +390,31 @@ mod tests {
 
     #[async_trait::async_trait]
     impl NodeExecutor for StubNode {
-        fn node_type(&self) -> &str { "stub" }
-        fn node_kind(&self) -> NodeKind { NodeKind::Processor }
-        async fn init(&mut self, _: &serde_json::Value) -> NodeResult<()> { Ok(()) }
-        async fn execute(&self, _: serde_json::Value, _: &ExecutionContext) -> NodeResult<NodeOutput> {
+        fn node_type(&self) -> &str {
+            "stub"
+        }
+        fn node_kind(&self) -> NodeKind {
+            NodeKind::Processor
+        }
+        async fn init(&mut self, _: &serde_json::Value) -> NodeResult<()> {
+            Ok(())
+        }
+        async fn execute(
+            &self,
+            _: serde_json::Value,
+            _: &ExecutionContext,
+        ) -> NodeResult<NodeOutput> {
             Ok(NodeOutput::data(serde_json::json!(null)))
         }
     }
 
-    fn register_type(r: &mut NodeRegistry, name: &str, kind: NodeKind, inputs: &[&str], outputs: &[&str]) {
+    fn register_type(
+        r: &mut NodeRegistry,
+        name: &str,
+        kind: NodeKind,
+        inputs: &[&str],
+        outputs: &[&str],
+    ) {
         r.register(NodeInfo {
             factory: || Box::new(StubNode),
             schema: NodeSchema {
@@ -425,9 +432,27 @@ mod tests {
         let mut r = NodeRegistry::new();
         register_type(&mut r, "file_read", NodeKind::Source, &[], &["default"]);
         register_type(&mut r, "console", NodeKind::Sink, &["default"], &[]);
-        register_type(&mut r, "transform", NodeKind::Processor, &["default"], &["default"]);
-        register_type(&mut r, "filter", NodeKind::Processor, &["default"], &["default"]);
-        register_type(&mut r, "database", NodeKind::Processor, &["default"], &["default"]);
+        register_type(
+            &mut r,
+            "transform",
+            NodeKind::Processor,
+            &["default"],
+            &["default"],
+        );
+        register_type(
+            &mut r,
+            "filter",
+            NodeKind::Processor,
+            &["default"],
+            &["default"],
+        );
+        register_type(
+            &mut r,
+            "database",
+            NodeKind::Processor,
+            &["default"],
+            &["default"],
+        );
         register_type(&mut r, "http_server", NodeKind::Service, &[], &["default"]);
         r
     }
@@ -661,10 +686,16 @@ mod tests {
         assert_eq!(editor.graph().edges.len(), 2);
 
         let edges = &editor.graph().edges;
-        assert!(edges.iter().any(|e| e.from_node == "src" && e.to_node == "mid"));
-        assert!(edges.iter().any(|e| e.from_node == "mid" && e.to_node == "out"));
+        assert!(edges
+            .iter()
+            .any(|e| e.from_node == "src" && e.to_node == "mid"));
+        assert!(edges
+            .iter()
+            .any(|e| e.from_node == "mid" && e.to_node == "out"));
         // Old direct edge should be gone
-        assert!(!edges.iter().any(|e| e.from_node == "src" && e.to_node == "out"));
+        assert!(!edges
+            .iter()
+            .any(|e| e.from_node == "src" && e.to_node == "out"));
     }
 
     #[test]
@@ -675,35 +706,37 @@ mod tests {
         let mut graph = empty_graph();
         let mut editor = GraphEditor::new(&mut graph, &registry);
 
-        editor.apply_all(vec![
-            GraphOp::AddNode {
-                id: "src".to_string(),
-                node_type: "file_read".to_string(),
-                config: Some(serde_json::json!({"path": "x.txt"})),
-            },
-            GraphOp::AddNode {
-                id: "out1".to_string(),
-                node_type: "console".to_string(),
-                config: None,
-            },
-            GraphOp::AddNode {
-                id: "out2".to_string(),
-                node_type: "console".to_string(),
-                config: None,
-            },
-            GraphOp::Connect {
-                from_node: "src".to_string(),
-                from_port: None,
-                to_node: "out1".to_string(),
-                to_port: None,
-            },
-            GraphOp::Connect {
-                from_node: "src".to_string(),
-                from_port: None,
-                to_node: "out2".to_string(),
-                to_port: None,
-            },
-        ]).unwrap();
+        editor
+            .apply_all(vec![
+                GraphOp::AddNode {
+                    id: "src".to_string(),
+                    node_type: "file_read".to_string(),
+                    config: Some(serde_json::json!({"path": "x.txt"})),
+                },
+                GraphOp::AddNode {
+                    id: "out1".to_string(),
+                    node_type: "console".to_string(),
+                    config: None,
+                },
+                GraphOp::AddNode {
+                    id: "out2".to_string(),
+                    node_type: "console".to_string(),
+                    config: None,
+                },
+                GraphOp::Connect {
+                    from_node: "src".to_string(),
+                    from_port: None,
+                    to_node: "out1".to_string(),
+                    to_port: None,
+                },
+                GraphOp::Connect {
+                    from_node: "src".to_string(),
+                    from_port: None,
+                    to_node: "out2".to_string(),
+                    to_port: None,
+                },
+            ])
+            .unwrap();
 
         assert_eq!(editor.graph().edges.len(), 2);
 
@@ -720,9 +753,15 @@ mod tests {
         assert_eq!(editor.graph().edges.len(), 3);
 
         let edges = &editor.graph().edges;
-        assert!(edges.iter().any(|e| e.from_node == "src" && e.to_node == "mid"));
-        assert!(edges.iter().any(|e| e.from_node == "mid" && e.to_node == "out1"));
-        assert!(edges.iter().any(|e| e.from_node == "mid" && e.to_node == "out2"));
+        assert!(edges
+            .iter()
+            .any(|e| e.from_node == "src" && e.to_node == "mid"));
+        assert!(edges
+            .iter()
+            .any(|e| e.from_node == "mid" && e.to_node == "out1"));
+        assert!(edges
+            .iter()
+            .any(|e| e.from_node == "mid" && e.to_node == "out2"));
     }
 
     #[test]
@@ -731,24 +770,26 @@ mod tests {
         let mut graph = empty_graph();
         let mut editor = GraphEditor::new(&mut graph, &registry);
 
-        editor.apply_all(vec![
-            GraphOp::AddNode {
-                id: "src".to_string(),
-                node_type: "file_read".to_string(),
-                config: Some(serde_json::json!({"path": "data.txt"})),
-            },
-            GraphOp::AddNode {
-                id: "out".to_string(),
-                node_type: "console".to_string(),
-                config: None,
-            },
-            GraphOp::Connect {
-                from_node: "src".to_string(),
-                from_port: None,
-                to_node: "out".to_string(),
-                to_port: None,
-            },
-        ]).unwrap();
+        editor
+            .apply_all(vec![
+                GraphOp::AddNode {
+                    id: "src".to_string(),
+                    node_type: "file_read".to_string(),
+                    config: Some(serde_json::json!({"path": "data.txt"})),
+                },
+                GraphOp::AddNode {
+                    id: "out".to_string(),
+                    node_type: "console".to_string(),
+                    config: None,
+                },
+                GraphOp::Connect {
+                    from_node: "src".to_string(),
+                    from_port: None,
+                    to_node: "out".to_string(),
+                    to_port: None,
+                },
+            ])
+            .unwrap();
 
         assert_eq!(editor.graph().nodes.len(), 2);
         assert_eq!(editor.graph().edges.len(), 1);
@@ -804,17 +845,44 @@ mod tests {
         let mut graph = empty_graph();
         let mut editor = GraphEditor::new(&mut graph, &registry);
 
-        editor.apply_all(vec![
-            GraphOp::AddNode { id: "a".into(), node_type: "transform".into(), config: None },
-            GraphOp::AddNode { id: "b".into(), node_type: "transform".into(), config: None },
-            GraphOp::AddNode { id: "c".into(), node_type: "transform".into(), config: None },
-            GraphOp::Connect { from_node: "a".into(), from_port: None, to_node: "b".into(), to_port: None },
-            GraphOp::Connect { from_node: "b".into(), from_port: None, to_node: "c".into(), to_port: None },
-        ]).unwrap();
+        editor
+            .apply_all(vec![
+                GraphOp::AddNode {
+                    id: "a".into(),
+                    node_type: "transform".into(),
+                    config: None,
+                },
+                GraphOp::AddNode {
+                    id: "b".into(),
+                    node_type: "transform".into(),
+                    config: None,
+                },
+                GraphOp::AddNode {
+                    id: "c".into(),
+                    node_type: "transform".into(),
+                    config: None,
+                },
+                GraphOp::Connect {
+                    from_node: "a".into(),
+                    from_port: None,
+                    to_node: "b".into(),
+                    to_port: None,
+                },
+                GraphOp::Connect {
+                    from_node: "b".into(),
+                    from_port: None,
+                    to_node: "c".into(),
+                    to_port: None,
+                },
+            ])
+            .unwrap();
 
         // c -> a would create a cycle (a -> b -> c -> a)
         let result = editor.apply(GraphOp::Connect {
-            from_node: "c".into(), from_port: None, to_node: "a".into(), to_port: None,
+            from_node: "c".into(),
+            from_port: None,
+            to_node: "a".into(),
+            to_port: None,
         });
         assert!(matches!(result, Err(EditError::WouldCreateCycle { .. })));
     }
@@ -827,8 +895,16 @@ mod tests {
 
         // First op succeeds, second fails — graph should be rolled back
         let result = editor.apply_all(vec![
-            GraphOp::AddNode { id: "a".into(), node_type: "transform".into(), config: None },
-            GraphOp::AddNode { id: "a".into(), node_type: "transform".into(), config: None }, // duplicate
+            GraphOp::AddNode {
+                id: "a".into(),
+                node_type: "transform".into(),
+                config: None,
+            },
+            GraphOp::AddNode {
+                id: "a".into(),
+                node_type: "transform".into(),
+                config: None,
+            }, // duplicate
         ]);
 
         assert!(result.is_err());

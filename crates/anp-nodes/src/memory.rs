@@ -279,7 +279,9 @@ mod tests {
     async fn test_max_history_limit() {
         let mut node = MemoryNode::new();
         let ctx = ExecutionContext::new();
-        node.init(&serde_json::json!({"max_history": 3})).await.unwrap();
+        node.init(&serde_json::json!({"max_history": 3}))
+            .await
+            .unwrap();
 
         for i in 0..5 {
             node.execute(

@@ -53,7 +53,7 @@ fn resolve_path(value: &serde_json::Value, path: &str) -> Option<String> {
 
     match current {
         serde_json::Value::String(s) => Some(s.clone()),
-        serde_json::Value::Null => Some("".to_string()),
+        serde_json::Value::Null => Some("null".to_string()),
         other => Some(other.to_string()),
     }
 }
@@ -145,9 +145,7 @@ impl NodeExecutor for HtmlTemplateNode {
         self.html = config
             .get("html")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| {
-                NodeError::InvalidConfig("missing 'html' string in config".into())
-            })?
+            .ok_or_else(|| NodeError::InvalidConfig("missing 'html' string in config".into()))?
             .to_string();
 
         if self.html.is_empty() {
@@ -195,8 +193,7 @@ mod tests {
     #[test]
     fn test_render_basic_html() {
         let data = serde_json::json!({"title": "Hello", "body": "World"});
-        let (result, unresolved) =
-            render_html("<h1>{{title}}</h1><p>{{body}}</p>", &data);
+        let (result, unresolved) = render_html("<h1>{{title}}</h1><p>{{body}}</p>", &data);
         assert_eq!(result, "<h1>Hello</h1><p>World</p>");
         assert!(unresolved.is_empty());
     }
@@ -221,12 +218,11 @@ mod tests {
     #[test]
     fn test_nested_path() {
         let data = serde_json::json!({"page": {"title": "ANP", "desc": "AI Native"}});
-        let (result, _) =
-            render_html("<title>{{page.title}}</title><meta content=\"{{page.desc}}\">", &data);
-        assert_eq!(
-            result,
-            "<title>ANP</title><meta content=\"AI Native\">"
+        let (result, _) = render_html(
+            "<title>{{page.title}}</title><meta content=\"{{page.desc}}\">",
+            &data,
         );
+        assert_eq!(result, "<title>ANP</title><meta content=\"AI Native\">");
     }
 
     #[test]

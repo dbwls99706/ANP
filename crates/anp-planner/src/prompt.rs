@@ -54,6 +54,11 @@ An ANP Graph is a JSON object with this structure:
 - Service nodes cannot have incoming edges.
 - The graph must be a DAG (no cycles).
 - For http_server: each route has an `output_port`, use that as `from_port` in edges.
+- http_server routes support path params (e.g., `/users/:id`) — the param value is injected into trigger data.
+- http_server automatically parses query params (e.g., `?page=1`) into `_query` object.
+- html_template outputs `{{html, _content_type}}` — http_server auto-detects and serves as HTML.
+- foreach extracts arrays from input and emits items for downstream processing.
+- merge combines multiple JSON objects using shallow, deep, or array strategy.
 
 {catalog}
 
@@ -167,11 +172,7 @@ pub fn build_edit_user_prompt(instruction: &str, current_graph: &str) -> String 
 }
 
 /// Build a fix prompt when validation fails.
-pub fn build_fix_prompt(
-    original_prompt: &str,
-    previous_graph: &str,
-    errors: &[String],
-) -> String {
+pub fn build_fix_prompt(original_prompt: &str, previous_graph: &str, errors: &[String]) -> String {
     format!(
         r#"The previous graph is invalid.
 
