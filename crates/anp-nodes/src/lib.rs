@@ -16,7 +16,26 @@ pub mod tool_router;
 pub mod transform;
 
 use anp_core::graph::spec::{NodeKind, PortSpec};
+use anp_core::node::plugin::NodePlugin;
 use anp_core::node::registry::{NodeInfo, NodeRegistry, NodeSchema};
+
+/// Built-in node plugin that ships with ANP.
+/// Implements `NodePlugin` trait for clean registration.
+pub struct BuiltinPlugin;
+
+impl NodePlugin for BuiltinPlugin {
+    fn name(&self) -> &str {
+        "anp-builtins"
+    }
+
+    fn version(&self) -> &str {
+        env!("CARGO_PKG_VERSION")
+    }
+
+    fn register(&self, registry: &mut NodeRegistry) {
+        register_all(registry);
+    }
+}
 
 /// Register all built-in nodes with the registry
 pub fn register_all(registry: &mut NodeRegistry) {

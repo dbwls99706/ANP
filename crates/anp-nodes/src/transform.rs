@@ -253,7 +253,7 @@ mod tests {
     #[test]
     fn test_parse_literal_number() {
         assert_eq!(parse_literal("42"), Some(serde_json::json!(42)));
-        assert_eq!(parse_literal("3.14"), Some(serde_json::json!(3.14)));
+        assert_eq!(parse_literal("3.15"), Some(serde_json::json!(3.15)));
         assert_eq!(parse_literal("-1"), Some(serde_json::json!(-1)));
     }
 

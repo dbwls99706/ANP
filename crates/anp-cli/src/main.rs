@@ -100,7 +100,7 @@ type CliResult = Result<(), CliError>;
 
 fn create_registry() -> NodeRegistry {
     let mut registry = NodeRegistry::new();
-    anp_nodes::register_all(&mut registry);
+    registry.register_plugin(&anp_nodes::BuiltinPlugin);
     registry
 }
 
