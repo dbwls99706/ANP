@@ -78,3 +78,80 @@ impl NodeExecutor for ConsoleNode {
         Ok(NodeOutput::data(input))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_init_no_prefix() {
+        let mut node = ConsoleNode::new();
+        node.init(&serde_json::json!({})).await.unwrap();
+        assert_eq!(node.prefix, "");
+    }
+
+    #[tokio::test]
+    async fn test_init_with_prefix() {
+        let mut node = ConsoleNode::new();
+        node.init(&serde_json::json!({"prefix": "[LOG] "}))
+            .await
+            .unwrap();
+        assert_eq!(node.prefix, "[LOG] ");
+    }
+
+    #[tokio::test]
+    async fn test_execute_string() {
+        let mut node = ConsoleNode::new();
+        node.init(&serde_json::json!({})).await.unwrap();
+
+        let ctx = ExecutionContext::new();
+        let output = node
+            .execute(serde_json::json!("hello"), &ctx)
+            .await
+            .unwrap();
+        // Console passes through input
+        assert_eq!(output.ports["default"], "hello");
+    }
+
+    #[tokio::test]
+    async fn test_execute_json_object() {
+        let mut node = ConsoleNode::new();
+        node.init(&serde_json::json!({})).await.unwrap();
+
+        let ctx = ExecutionContext::new();
+        let input = serde_json::json!({"key": "value"});
+        let output = node.execute(input.clone(), &ctx).await.unwrap();
+        assert_eq!(output.ports["default"], input);
+    }
+
+    #[tokio::test]
+    async fn test_execute_null() {
+        let mut node = ConsoleNode::new();
+        node.init(&serde_json::json!({})).await.unwrap();
+
+        let ctx = ExecutionContext::new();
+        let output = node
+            .execute(serde_json::Value::Null, &ctx)
+            .await
+            .unwrap();
+        assert!(output.ports["default"].is_null());
+    }
+
+    #[tokio::test]
+    async fn test_execute_array_of_strings() {
+        let mut node = ConsoleNode::new();
+        node.init(&serde_json::json!({})).await.unwrap();
+
+        let ctx = ExecutionContext::new();
+        let input = serde_json::json!(["line1", "line2", "line3"]);
+        let output = node.execute(input.clone(), &ctx).await.unwrap();
+        assert_eq!(output.ports["default"], input);
+    }
+
+    #[tokio::test]
+    async fn test_node_type_and_kind() {
+        let node = ConsoleNode::new();
+        assert_eq!(node.node_type(), "console");
+        assert_eq!(node.node_kind(), NodeKind::Sink);
+    }
+}

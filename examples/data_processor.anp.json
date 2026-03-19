@@ -1,0 +1,66 @@
+{
+  "version": "0.1",
+  "metadata": {
+    "name": "data-processor",
+    "description": "Reads JSON data, iterates over items, filters by condition, transforms, and writes results — all without code"
+  },
+  "nodes": [
+    {
+      "id": "read_data",
+      "node_type": "file_read",
+      "kind": "source",
+      "config": {
+        "path": "examples/sample_data.json"
+      },
+      "outputs": [{ "name": "default" }]
+    },
+    {
+      "id": "iterate",
+      "node_type": "foreach",
+      "kind": "processor",
+      "config": {
+        "field": "users",
+        "collect": false
+      },
+      "inputs": [{ "name": "default" }],
+      "outputs": [{ "name": "default" }]
+    },
+    {
+      "id": "filter_active",
+      "node_type": "filter",
+      "kind": "processor",
+      "config": {
+        "field": "active",
+        "op": "eq",
+        "value": true
+      },
+      "inputs": [{ "name": "default" }],
+      "outputs": [{ "name": "default" }]
+    },
+    {
+      "id": "format",
+      "node_type": "template",
+      "kind": "processor",
+      "config": {
+        "template": "User: {{name}} ({{email}})"
+      },
+      "inputs": [{ "name": "default" }],
+      "outputs": [{ "name": "default" }]
+    },
+    {
+      "id": "print",
+      "node_type": "console",
+      "kind": "sink",
+      "config": {
+        "prefix": "→ "
+      },
+      "inputs": [{ "name": "default" }]
+    }
+  ],
+  "edges": [
+    { "id": "e1", "from_node": "read_data", "to_node": "iterate" },
+    { "id": "e2", "from_node": "iterate", "to_node": "filter_active" },
+    { "id": "e3", "from_node": "filter_active", "to_node": "format" },
+    { "id": "e4", "from_node": "format", "to_node": "print" }
+  ]
+}

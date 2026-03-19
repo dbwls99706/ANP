@@ -54,6 +54,11 @@ An ANP Graph is a JSON object with this structure:
 - Service nodes cannot have incoming edges.
 - The graph must be a DAG (no cycles).
 - For http_server: each route has an `output_port`, use that as `from_port` in edges.
+- http_server routes support path params (e.g., `/users/:id`) — the param value is injected into trigger data.
+- http_server automatically parses query params (e.g., `?page=1`) into `_query` object.
+- html_template outputs `{{html, _content_type}}` — http_server auto-detects and serves as HTML.
+- foreach extracts arrays from input and emits items for downstream processing.
+- merge combines multiple JSON objects using shallow, deep, or array strategy.
 
 {catalog}
 
