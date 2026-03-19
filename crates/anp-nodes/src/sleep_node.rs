@@ -122,9 +122,7 @@ mod tests {
     #[tokio::test]
     async fn test_zero_max_duration_fails() {
         let mut node = SleepNode::new();
-        let result = node
-            .init(&serde_json::json!({"max_duration_ms": 0}))
-            .await;
+        let result = node.init(&serde_json::json!({"max_duration_ms": 0})).await;
         assert!(result.is_err());
     }
 

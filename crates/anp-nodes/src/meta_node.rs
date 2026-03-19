@@ -42,7 +42,11 @@ fn html_escape(s: &str) -> String {
         .replace('\'', "&#x27;")
 }
 
-fn get_field<'a>(input: &'a serde_json::Value, defaults: &'a serde_json::Value, key: &str) -> Option<String> {
+fn get_field<'a>(
+    input: &'a serde_json::Value,
+    defaults: &'a serde_json::Value,
+    key: &str,
+) -> Option<String> {
     input
         .get(key)
         .and_then(|v| v.as_str())
@@ -76,10 +80,7 @@ impl NodeExecutor for MetaNode {
 
         // Standard meta tags
         if let Some(title) = get_field(&input, &self.defaults, "title") {
-            tags.push(format!(
-                "<title>{}</title>",
-                html_escape(&title)
-            ));
+            tags.push(format!("<title>{}</title>", html_escape(&title)));
         }
 
         if let Some(description) = get_field(&input, &self.defaults, "description") {

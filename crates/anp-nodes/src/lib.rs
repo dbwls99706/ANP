@@ -33,8 +33,8 @@ pub mod foreach;
 pub mod form_node;
 pub mod group_by_node;
 pub mod gzip_node;
-pub mod health_check_node;
 pub mod hash_node;
+pub mod health_check_node;
 pub mod html_template;
 pub mod http_client;
 pub mod http_server;
@@ -46,7 +46,6 @@ pub mod layout_node;
 pub mod llm_call;
 pub mod log_node;
 pub mod lookup_node;
-pub mod oauth_node;
 pub mod markdown_node;
 pub mod markdown_render_node;
 pub mod math_node;
@@ -56,6 +55,7 @@ pub mod message_broker_node;
 pub mod meta_node;
 pub mod metrics_node;
 pub mod multipart_node;
+pub mod oauth_node;
 pub mod paginate_node;
 pub mod parallel_node;
 pub mod password_node;
@@ -66,9 +66,9 @@ pub mod queue_node;
 pub mod random_node;
 pub mod rate_limit;
 pub mod redirect_node;
-pub mod request_id_node;
 pub mod redis_client_node;
 pub mod regex_node;
+pub mod request_id_node;
 pub mod retry_node;
 pub mod sanitize_node;
 pub mod semaphore_node;
@@ -746,7 +746,8 @@ pub fn register_all(registry: &mut NodeRegistry) {
         schema: NodeSchema {
             node_type: "websocket".to_string(),
             kind: NodeKind::Service,
-            description: "WebSocket server endpoint. Full WS upgrade requires axum 'ws' feature.".to_string(),
+            description: "WebSocket server endpoint. Full WS upgrade requires axum 'ws' feature."
+                .to_string(),
             inputs: vec![],
             outputs: vec![PortSpec::new("default")],
             config_schema: serde_json::json!({
@@ -765,7 +766,8 @@ pub fn register_all(registry: &mut NodeRegistry) {
         schema: NodeSchema {
             node_type: "sse".to_string(),
             kind: NodeKind::Processor,
-            description: "Formats data as Server-Sent Events for http_server SSE endpoints".to_string(),
+            description: "Formats data as Server-Sent Events for http_server SSE endpoints"
+                .to_string(),
             inputs: vec![PortSpec::new("default")],
             outputs: vec![PortSpec::new("default")],
             config_schema: serde_json::json!({

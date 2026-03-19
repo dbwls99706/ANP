@@ -147,10 +147,7 @@ fn parse_url(url: &str) -> Result<serde_json::Value, String> {
             let decoded_value = percent_decode(value).unwrap_or_else(|_| value.to_string());
             params.insert(decoded_key, serde_json::Value::String(decoded_value));
         }
-        result.insert(
-            "query".to_string(),
-            serde_json::Value::Object(params),
-        );
+        result.insert("query".to_string(), serde_json::Value::Object(params));
         result.insert(
             "query_string".to_string(),
             serde_json::Value::String(qs.clone()),
@@ -158,10 +155,7 @@ fn parse_url(url: &str) -> Result<serde_json::Value, String> {
     }
 
     if let Some(frag) = fragment {
-        result.insert(
-            "fragment".to_string(),
-            serde_json::Value::String(frag),
-        );
+        result.insert("fragment".to_string(), serde_json::Value::String(frag));
     }
 
     Ok(serde_json::Value::Object(result))
@@ -230,10 +224,11 @@ fn extract_text(input: &serde_json::Value, field: &str) -> Option<String> {
         Some(s.to_string())
     } else if let Some(s) = input.get("url").and_then(|v| v.as_str()) {
         Some(s.to_string())
-    } else if let Some(s) = input.get("text").and_then(|v| v.as_str()) {
-        Some(s.to_string())
     } else {
-        None
+        input
+            .get("text")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
     }
 }
 
@@ -282,23 +277,20 @@ impl NodeExecutor for UrlEncodeNode {
                 let text = extract_text(&input, &self.field).ok_or_else(|| {
                     NodeError::ExecutionFailed("decode requires a string input".into())
                 })?;
-                let decoded = percent_decode(&text).map_err(|e| {
-                    NodeError::ExecutionFailed(format!("decode failed: {}", e))
-                })?;
+                let decoded = percent_decode(&text)
+                    .map_err(|e| NodeError::ExecutionFailed(format!("decode failed: {}", e)))?;
                 serde_json::json!({ "decoded": decoded })
             }
             "parse" => {
                 let url = extract_text(&input, &self.field).ok_or_else(|| {
                     NodeError::ExecutionFailed("parse requires a URL string input".into())
                 })?;
-                parse_url(&url).map_err(|e| {
-                    NodeError::ExecutionFailed(format!("URL parse failed: {}", e))
-                })?
+                parse_url(&url)
+                    .map_err(|e| NodeError::ExecutionFailed(format!("URL parse failed: {}", e)))?
             }
             "build" => {
-                let url = build_url(&input).map_err(|e| {
-                    NodeError::ExecutionFailed(format!("URL build failed: {}", e))
-                })?;
+                let url = build_url(&input)
+                    .map_err(|e| NodeError::ExecutionFailed(format!("URL build failed: {}", e)))?;
                 serde_json::json!({ "url": url })
             }
             _ => {

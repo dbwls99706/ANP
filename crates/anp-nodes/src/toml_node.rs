@@ -230,10 +230,11 @@ fn extract_text_input(input: &serde_json::Value, field: &str) -> Option<String> 
         Some(s.to_string())
     } else if let Some(s) = input.get(field).and_then(|v| v.as_str()) {
         Some(s.to_string())
-    } else if let Some(s) = input.get("data").and_then(|v| v.as_str()) {
-        Some(s.to_string())
     } else {
-        None
+        input
+            .get("data")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
     }
 }
 
@@ -275,9 +276,8 @@ impl NodeExecutor for TomlNode {
                 let text = extract_text_input(&input, &self.field).ok_or_else(|| {
                     NodeError::ExecutionFailed("parse requires a string input".into())
                 })?;
-                parse_toml(&text).map_err(|e| {
-                    NodeError::ExecutionFailed(format!("TOML parse error: {}", e))
-                })?
+                parse_toml(&text)
+                    .map_err(|e| NodeError::ExecutionFailed(format!("TOML parse error: {}", e)))?
             }
             "stringify" => {
                 let toml_str = json_to_toml(&input).map_err(|e| {
@@ -344,9 +344,7 @@ mod tests {
     #[tokio::test]
     async fn test_stringify_basic() {
         let mut node = TomlNode::new();
-        node.init(&json!({"operation": "stringify"}))
-            .await
-            .unwrap();
+        node.init(&json!({"operation": "stringify"})).await.unwrap();
         let input = json!({"name": "Alice", "age": 30});
         let output = node.execute(input, &ctx()).await.unwrap();
         let toml = output.ports["default"]["toml"].as_str().unwrap();
@@ -357,9 +355,7 @@ mod tests {
     #[tokio::test]
     async fn test_stringify_with_sections() {
         let mut node = TomlNode::new();
-        node.init(&json!({"operation": "stringify"}))
-            .await
-            .unwrap();
+        node.init(&json!({"operation": "stringify"})).await.unwrap();
         let input = json!({
             "title": "My App",
             "server": {"host": "localhost", "port": 8080}

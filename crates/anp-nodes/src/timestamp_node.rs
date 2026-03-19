@@ -174,14 +174,9 @@ impl NodeExecutor for TimestampNode {
             }
 
             "add" => {
-                let base = input
-                    .get("unix")
-                    .and_then(|v| v.as_i64())
-                    .ok_or_else(|| {
-                        NodeError::ExecutionFailed(
-                            "add requires 'unix' field in input".into(),
-                        )
-                    })?;
+                let base = input.get("unix").and_then(|v| v.as_i64()).ok_or_else(|| {
+                    NodeError::ExecutionFailed("add requires 'unix' field in input".into())
+                })?;
                 let amount = self
                     .amount
                     .or_else(|| input.get("amount").and_then(|v| v.as_i64()))
@@ -198,14 +193,9 @@ impl NodeExecutor for TimestampNode {
             }
 
             "subtract" => {
-                let base = input
-                    .get("unix")
-                    .and_then(|v| v.as_i64())
-                    .ok_or_else(|| {
-                        NodeError::ExecutionFailed(
-                            "subtract requires 'unix' field in input".into(),
-                        )
-                    })?;
+                let base = input.get("unix").and_then(|v| v.as_i64()).ok_or_else(|| {
+                    NodeError::ExecutionFailed("subtract requires 'unix' field in input".into())
+                })?;
                 let amount = self
                     .amount
                     .or_else(|| input.get("amount").and_then(|v| v.as_i64()))
@@ -222,22 +212,12 @@ impl NodeExecutor for TimestampNode {
             }
 
             "diff" => {
-                let start = input
-                    .get("start")
-                    .and_then(|v| v.as_i64())
-                    .ok_or_else(|| {
-                        NodeError::ExecutionFailed(
-                            "diff requires 'start' field in input".into(),
-                        )
-                    })?;
-                let end = input
-                    .get("end")
-                    .and_then(|v| v.as_i64())
-                    .ok_or_else(|| {
-                        NodeError::ExecutionFailed(
-                            "diff requires 'end' field in input".into(),
-                        )
-                    })?;
+                let start = input.get("start").and_then(|v| v.as_i64()).ok_or_else(|| {
+                    NodeError::ExecutionFailed("diff requires 'start' field in input".into())
+                })?;
+                let end = input.get("end").and_then(|v| v.as_i64()).ok_or_else(|| {
+                    NodeError::ExecutionFailed("diff requires 'end' field in input".into())
+                })?;
 
                 let diff = end - start;
                 let result = serde_json::json!({

@@ -159,12 +159,9 @@ impl NodeExecutor for ApiKeyNode {
                 })))
             }
             "mask" => {
-                let key = input
-                    .get("key")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| {
-                        NodeError::ExecutionFailed("missing 'key' in input".to_string())
-                    })?;
+                let key = input.get("key").and_then(|v| v.as_str()).ok_or_else(|| {
+                    NodeError::ExecutionFailed("missing 'key' in input".to_string())
+                })?;
 
                 let original_length = key.len();
                 let masked = Self::mask_key(key);
@@ -234,10 +231,7 @@ mod tests {
             .unwrap();
 
         let ctx = ExecutionContext::new();
-        let output = node
-            .execute(serde_json::json!({}), &ctx)
-            .await
-            .unwrap();
+        let output = node.execute(serde_json::json!({}), &ctx).await.unwrap();
 
         let data = &output.ports["default"];
         let api_key = data["api_key"].as_str().unwrap();
@@ -283,9 +277,7 @@ mod tests {
     #[tokio::test]
     async fn test_invalid_operation() {
         let mut node = ApiKeyNode::new();
-        let result = node
-            .init(&serde_json::json!({"operation": "bad"}))
-            .await;
+        let result = node.init(&serde_json::json!({"operation": "bad"})).await;
         assert!(result.is_err());
     }
 

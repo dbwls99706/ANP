@@ -157,7 +157,10 @@ mod tests {
 
         // Check SendGrid payload
         let api = &result["api_payload"];
-        assert_eq!(api["personalizations"][0]["to"][0]["email"], "recipient@test.com");
+        assert_eq!(
+            api["personalizations"][0]["to"][0]["email"],
+            "recipient@test.com"
+        );
         assert_eq!(api["from"]["email"], "sender@test.com");
         assert_eq!(api["subject"], "Hello");
         assert_eq!(api["content"][0]["type"], "text/plain");
@@ -194,10 +197,7 @@ mod tests {
 
         let ctx = ExecutionContext::new();
         let result = node
-            .execute(
-                serde_json::json!({"subject": "test", "body": "test"}),
-                &ctx,
-            )
+            .execute(serde_json::json!({"subject": "test", "body": "test"}), &ctx)
             .await;
         assert!(result.is_err());
     }

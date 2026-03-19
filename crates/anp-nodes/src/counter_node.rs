@@ -101,14 +101,11 @@ impl NodeExecutor for CounterNode {
                 (prev, self.initial)
             }
             "set" => {
-                let new_val = input
-                    .get("value")
-                    .and_then(|v| v.as_i64())
-                    .ok_or_else(|| {
-                        NodeError::ExecutionFailed(
-                            "set operation requires 'value' field in input".into(),
-                        )
-                    })?;
+                let new_val = input.get("value").and_then(|v| v.as_i64()).ok_or_else(|| {
+                    NodeError::ExecutionFailed(
+                        "set operation requires 'value' field in input".into(),
+                    )
+                })?;
                 let prev = self.counter.swap(new_val, Ordering::SeqCst);
                 (prev, new_val)
             }

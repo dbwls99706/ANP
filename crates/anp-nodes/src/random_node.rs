@@ -176,7 +176,7 @@ impl NodeExecutor for RandomNode {
                 serde_json::json!(val)
             }
             "boolean" => {
-                let val = random_u64() % 2 == 0;
+                let val = random_u64().is_multiple_of(2);
                 serde_json::json!(val)
             }
             "string" => {
@@ -185,9 +185,7 @@ impl NodeExecutor for RandomNode {
             }
             "choice" => {
                 if self.choices.is_empty() {
-                    return Err(NodeError::ExecutionFailed(
-                        "no choices available".into(),
-                    ));
+                    return Err(NodeError::ExecutionFailed("no choices available".into()));
                 }
                 let idx = (random_u64() as usize) % self.choices.len();
                 self.choices[idx].clone()
@@ -298,18 +296,14 @@ mod tests {
     #[tokio::test]
     async fn test_invalid_type() {
         let mut node = RandomNode::new();
-        let result = node
-            .init(&serde_json::json!({"type": "invalid"}))
-            .await;
+        let result = node.init(&serde_json::json!({"type": "invalid"})).await;
         assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn test_choice_without_choices() {
         let mut node = RandomNode::new();
-        let result = node
-            .init(&serde_json::json!({"type": "choice"}))
-            .await;
+        let result = node.init(&serde_json::json!({"type": "choice"})).await;
         assert!(result.is_err());
     }
 

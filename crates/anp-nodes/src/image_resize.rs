@@ -401,7 +401,10 @@ mod tests {
 
     #[test]
     fn test_detect_jpeg_hex() {
-        assert_eq!(detect_format_from_data("ffd8ffe000104a464946"), Some("jpeg"));
+        assert_eq!(
+            detect_format_from_data("ffd8ffe000104a464946"),
+            Some("jpeg")
+        );
     }
 
     #[test]
@@ -426,10 +429,7 @@ mod tests {
         .await
         .unwrap();
 
-        let result = node
-            .execute(serde_json::json!({}), &ctx)
-            .await
-            .unwrap();
+        let result = node.execute(serde_json::json!({}), &ctx).await.unwrap();
 
         let data = &result.ports["default"];
         assert_eq!(data["params"]["width"], 800);
@@ -452,10 +452,7 @@ mod tests {
         .await
         .unwrap();
 
-        let result = node
-            .execute(serde_json::json!({}), &ctx)
-            .await
-            .unwrap();
+        let result = node.execute(serde_json::json!({}), &ctx).await.unwrap();
 
         let data = &result.ports["default"];
         assert_eq!(data["params"]["maintain_aspect"], false);
@@ -495,10 +492,7 @@ mod tests {
             .unwrap();
 
         let result = node
-            .execute(
-                serde_json::json!({"format": "webp", "quality": 90}),
-                &ctx,
-            )
+            .execute(serde_json::json!({"format": "webp", "quality": 90}), &ctx)
             .await
             .unwrap();
 
@@ -517,7 +511,10 @@ mod tests {
             .unwrap();
 
         let result = node
-            .execute(serde_json::json!({"data": "iVBORw0KGgoAAAANSUhEUg=="}), &ctx)
+            .execute(
+                serde_json::json!({"data": "iVBORw0KGgoAAAANSUhEUg=="}),
+                &ctx,
+            )
             .await
             .unwrap();
 
@@ -533,10 +530,7 @@ mod tests {
             .await
             .unwrap();
 
-        let result = node
-            .execute(serde_json::json!({}), &ctx)
-            .await
-            .unwrap();
+        let result = node.execute(serde_json::json!({}), &ctx).await.unwrap();
 
         let data = &result.ports["default"];
         assert_eq!(data["detected_format"], serde_json::Value::Null);
@@ -566,9 +560,7 @@ mod tests {
     #[tokio::test]
     async fn test_invalid_format() {
         let mut node = ImageResizeNode::new();
-        let result = node
-            .init(&serde_json::json!({"format": "tiff"}))
-            .await;
+        let result = node.init(&serde_json::json!({"format": "tiff"})).await;
         assert!(result.is_err());
     }
 

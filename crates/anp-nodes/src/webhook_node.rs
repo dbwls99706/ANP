@@ -153,9 +153,7 @@ impl NodeExecutor for WebhookNode {
         _ctx: &ExecutionContext,
     ) -> NodeResult<NodeOutput> {
         if self.url.is_empty() {
-            return Err(NodeError::MissingInput(
-                "no webhook URL configured".into(),
-            ));
+            return Err(NodeError::MissingInput("no webhook URL configured".into()));
         }
 
         let body = serde_json::to_string(&input)
@@ -218,7 +216,7 @@ impl NodeExecutor for WebhookNode {
                     }
 
                     let response_body = response.text().await.unwrap_or_default();
-                    let success = status >= 200 && status < 300;
+                    let success = (200..300).contains(&status);
 
                     let mut output = NodeOutput::data(serde_json::json!({
                         "status": status,
@@ -229,10 +227,8 @@ impl NodeExecutor for WebhookNode {
                     }));
 
                     if attempts > 1 {
-                        output = output.with_log(format!(
-                            "webhook delivered after {} attempts",
-                            attempts
-                        ));
+                        output = output
+                            .with_log(format!("webhook delivered after {} attempts", attempts));
                     }
 
                     return Ok(output);
@@ -349,27 +345,21 @@ mod tests {
     #[tokio::test]
     async fn test_init_invalid_method() {
         let mut node = WebhookNode::new();
-        let result = node
-            .init(&serde_json::json!({"method": "INVALID"}))
-            .await;
+        let result = node.init(&serde_json::json!({"method": "INVALID"})).await;
         assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn test_init_retry_count_too_high() {
         let mut node = WebhookNode::new();
-        let result = node
-            .init(&serde_json::json!({"retry_count": 99}))
-            .await;
+        let result = node.init(&serde_json::json!({"retry_count": 99})).await;
         assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn test_init_timeout_too_high() {
         let mut node = WebhookNode::new();
-        let result = node
-            .init(&serde_json::json!({"timeout_secs": 999}))
-            .await;
+        let result = node.init(&serde_json::json!({"timeout_secs": 999})).await;
         assert!(result.is_err());
     }
 

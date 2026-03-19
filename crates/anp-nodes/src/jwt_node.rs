@@ -43,12 +43,20 @@ impl JwtNode {
 /// Base64url encode bytes (A-Za-z0-9-_, no padding)
 fn base64url_encode(data: &[u8]) -> String {
     const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-    let mut result = String::with_capacity((data.len() * 4 + 2) / 3);
+    let mut result = String::with_capacity((data.len() * 4).div_ceil(3));
     let mut i = 0;
     while i < data.len() {
         let b0 = data[i] as u32;
-        let b1 = if i + 1 < data.len() { data[i + 1] as u32 } else { 0 };
-        let b2 = if i + 2 < data.len() { data[i + 2] as u32 } else { 0 };
+        let b1 = if i + 1 < data.len() {
+            data[i + 1] as u32
+        } else {
+            0
+        };
+        let b2 = if i + 2 < data.len() {
+            data[i + 2] as u32
+        } else {
+            0
+        };
         let triple = (b0 << 16) | (b1 << 8) | b2;
 
         result.push(CHARS[((triple >> 18) & 0x3F) as usize] as char);
@@ -83,9 +91,21 @@ fn base64url_decode(s: &str) -> Result<Vec<u8>, String> {
     let mut i = 0;
     while i < bytes.len() {
         let b0 = char_to_val(bytes[i])?;
-        let b1 = if i + 1 < bytes.len() { char_to_val(bytes[i + 1])? } else { 0 };
-        let b2 = if i + 2 < bytes.len() { char_to_val(bytes[i + 2])? } else { 0 };
-        let b3 = if i + 3 < bytes.len() { char_to_val(bytes[i + 3])? } else { 0 };
+        let b1 = if i + 1 < bytes.len() {
+            char_to_val(bytes[i + 1])?
+        } else {
+            0
+        };
+        let b2 = if i + 2 < bytes.len() {
+            char_to_val(bytes[i + 2])?
+        } else {
+            0
+        };
+        let b3 = if i + 3 < bytes.len() {
+            char_to_val(bytes[i + 3])?
+        } else {
+            0
+        };
 
         let triple = (b0 << 18) | (b1 << 12) | (b2 << 6) | b3;
 

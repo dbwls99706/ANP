@@ -92,10 +92,7 @@ impl NodeExecutor for ClassifyNode {
         _ctx: &ExecutionContext,
     ) -> NodeResult<NodeOutput> {
         let text = self.resolve_field(&input).ok_or_else(|| {
-            NodeError::ExecutionFailed(format!(
-                "field '{}' not found or not a string",
-                self.field
-            ))
+            NodeError::ExecutionFailed(format!("field '{}' not found or not a string", self.field))
         })?;
 
         let text_lower = text.to_lowercase();
@@ -185,10 +182,7 @@ mod tests {
         .unwrap();
         let ctx = ExecutionContext::new();
         let output = node
-            .execute(
-                serde_json::json!({"text": "The cat sat on the mat"}),
-                &ctx,
-            )
+            .execute(serde_json::json!({"text": "The cat sat on the mat"}), &ctx)
             .await
             .unwrap();
         let data = &output.ports["default"];

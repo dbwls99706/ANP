@@ -46,9 +46,7 @@ fn sanitize_html(input: &str) -> String {
 }
 
 fn sanitize_sql(input: &str) -> String {
-    input
-        .replace('\\', "\\\\")
-        .replace('\'', "''")
+    input.replace('\\', "\\\\").replace('\'', "''")
 }
 
 fn sanitize_xss(input: &str) -> String {
@@ -84,10 +82,14 @@ fn sanitize_xss(input: &str) -> String {
         if i + 2 < len
             && lower_bytes[i] == b'o'
             && lower_bytes[i + 1] == b'n'
-            && (i + 2 < len && lower_bytes[i + 2].is_ascii_alphabetic())
+            && lower_bytes[i + 2].is_ascii_alphabetic()
         {
             // Check if preceded by a space or start (attribute context)
-            let preceded_by_space = i == 0 || bytes[i - 1] == b' ' || bytes[i - 1] == b'"' || bytes[i - 1] == b'\'' || bytes[i - 1] == b'\t';
+            let preceded_by_space = i == 0
+                || bytes[i - 1] == b' '
+                || bytes[i - 1] == b'"'
+                || bytes[i - 1] == b'\''
+                || bytes[i - 1] == b'\t';
             if preceded_by_space {
                 // Find the = sign
                 let mut j = i + 2;
@@ -204,11 +206,7 @@ fn set_field(value: &mut serde_json::Value, field: &str, new_val: serde_json::Va
 }
 
 /// Recursively sanitize all string values in a JSON value.
-fn sanitize_recursive(
-    value: &mut serde_json::Value,
-    operation: &str,
-    max_length: Option<usize>,
-) {
+fn sanitize_recursive(value: &mut serde_json::Value, operation: &str, max_length: Option<usize>) {
     match value {
         serde_json::Value::String(s) => {
             let sanitized = apply_sanitization(s, operation);
@@ -274,18 +272,18 @@ impl NodeExecutor for SanitizeNode {
 
         if let Some(ref field_path) = self.field {
             // Sanitize only the specified field
-            let field_val = resolve_field(&input, field_path)
-                .ok_or_else(|| {
-                    NodeError::ExecutionFailed(format!(
-                        "field '{}' not found in input",
-                        field_path
-                    ))
-                })?;
+            let field_val = resolve_field(&input, field_path).ok_or_else(|| {
+                NodeError::ExecutionFailed(format!("field '{}' not found in input", field_path))
+            })?;
 
             if let Some(s) = field_val.as_str() {
                 let sanitized = apply_sanitization(s, &self.operation);
                 let sanitized = apply_max_length(sanitized, self.max_length);
-                set_field(&mut result, field_path, serde_json::Value::String(sanitized));
+                set_field(
+                    &mut result,
+                    field_path,
+                    serde_json::Value::String(sanitized),
+                );
             }
         } else {
             // Recursively sanitize all string values
@@ -385,10 +383,7 @@ mod tests {
 
         let ctx = ExecutionContext::new();
         let output = node
-            .execute(
-                serde_json::json!({"text": "  hello   world  "}),
-                &ctx,
-            )
+            .execute(serde_json::json!({"text": "  hello   world  "}), &ctx)
             .await
             .unwrap();
 
@@ -447,9 +442,7 @@ mod tests {
     #[tokio::test]
     async fn test_invalid_operation() {
         let mut node = SanitizeNode::new();
-        let result = node
-            .init(&serde_json::json!({"operation": "bad"}))
-            .await;
+        let result = node.init(&serde_json::json!({"operation": "bad"})).await;
         assert!(result.is_err());
     }
 

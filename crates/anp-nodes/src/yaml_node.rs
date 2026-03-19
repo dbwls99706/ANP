@@ -129,8 +129,7 @@ fn parse_yaml_array(
                         if idx < lines.len() {
                             let sub_indent = count_indent(lines[idx]);
                             if sub_indent > next_indent {
-                                let (sub_val, next_idx) =
-                                    parse_yaml_block(lines, idx, sub_indent)?;
+                                let (sub_val, next_idx) = parse_yaml_block(lines, idx, sub_indent)?;
                                 obj.insert(k.to_string(), sub_val);
                                 idx = next_idx;
                             } else {
@@ -189,8 +188,7 @@ fn parse_yaml_object(
                     if !next_trimmed.is_empty() && !next_trimmed.starts_with('#') {
                         let next_indent = count_indent(lines[idx]);
                         if next_indent > base_indent {
-                            let (sub_val, next_idx) =
-                                parse_yaml_block(lines, idx, next_indent)?;
+                            let (sub_val, next_idx) = parse_yaml_block(lines, idx, next_indent)?;
                             obj.insert(key, sub_val);
                             idx = next_idx;
                         } else {
@@ -225,10 +223,10 @@ fn parse_yaml_scalar(s: &str) -> serde_json::Value {
     if s == "false" {
         return serde_json::Value::Bool(false);
     }
-    if (s.starts_with('"') && s.ends_with('"')) || (s.starts_with('\'') && s.ends_with('\'')) {
-        if s.len() >= 2 {
-            return serde_json::Value::String(s[1..s.len() - 1].to_string());
-        }
+    if ((s.starts_with('"') && s.ends_with('"')) || (s.starts_with('\'') && s.ends_with('\'')))
+        && s.len() >= 2
+    {
+        return serde_json::Value::String(s[1..s.len() - 1].to_string());
     }
     if let Ok(n) = s.parse::<i64>() {
         return serde_json::json!(n);
@@ -273,9 +271,14 @@ fn json_to_yaml(value: &serde_json::Value, indent: usize) -> String {
         serde_json::Value::Bool(b) => format!("{}", b),
         serde_json::Value::Number(n) => format!("{}", n),
         serde_json::Value::String(s) => {
-            if s.contains(':') || s.contains('#') || s.contains('\n')
-                || s.starts_with(' ') || s.ends_with(' ')
-                || s == "true" || s == "false" || s == "null"
+            if s.contains(':')
+                || s.contains('#')
+                || s.contains('\n')
+                || s.starts_with(' ')
+                || s.ends_with(' ')
+                || s == "true"
+                || s == "false"
+                || s == "null"
                 || s.is_empty()
             {
                 format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))

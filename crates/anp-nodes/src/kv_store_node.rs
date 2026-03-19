@@ -94,7 +94,9 @@ impl NodeExecutor for KvStoreNode {
                     .get("key")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| {
-                        NodeError::ExecutionFailed("'key' field (string) is required for set".into())
+                        NodeError::ExecutionFailed(
+                            "'key' field (string) is required for set".into(),
+                        )
                     })?
                     .to_string();
 
@@ -104,7 +106,9 @@ impl NodeExecutor for KvStoreNode {
                     .unwrap_or(serde_json::Value::Null);
 
                 let mut store = self.store.write().await;
-                let ns = store.entry(self.namespace.clone()).or_insert_with(HashMap::new);
+                let ns = store
+                    .entry(self.namespace.clone())
+                    .or_insert_with(HashMap::new);
                 ns.insert(key.clone(), value.clone());
 
                 Ok(NodeOutput::data(serde_json::json!({
@@ -115,12 +119,9 @@ impl NodeExecutor for KvStoreNode {
                 })))
             }
             "get" => {
-                let key = input
-                    .get("key")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| {
-                        NodeError::ExecutionFailed("'key' field (string) is required for get".into())
-                    })?;
+                let key = input.get("key").and_then(|v| v.as_str()).ok_or_else(|| {
+                    NodeError::ExecutionFailed("'key' field (string) is required for get".into())
+                })?;
 
                 let store = self.store.read().await;
                 let (value, found) = store
@@ -186,12 +187,9 @@ impl NodeExecutor for KvStoreNode {
                 })))
             }
             "has" => {
-                let key = input
-                    .get("key")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| {
-                        NodeError::ExecutionFailed("'key' field (string) is required for has".into())
-                    })?;
+                let key = input.get("key").and_then(|v| v.as_str()).ok_or_else(|| {
+                    NodeError::ExecutionFailed("'key' field (string) is required for has".into())
+                })?;
 
                 let store = self.store.read().await;
                 let exists = store
@@ -208,10 +206,7 @@ impl NodeExecutor for KvStoreNode {
             }
             "count" => {
                 let store = self.store.read().await;
-                let count = store
-                    .get(&self.namespace)
-                    .map(|ns| ns.len())
-                    .unwrap_or(0);
+                let count = store.get(&self.namespace).map(|ns| ns.len()).unwrap_or(0);
 
                 Ok(NodeOutput::data(serde_json::json!({
                     "count": count,
@@ -263,10 +258,7 @@ mod tests {
         let shared = set_node.store.clone();
 
         set_node
-            .execute(
-                serde_json::json!({"key": "name", "value": "Alice"}),
-                &ctx(),
-            )
+            .execute(serde_json::json!({"key": "name", "value": "Alice"}), &ctx())
             .await
             .unwrap();
 
@@ -465,9 +457,7 @@ mod tests {
     #[tokio::test]
     async fn test_empty_namespace_rejected() {
         let mut node = KvStoreNode::new();
-        let result = node
-            .init(&serde_json::json!({ "namespace": "" }))
-            .await;
+        let result = node.init(&serde_json::json!({ "namespace": "" })).await;
         assert!(result.is_err());
     }
 

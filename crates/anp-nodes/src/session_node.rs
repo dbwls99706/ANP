@@ -1,6 +1,6 @@
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::Instant;
 
 use anp_core::graph::spec::NodeKind;
@@ -215,9 +215,7 @@ impl NodeExecutor for SessionNode {
                 let key = input
                     .get("key")
                     .and_then(|v| v.as_str())
-                    .ok_or_else(|| {
-                        NodeError::MissingInput("'key' field required for set".into())
-                    })?
+                    .ok_or_else(|| NodeError::MissingInput("'key' field required for set".into()))?
                     .to_string();
                 let value = input
                     .get("value")
@@ -261,12 +259,9 @@ impl NodeExecutor for SessionNode {
                     .ok_or_else(|| {
                         NodeError::MissingInput("'session_id' field required for delete".into())
                     })?;
-                let key = input
-                    .get("key")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| {
-                        NodeError::MissingInput("'key' field required for delete".into())
-                    })?;
+                let key = input.get("key").and_then(|v| v.as_str()).ok_or_else(|| {
+                    NodeError::MissingInput("'key' field required for delete".into())
+                })?;
 
                 let mut sessions = self.sessions.write().await;
                 let now = Instant::now();

@@ -159,10 +159,7 @@ mod tests {
         node.init(&serde_json::json!({})).await.unwrap();
 
         let ctx = ExecutionContext::new();
-        let output = node
-            .execute(serde_json::json!(42), &ctx)
-            .await
-            .unwrap();
+        let output = node.execute(serde_json::json!(42), &ctx).await.unwrap();
 
         let result = &output.ports["default"];
         let sse = result["sse"].as_str().unwrap();

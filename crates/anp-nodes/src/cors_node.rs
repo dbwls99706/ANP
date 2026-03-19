@@ -39,10 +39,7 @@ impl CorsNode {
                 "PUT".to_string(),
                 "DELETE".to_string(),
             ],
-            allowed_headers: vec![
-                "Content-Type".to_string(),
-                "Authorization".to_string(),
-            ],
+            allowed_headers: vec!["Content-Type".to_string(), "Authorization".to_string()],
             max_age: 86400,
         }
     }
@@ -126,10 +123,7 @@ mod tests {
 
         let result = &output.ports["default"];
         assert_eq!(result["message"], "hello");
-        assert_eq!(
-            result["_cors_headers"]["Access-Control-Allow-Origin"],
-            "*"
-        );
+        assert_eq!(result["_cors_headers"]["Access-Control-Allow-Origin"], "*");
         assert!(result["_cors_headers"]["Access-Control-Allow-Methods"]
             .as_str()
             .unwrap()
@@ -149,13 +143,13 @@ mod tests {
         .unwrap();
 
         let ctx = ExecutionContext::new();
-        let output = node
-            .execute(serde_json::json!({}), &ctx)
-            .await
-            .unwrap();
+        let output = node.execute(serde_json::json!({}), &ctx).await.unwrap();
 
         let headers = &output.ports["default"]["_cors_headers"];
-        assert_eq!(headers["Access-Control-Allow-Origin"], "https://example.com");
+        assert_eq!(
+            headers["Access-Control-Allow-Origin"],
+            "https://example.com"
+        );
         assert_eq!(headers["Access-Control-Allow-Methods"], "GET, POST");
         assert_eq!(headers["Access-Control-Allow-Headers"], "X-Custom");
         assert_eq!(headers["Access-Control-Max-Age"], "3600");

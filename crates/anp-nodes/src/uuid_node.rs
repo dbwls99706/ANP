@@ -65,10 +65,7 @@ impl NodeExecutor for UuidNode {
             Ok(NodeOutput::data(result))
         } else if let serde_json::Value::Object(mut map) = input {
             // Processor mode: add UUID to existing object
-            map.insert(
-                self.field.clone(),
-                serde_json::Value::String(uuid_str),
-            );
+            map.insert(self.field.clone(), serde_json::Value::String(uuid_str));
             Ok(NodeOutput::data(serde_json::Value::Object(map)))
         } else {
             // For non-object inputs, wrap with UUID

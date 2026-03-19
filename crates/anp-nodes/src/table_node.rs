@@ -190,7 +190,10 @@ impl NodeExecutor for TableNode {
         html.push_str("<thead><tr>");
         for col in &columns {
             let sort_attr = if self.sortable {
-                format!(" data-sortable=\"true\" data-field=\"{}\"", html_escape(&col.field))
+                format!(
+                    " data-sortable=\"true\" data-field=\"{}\"",
+                    html_escape(&col.field)
+                )
             } else {
                 String::new()
             };
@@ -220,10 +223,7 @@ impl NodeExecutor for TableNode {
                 };
                 html.push_str(&format!("<tr{}>", row_style));
                 for col in &columns {
-                    let val = row
-                        .get(&col.field)
-                        .map(value_to_string)
-                        .unwrap_or_default();
+                    let val = row.get(&col.field).map(value_to_string).unwrap_or_default();
                     html.push_str(&format!(
                         "<td style=\"text-align: {}\">{}</td>",
                         html_escape(&col.align),

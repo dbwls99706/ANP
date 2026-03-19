@@ -108,9 +108,9 @@ impl NodeExecutor for PivotNode {
 
 impl PivotNode {
     fn execute_pivot(&self, input: &serde_json::Value) -> Result<serde_json::Value, NodeError> {
-        let arr = input.as_array().ok_or_else(|| {
-            NodeError::ExecutionFailed("pivot requires an array input".into())
-        })?;
+        let arr = input
+            .as_array()
+            .ok_or_else(|| NodeError::ExecutionFailed("pivot requires an array input".into()))?;
 
         if self.row_field.is_empty() || self.column_field.is_empty() || self.value_field.is_empty()
         {
@@ -184,9 +184,9 @@ impl PivotNode {
     }
 
     fn execute_unpivot(&self, input: &serde_json::Value) -> Result<serde_json::Value, NodeError> {
-        let obj = input.as_object().ok_or_else(|| {
-            NodeError::ExecutionFailed("unpivot requires an object input".into())
-        })?;
+        let obj = input
+            .as_object()
+            .ok_or_else(|| NodeError::ExecutionFailed("unpivot requires an object input".into()))?;
 
         let mut rows: Vec<serde_json::Value> = Vec::new();
         for (key, value) in obj {
@@ -235,19 +235,19 @@ impl PivotNode {
                     }
                 }
                 // Pad with null if row is shorter
-                for col_idx in row_arr.len()..max_cols {
-                    transposed[col_idx].push(serde_json::Value::Null);
+                for item in transposed.iter_mut().take(max_cols).skip(row_arr.len()) {
+                    item.push(serde_json::Value::Null);
                 }
             } else {
-                for col_idx in 0..max_cols {
-                    transposed[col_idx].push(serde_json::Value::Null);
+                for item in transposed.iter_mut().take(max_cols) {
+                    item.push(serde_json::Value::Null);
                 }
             }
         }
 
         let result: Vec<serde_json::Value> = transposed
             .into_iter()
-            .map(|row| serde_json::Value::Array(row))
+            .map(serde_json::Value::Array)
             .collect();
 
         Ok(serde_json::json!({
@@ -334,9 +334,7 @@ mod tests {
     #[tokio::test]
     async fn test_transpose_basic() {
         let mut node = PivotNode::new();
-        node.init(&json!({"operation": "transpose"}))
-            .await
-            .unwrap();
+        node.init(&json!({"operation": "transpose"})).await.unwrap();
 
         let input = json!([[1, 2, 3], [4, 5, 6]]);
         let output = node.execute(input, &ctx()).await.unwrap();

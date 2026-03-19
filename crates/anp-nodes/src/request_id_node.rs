@@ -88,8 +88,7 @@ impl NodeExecutor for RequestIdNode {
             );
         }
 
-        Ok(NodeOutput::data(output)
-            .with_log(format!("request_id={}", request_id)))
+        Ok(NodeOutput::data(output).with_log(format!("request_id={}", request_id)))
     }
 }
 

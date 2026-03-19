@@ -229,10 +229,7 @@ mod tests {
 
         let ctx = ExecutionContext::new();
         let output = node
-            .execute(
-                serde_json::json!({"response": {"status": "ok"}}),
-                &ctx,
-            )
+            .execute(serde_json::json!({"response": {"status": "ok"}}), &ctx)
             .await
             .unwrap();
 
@@ -262,9 +259,7 @@ mod tests {
     #[tokio::test]
     async fn test_switch_init_missing_field() {
         let mut node = SwitchNode::new();
-        let result = node
-            .init(&serde_json::json!({"cases": {"a": "b"}}))
-            .await;
+        let result = node.init(&serde_json::json!({"cases": {"a": "b"}})).await;
         assert!(result.is_err());
     }
 

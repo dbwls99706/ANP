@@ -184,10 +184,7 @@ mod tests {
             .unwrap();
 
         let ctx = ExecutionContext::new();
-        let output = node
-            .execute(serde_json::json!({}), &ctx)
-            .await
-            .unwrap();
+        let output = node.execute(serde_json::json!({}), &ctx).await.unwrap();
 
         let data = &output.ports["default"];
         assert_eq!(data["acquired"], true);
@@ -246,10 +243,7 @@ mod tests {
             .unwrap();
 
         let ctx = ExecutionContext::new();
-        let output = node
-            .execute(serde_json::json!({}), &ctx)
-            .await
-            .unwrap();
+        let output = node.execute(serde_json::json!({}), &ctx).await.unwrap();
 
         let data = &output.ports["default"];
         assert_eq!(data["released"], false);
@@ -284,9 +278,7 @@ mod tests {
     #[tokio::test]
     async fn test_invalid_config() {
         let mut node = SemaphoreNode::new();
-        let result = node
-            .init(&serde_json::json!({"max_permits": 0}))
-            .await;
+        let result = node.init(&serde_json::json!({"max_permits": 0})).await;
         assert!(result.is_err());
     }
 

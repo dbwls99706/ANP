@@ -233,7 +233,7 @@ impl NodeExecutor for StaticFileNode {
                 h ^= b as u64;
                 h = h.wrapping_mul(1099511628211);
             }
-            format!("\"{}\"", format!("{:016x}", h))
+            format!("\"{:016x}\"", h)
         };
 
         // Store in cache

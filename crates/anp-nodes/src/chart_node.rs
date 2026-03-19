@@ -72,10 +72,7 @@ fn extract_data_points(
                 Some(v) => v.to_string(),
                 None => return None,
             };
-            let y = item
-                .get(y_field)
-                .and_then(|v| v.as_f64())
-                .unwrap_or(0.0);
+            let y = item.get(y_field).and_then(|v| v.as_f64()).unwrap_or(0.0);
             Some((x, y))
         })
         .collect()
@@ -167,11 +164,12 @@ fn render_line(
         .iter()
         .enumerate()
         .map(|(i, (_, val))| {
-            let x = margin + if n > 1 {
-                (i as f64) / ((n - 1) as f64) * chart_w
-            } else {
-                chart_w / 2.0
-            };
+            let x = margin
+                + if n > 1 {
+                    (i as f64) / ((n - 1) as f64) * chart_w
+                } else {
+                    chart_w / 2.0
+                };
             let y = margin + title_offset + chart_h - (val / max_val) * chart_h;
             (x, y)
         })
@@ -213,12 +211,7 @@ fn render_line(
     svg
 }
 
-fn render_pie(
-    points: &[(String, f64)],
-    width: f64,
-    height: f64,
-    title: &Option<String>,
-) -> String {
+fn render_pie(points: &[(String, f64)], width: f64, height: f64, title: &Option<String>) -> String {
     let title_offset = if title.is_some() { 30.0 } else { 0.0 };
     let cx = width / 2.0;
     let cy = (height + title_offset) / 2.0;
@@ -351,7 +344,9 @@ impl NodeExecutor for ChartNode {
         };
 
         if data.is_empty() {
-            return Err(NodeError::ExecutionFailed("input data array is empty".into()));
+            return Err(NodeError::ExecutionFailed(
+                "input data array is empty".into(),
+            ));
         }
 
         let points = extract_data_points(&data, &self.x_field, &self.y_field);
@@ -469,7 +464,10 @@ mod tests {
             "data": [{ "k": "X", "v": 5 }]
         });
         let output = node.execute(input, &ctx).await.unwrap();
-        assert!(output.ports["default"]["svg"].as_str().unwrap().contains("<svg"));
+        assert!(output.ports["default"]["svg"]
+            .as_str()
+            .unwrap()
+            .contains("<svg"));
     }
 
     #[tokio::test]

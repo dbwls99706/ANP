@@ -241,10 +241,7 @@ mod tests {
             .execute(serde_json::json!("{\"a\":1,\"b\":2}"), &ctx)
             .await
             .unwrap();
-        assert_eq!(
-            output.ports["default"],
-            serde_json::json!({"a": 1, "b": 2})
-        );
+        assert_eq!(output.ports["default"], serde_json::json!({"a": 1, "b": 2}));
     }
 
     #[tokio::test]
@@ -302,7 +299,10 @@ mod tests {
             .execute(serde_json::json!({"a": {"b": 1}}), &ctx)
             .await
             .unwrap();
-        assert_eq!(output.ports["default"]["a"]["c"], serde_json::json!("hello"));
+        assert_eq!(
+            output.ports["default"]["a"]["c"],
+            serde_json::json!("hello")
+        );
         assert_eq!(output.ports["default"]["a"]["b"], serde_json::json!(1));
     }
 
@@ -317,10 +317,7 @@ mod tests {
             .execute(serde_json::json!({"a": 1, "b": 2, "c": 3}), &ctx)
             .await
             .unwrap();
-        assert_eq!(
-            output.ports["default"],
-            serde_json::json!({"a": 1, "c": 3})
-        );
+        assert_eq!(output.ports["default"], serde_json::json!({"a": 1, "c": 3}));
     }
 
     #[tokio::test]

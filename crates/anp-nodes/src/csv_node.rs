@@ -77,10 +77,11 @@ fn extract_text(input: &serde_json::Value) -> Option<String> {
         Some(s.to_string())
     } else if let Some(s) = input.get("text").and_then(|v| v.as_str()) {
         Some(s.to_string())
-    } else if let Some(s) = input.get("data").and_then(|v| v.as_str()) {
-        Some(s.to_string())
     } else {
-        None
+        input
+            .get("data")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
     }
 }
 
@@ -207,13 +208,16 @@ impl NodeExecutor for CsvNode {
                             let row: Vec<String> = headers
                                 .iter()
                                 .map(|h| {
-                                    let val = obj.get(h).map(|v| {
-                                        if let Some(s) = v.as_str() {
-                                            s.to_string()
-                                        } else {
-                                            v.to_string()
-                                        }
-                                    }).unwrap_or_default();
+                                    let val = obj
+                                        .get(h)
+                                        .map(|v| {
+                                            if let Some(s) = v.as_str() {
+                                                s.to_string()
+                                            } else {
+                                                v.to_string()
+                                            }
+                                        })
+                                        .unwrap_or_default();
                                     quote_field(&val, self.delimiter)
                                 })
                                 .collect();

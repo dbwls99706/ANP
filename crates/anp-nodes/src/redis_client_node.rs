@@ -263,7 +263,10 @@ impl NodeExecutor for RedisClientNode {
                 if let Some(pairs) = input.get("pairs").and_then(|v| v.as_object()) {
                     for (k, v) in pairs {
                         let pk = self.prefixed_key(k);
-                        let val = v.as_str().map(|s| s.to_string()).unwrap_or_else(|| v.to_string());
+                        let val = v
+                            .as_str()
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| v.to_string());
                         store.strings.insert(pk, val);
                     }
                 }
@@ -275,7 +278,11 @@ impl NodeExecutor for RedisClientNode {
                 let field = input.get("field").and_then(|v| v.as_str()).unwrap_or("");
                 let value = input
                     .get("value")
-                    .map(|v| v.as_str().map(|s| s.to_string()).unwrap_or_else(|| v.to_string()))
+                    .map(|v| {
+                        v.as_str()
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| v.to_string())
+                    })
                     .unwrap_or_default();
                 let hash = store.hashes.entry(key).or_default();
                 let is_new = !hash.contains_key(field);
@@ -285,11 +292,7 @@ impl NodeExecutor for RedisClientNode {
 
             "HGET" => {
                 let field = input.get("field").and_then(|v| v.as_str()).unwrap_or("");
-                let value = store
-                    .hashes
-                    .get(&key)
-                    .and_then(|h| h.get(field))
-                    .cloned();
+                let value = store.hashes.get(&key).and_then(|h| h.get(field)).cloned();
                 Ok(NodeOutput::data(json!({"value": value})))
             }
 
@@ -312,7 +315,10 @@ impl NodeExecutor for RedisClientNode {
                 if let Some(fields) = input.get("fields").and_then(|v| v.as_object()) {
                     let hash = store.hashes.entry(key).or_default();
                     for (k, v) in fields {
-                        let val = v.as_str().map(|s| s.to_string()).unwrap_or_else(|| v.to_string());
+                        let val = v
+                            .as_str()
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| v.to_string());
                         hash.insert(k.clone(), val);
                     }
                 }
@@ -323,7 +329,11 @@ impl NodeExecutor for RedisClientNode {
             "LPUSH" => {
                 let value = input
                     .get("value")
-                    .map(|v| v.as_str().map(|s| s.to_string()).unwrap_or_else(|| v.to_string()))
+                    .map(|v| {
+                        v.as_str()
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| v.to_string())
+                    })
                     .unwrap_or_default();
                 let list = store.lists.entry(key).or_default();
                 list.insert(0, value);
@@ -333,7 +343,11 @@ impl NodeExecutor for RedisClientNode {
             "RPUSH" => {
                 let value = input
                     .get("value")
-                    .map(|v| v.as_str().map(|s| s.to_string()).unwrap_or_else(|| v.to_string()))
+                    .map(|v| {
+                        v.as_str()
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| v.to_string())
+                    })
                     .unwrap_or_default();
                 let list = store.lists.entry(key).or_default();
                 list.push(value);
@@ -341,18 +355,18 @@ impl NodeExecutor for RedisClientNode {
             }
 
             "LPOP" => {
-                let value = store
-                    .lists
-                    .get_mut(&key)
-                    .and_then(|list| if list.is_empty() { None } else { Some(list.remove(0)) });
+                let value = store.lists.get_mut(&key).and_then(|list| {
+                    if list.is_empty() {
+                        None
+                    } else {
+                        Some(list.remove(0))
+                    }
+                });
                 Ok(NodeOutput::data(json!({"value": value})))
             }
 
             "RPOP" => {
-                let value = store
-                    .lists
-                    .get_mut(&key)
-                    .and_then(|list| list.pop());
+                let value = store.lists.get_mut(&key).and_then(|list| list.pop());
                 Ok(NodeOutput::data(json!({"value": value})))
             }
 
@@ -361,14 +375,24 @@ impl NodeExecutor for RedisClientNode {
                 let stop = input.get("stop").and_then(|v| v.as_i64()).unwrap_or(-1);
                 let list = store.lists.get(&key).cloned().unwrap_or_default();
                 let len = list.len() as i64;
-                let s = if start < 0 { (len + start).max(0) as usize } else { start as usize };
-                let e = if stop < 0 { (len + stop + 1).max(0) as usize } else { (stop + 1).min(len) as usize };
+                let s = if start < 0 {
+                    (len + start).max(0) as usize
+                } else {
+                    start as usize
+                };
+                let e = if stop < 0 {
+                    (len + stop + 1).max(0) as usize
+                } else {
+                    (stop + 1).min(len) as usize
+                };
                 let range: Vec<&str> = if s < e {
                     list[s..e].iter().map(|s| s.as_str()).collect()
                 } else {
                     Vec::new()
                 };
-                Ok(NodeOutput::data(json!({"values": range, "length": list.len()})))
+                Ok(NodeOutput::data(
+                    json!({"values": range, "length": list.len()}),
+                ))
             }
 
             "LLEN" => {
@@ -380,7 +404,11 @@ impl NodeExecutor for RedisClientNode {
             "SADD" => {
                 let value = input
                     .get("value")
-                    .map(|v| v.as_str().map(|s| s.to_string()).unwrap_or_else(|| v.to_string()))
+                    .map(|v| {
+                        v.as_str()
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| v.to_string())
+                    })
                     .unwrap_or_default();
                 let set = store.sets.entry(key).or_default();
                 let added = if set.contains(&value) {
@@ -395,7 +423,11 @@ impl NodeExecutor for RedisClientNode {
             "SREM" => {
                 let value = input
                     .get("value")
-                    .map(|v| v.as_str().map(|s| s.to_string()).unwrap_or_else(|| v.to_string()))
+                    .map(|v| {
+                        v.as_str()
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| v.to_string())
+                    })
                     .unwrap_or_default();
                 let removed = store
                     .sets
@@ -414,13 +446,19 @@ impl NodeExecutor for RedisClientNode {
 
             "SMEMBERS" => {
                 let members = store.sets.get(&key).cloned().unwrap_or_default();
-                Ok(NodeOutput::data(json!({"members": members, "size": members.len()})))
+                Ok(NodeOutput::data(
+                    json!({"members": members, "size": members.len()}),
+                ))
             }
 
             "SISMEMBER" => {
                 let value = input
                     .get("value")
-                    .map(|v| v.as_str().map(|s| s.to_string()).unwrap_or_else(|| v.to_string()))
+                    .map(|v| {
+                        v.as_str()
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| v.to_string())
+                    })
                     .unwrap_or_default();
                 let is_member = store
                     .sets
@@ -441,7 +479,11 @@ impl NodeExecutor for RedisClientNode {
                 let member = input
                     .get("member")
                     .or_else(|| input.get("value"))
-                    .map(|v| v.as_str().map(|s| s.to_string()).unwrap_or_else(|| v.to_string()))
+                    .map(|v| {
+                        v.as_str()
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| v.to_string())
+                    })
                     .unwrap_or_default();
                 let zset = store.sorted_sets.entry(key).or_default();
                 zset.retain(|(_, m)| m != &member);
@@ -455,7 +497,11 @@ impl NodeExecutor for RedisClientNode {
                 let stop = input.get("stop").and_then(|v| v.as_i64()).unwrap_or(-1);
                 let zset = store.sorted_sets.get(&key).cloned().unwrap_or_default();
                 let len = zset.len();
-                let e = if stop < 0 { len } else { (stop as usize + 1).min(len) };
+                let e = if stop < 0 {
+                    len
+                } else {
+                    (stop as usize + 1).min(len)
+                };
                 let range: Vec<Value> = if start < e {
                     zset[start..e]
                         .iter()
@@ -468,10 +514,7 @@ impl NodeExecutor for RedisClientNode {
             }
 
             "ZSCORE" => {
-                let member = input
-                    .get("member")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
+                let member = input.get("member").and_then(|v| v.as_str()).unwrap_or("");
                 let score = store
                     .sorted_sets
                     .get(&key)
@@ -493,16 +536,26 @@ impl NodeExecutor for RedisClientNode {
             }
 
             "TTL" => {
-                let ttl = store.expires.get(&key).map(|&exp| {
-                    let now = current_timestamp();
-                    if exp > now { (exp - now) as i64 } else { -2i64 }
-                }).unwrap_or(-1);
+                let ttl = store
+                    .expires
+                    .get(&key)
+                    .map(|&exp| {
+                        let now = current_timestamp();
+                        if exp > now {
+                            (exp - now) as i64
+                        } else {
+                            -2i64
+                        }
+                    })
+                    .unwrap_or(-1);
                 Ok(NodeOutput::data(json!({"ttl": ttl})))
             }
 
             "KEYS" => {
                 let pattern = input.get("pattern").and_then(|v| v.as_str()).unwrap_or("*");
-                let all_keys: Vec<String> = store.strings.keys()
+                let all_keys: Vec<String> = store
+                    .strings
+                    .keys()
                     .chain(store.hashes.keys())
                     .chain(store.lists.keys())
                     .chain(store.sets.keys())
@@ -518,7 +571,9 @@ impl NodeExecutor for RedisClientNode {
                         }
                     })
                     .collect();
-                Ok(NodeOutput::data(json!({"keys": all_keys, "count": all_keys.len()})))
+                Ok(NodeOutput::data(
+                    json!({"keys": all_keys, "count": all_keys.len()}),
+                ))
             }
 
             "FLUSHALL" => {
@@ -580,7 +635,10 @@ mod tests {
 
         // SET
         let output = node
-            .execute(json!({"command": "SET", "key": "name", "value": "Alice"}), &ctx())
+            .execute(
+                json!({"command": "SET", "key": "name", "value": "Alice"}),
+                &ctx(),
+            )
             .await
             .unwrap();
         assert_eq!(output.ports["default"]["ok"], true);
@@ -593,9 +651,12 @@ mod tests {
         assert_eq!(output.ports["default"]["value"], "Alice");
 
         // INCR
-        node.execute(json!({"command": "SET", "key": "counter", "value": "10"}), &ctx())
-            .await
-            .unwrap();
+        node.execute(
+            json!({"command": "SET", "key": "counter", "value": "10"}),
+            &ctx(),
+        )
+        .await
+        .unwrap();
         let output = node
             .execute(json!({"command": "INCR", "key": "counter"}), &ctx())
             .await
@@ -616,7 +677,10 @@ mod tests {
         .unwrap();
 
         let output = node
-            .execute(json!({"command": "HGET", "key": "user:1", "field": "name"}), &ctx())
+            .execute(
+                json!({"command": "HGET", "key": "user:1", "field": "name"}),
+                &ctx(),
+            )
             .await
             .unwrap();
         assert_eq!(output.ports["default"]["value"], "Bob");
@@ -633,18 +697,30 @@ mod tests {
         let mut node = RedisClientNode::new();
         node.init(&json!({})).await.unwrap();
 
-        node.execute(json!({"command": "RPUSH", "key": "q", "value": "a"}), &ctx())
-            .await
-            .unwrap();
-        node.execute(json!({"command": "RPUSH", "key": "q", "value": "b"}), &ctx())
-            .await
-            .unwrap();
-        node.execute(json!({"command": "LPUSH", "key": "q", "value": "z"}), &ctx())
-            .await
-            .unwrap();
+        node.execute(
+            json!({"command": "RPUSH", "key": "q", "value": "a"}),
+            &ctx(),
+        )
+        .await
+        .unwrap();
+        node.execute(
+            json!({"command": "RPUSH", "key": "q", "value": "b"}),
+            &ctx(),
+        )
+        .await
+        .unwrap();
+        node.execute(
+            json!({"command": "LPUSH", "key": "q", "value": "z"}),
+            &ctx(),
+        )
+        .await
+        .unwrap();
 
         let output = node
-            .execute(json!({"command": "LRANGE", "key": "q", "start": 0, "stop": -1}), &ctx())
+            .execute(
+                json!({"command": "LRANGE", "key": "q", "start": 0, "stop": -1}),
+                &ctx(),
+            )
             .await
             .unwrap();
         let values = output.ports["default"]["values"].as_array().unwrap();
@@ -662,15 +738,24 @@ mod tests {
         let mut node = RedisClientNode::new();
         node.init(&json!({})).await.unwrap();
 
-        node.execute(json!({"command": "SADD", "key": "tags", "value": "rust"}), &ctx())
-            .await
-            .unwrap();
-        node.execute(json!({"command": "SADD", "key": "tags", "value": "async"}), &ctx())
-            .await
-            .unwrap();
-        node.execute(json!({"command": "SADD", "key": "tags", "value": "rust"}), &ctx())
-            .await
-            .unwrap(); // duplicate
+        node.execute(
+            json!({"command": "SADD", "key": "tags", "value": "rust"}),
+            &ctx(),
+        )
+        .await
+        .unwrap();
+        node.execute(
+            json!({"command": "SADD", "key": "tags", "value": "async"}),
+            &ctx(),
+        )
+        .await
+        .unwrap();
+        node.execute(
+            json!({"command": "SADD", "key": "tags", "value": "rust"}),
+            &ctx(),
+        )
+        .await
+        .unwrap(); // duplicate
 
         let output = node
             .execute(json!({"command": "SCARD", "key": "tags"}), &ctx())
@@ -698,7 +783,10 @@ mod tests {
         .unwrap();
 
         let output = node
-            .execute(json!({"command": "ZRANGE", "key": "scores", "start": 0, "stop": -1}), &ctx())
+            .execute(
+                json!({"command": "ZRANGE", "key": "scores", "start": 0, "stop": -1}),
+                &ctx(),
+            )
             .await
             .unwrap();
         let members = output.ports["default"]["members"].as_array().unwrap();
@@ -711,9 +799,12 @@ mod tests {
         let mut node = RedisClientNode::new();
         node.init(&json!({"prefix": "app"})).await.unwrap();
 
-        node.execute(json!({"command": "SET", "key": "name", "value": "test"}), &ctx())
-            .await
-            .unwrap();
+        node.execute(
+            json!({"command": "SET", "key": "name", "value": "test"}),
+            &ctx(),
+        )
+        .await
+        .unwrap();
 
         let output = node
             .execute(json!({"command": "KEYS", "pattern": "*"}), &ctx())
@@ -728,9 +819,12 @@ mod tests {
         let mut node = RedisClientNode::new();
         node.init(&json!({})).await.unwrap();
 
-        node.execute(json!({"command": "SET", "key": "tmp", "value": "val"}), &ctx())
-            .await
-            .unwrap();
+        node.execute(
+            json!({"command": "SET", "key": "tmp", "value": "val"}),
+            &ctx(),
+        )
+        .await
+        .unwrap();
 
         let output = node
             .execute(json!({"command": "EXISTS", "key": "tmp"}), &ctx())

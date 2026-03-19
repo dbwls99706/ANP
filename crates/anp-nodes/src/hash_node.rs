@@ -43,10 +43,11 @@ fn extract_data(input: &serde_json::Value) -> Option<String> {
         Some(s.to_string())
     } else if let Some(s) = input.get("data").and_then(|v| v.as_str()) {
         Some(s.to_string())
-    } else if let Some(s) = input.get("text").and_then(|v| v.as_str()) {
-        Some(s.to_string())
     } else {
-        None
+        input
+            .get("text")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
     }
 }
 
@@ -137,7 +138,10 @@ mod tests {
         let ctx = ExecutionContext::new();
         let output1 = node.execute(json!("hello"), &ctx).await.unwrap();
         let output2 = node.execute(json!("hello"), &ctx).await.unwrap();
-        assert_eq!(output1.ports["default"]["hash"], output2.ports["default"]["hash"]);
+        assert_eq!(
+            output1.ports["default"]["hash"],
+            output2.ports["default"]["hash"]
+        );
     }
 
     #[tokio::test]
@@ -146,7 +150,10 @@ mod tests {
         let ctx = ExecutionContext::new();
         let output1 = node.execute(json!("hello"), &ctx).await.unwrap();
         let output2 = node.execute(json!("world"), &ctx).await.unwrap();
-        assert_ne!(output1.ports["default"]["hash"], output2.ports["default"]["hash"]);
+        assert_ne!(
+            output1.ports["default"]["hash"],
+            output2.ports["default"]["hash"]
+        );
     }
 
     #[tokio::test]
@@ -164,10 +171,7 @@ mod tests {
     async fn test_hash_data_field_input() {
         let node = make_node().await;
         let ctx = ExecutionContext::new();
-        let output = node
-            .execute(json!({"data": "hello"}), &ctx)
-            .await
-            .unwrap();
+        let output = node.execute(json!({"data": "hello"}), &ctx).await.unwrap();
         // Should produce same hash as direct string input
         let direct_output = node.execute(json!("hello"), &ctx).await.unwrap();
         assert_eq!(
@@ -180,10 +184,7 @@ mod tests {
     async fn test_hash_text_field_input() {
         let node = make_node().await;
         let ctx = ExecutionContext::new();
-        let output = node
-            .execute(json!({"text": "hello"}), &ctx)
-            .await
-            .unwrap();
+        let output = node.execute(json!({"text": "hello"}), &ctx).await.unwrap();
         let direct_output = node.execute(json!("hello"), &ctx).await.unwrap();
         assert_eq!(
             output.ports["default"]["hash"],

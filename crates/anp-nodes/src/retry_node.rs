@@ -88,7 +88,9 @@ impl NodeExecutor for RetryNode {
             // No error — success
             let mut ports = HashMap::new();
             ports.insert("success".to_string(), input);
-            return Ok(NodeOutput::multi(ports).with_log("no error, routed to 'success'".to_string()));
+            return Ok(
+                NodeOutput::multi(ports).with_log("no error, routed to 'success'".to_string())
+            );
         }
 
         // Has error — check retry count
@@ -114,8 +116,8 @@ impl NodeExecutor for RetryNode {
 
         // Calculate next backoff with exponential increase
         let next_count = retry_count + 1;
-        let backoff = (self.backoff_ms as f64 * self.backoff_multiplier.powi(retry_count as i32))
-            as u64;
+        let backoff =
+            (self.backoff_ms as f64 * self.backoff_multiplier.powi(retry_count as i32)) as u64;
         let capped_backoff = backoff.min(self.max_backoff_ms);
 
         let mut output = input;

@@ -150,7 +150,11 @@ fn apply_patch(
     Ok(())
 }
 
-fn set_path(target: &mut serde_json::Value, path: &str, value: serde_json::Value) -> Result<(), String> {
+fn set_path(
+    target: &mut serde_json::Value,
+    path: &str,
+    value: serde_json::Value,
+) -> Result<(), String> {
     if path == "." {
         *target = value;
         return Ok(());
@@ -285,38 +289,28 @@ impl NodeExecutor for DiffNode {
                 })
             }
             "patch" => {
-                let mut target = input
-                    .get("target")
-                    .cloned()
-                    .ok_or_else(|| {
-                        NodeError::ExecutionFailed("patch requires field 'target'".into())
-                    })?;
+                let mut target = input.get("target").cloned().ok_or_else(|| {
+                    NodeError::ExecutionFailed("patch requires field 'target'".into())
+                })?;
                 let changes = input
                     .get("changes")
                     .and_then(|v| v.as_array())
                     .ok_or_else(|| {
-                        NodeError::ExecutionFailed(
-                            "patch requires field 'changes' as array".into(),
-                        )
+                        NodeError::ExecutionFailed("patch requires field 'changes' as array".into())
                     })?;
 
-                apply_patch(&mut target, changes).map_err(|e| {
-                    NodeError::ExecutionFailed(format!("patch failed: {}", e))
-                })?;
+                apply_patch(&mut target, changes)
+                    .map_err(|e| NodeError::ExecutionFailed(format!("patch failed: {}", e)))?;
 
                 target
             }
             "equals" => {
-                let a = input
-                    .get("a")
-                    .ok_or_else(|| {
-                        NodeError::ExecutionFailed("equals requires field 'a'".into())
-                    })?;
-                let b = input
-                    .get("b")
-                    .ok_or_else(|| {
-                        NodeError::ExecutionFailed("equals requires field 'b'".into())
-                    })?;
+                let a = input.get("a").ok_or_else(|| {
+                    NodeError::ExecutionFailed("equals requires field 'a'".into())
+                })?;
+                let b = input.get("b").ok_or_else(|| {
+                    NodeError::ExecutionFailed("equals requires field 'b'".into())
+                })?;
 
                 let mut changes = Vec::new();
                 compute_diff(a, b, "", &mut changes);

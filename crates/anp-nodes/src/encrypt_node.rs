@@ -57,7 +57,7 @@ fn to_hex(data: &[u8]) -> String {
 
 /// Decode hex string to bytes
 fn from_hex(hex: &str) -> Result<Vec<u8>, String> {
-    if hex.len() % 2 != 0 {
+    if !hex.len().is_multiple_of(2) {
         return Err("hex string must have even length".to_string());
     }
     let mut bytes = Vec::with_capacity(hex.len() / 2);
@@ -115,10 +115,7 @@ impl NodeExecutor for EncryptNode {
         _ctx: &ExecutionContext,
     ) -> NodeResult<NodeOutput> {
         let key = std::env::var(&self.key_env).map_err(|_| {
-            NodeError::ExecutionFailed(format!(
-                "environment variable '{}' not set",
-                self.key_env
-            ))
+            NodeError::ExecutionFailed(format!("environment variable '{}' not set", self.key_env))
         })?;
 
         let data_str = input
@@ -126,9 +123,7 @@ impl NodeExecutor for EncryptNode {
             .and_then(|v| v.as_str())
             .or_else(|| input.as_str())
             .ok_or_else(|| {
-                NodeError::MissingInput(
-                    "expected string input or object with 'data' field".into(),
-                )
+                NodeError::MissingInput("expected string input or object with 'data' field".into())
             })?;
 
         match self.operation.as_str() {
@@ -148,10 +143,7 @@ impl NodeExecutor for EncryptNode {
                 })?;
                 let decrypted = xor_bytes(&encrypted_bytes, key.as_bytes());
                 let result = String::from_utf8(decrypted).map_err(|e| {
-                    NodeError::ExecutionFailed(format!(
-                        "decrypted data is not valid UTF-8: {}",
-                        e
-                    ))
+                    NodeError::ExecutionFailed(format!("decrypted data is not valid UTF-8: {}", e))
                 })?;
 
                 Ok(NodeOutput::data(serde_json::json!({
@@ -250,10 +242,7 @@ mod tests {
         .unwrap();
 
         let ctx = ExecutionContext::new();
-        let output = node
-            .execute(serde_json::json!("test"), &ctx)
-            .await
-            .unwrap();
+        let output = node.execute(serde_json::json!("test"), &ctx).await.unwrap();
 
         assert!(output.ports["default"]["result"].as_str().is_some());
     }

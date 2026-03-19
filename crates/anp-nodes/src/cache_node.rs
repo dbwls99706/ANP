@@ -120,9 +120,7 @@ impl NodeExecutor for CacheNode {
                 let key = input
                     .get("key")
                     .and_then(|v| v.as_str())
-                    .ok_or_else(|| {
-                        NodeError::MissingInput("'key' field required for set".into())
-                    })?
+                    .ok_or_else(|| NodeError::MissingInput("'key' field required for set".into()))?
                     .to_string();
                 let value = input
                     .get("value")
@@ -150,8 +148,7 @@ impl NodeExecutor for CacheNode {
                     )));
                 }
 
-                let expires_at =
-                    Instant::now() + std::time::Duration::from_millis(ttl_ms);
+                let expires_at = Instant::now() + std::time::Duration::from_millis(ttl_ms);
                 cache.insert(
                     key.clone(),
                     CacheEntry {
@@ -170,12 +167,9 @@ impl NodeExecutor for CacheNode {
             }
 
             "get" => {
-                let key = input
-                    .get("key")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| {
-                        NodeError::MissingInput("'key' field required for get".into())
-                    })?;
+                let key = input.get("key").and_then(|v| v.as_str()).ok_or_else(|| {
+                    NodeError::MissingInput("'key' field required for get".into())
+                })?;
 
                 let mut cache = self.cache.write().await;
                 let now = Instant::now();
@@ -210,12 +204,9 @@ impl NodeExecutor for CacheNode {
             }
 
             "delete" => {
-                let key = input
-                    .get("key")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| {
-                        NodeError::MissingInput("'key' field required for delete".into())
-                    })?;
+                let key = input.get("key").and_then(|v| v.as_str()).ok_or_else(|| {
+                    NodeError::MissingInput("'key' field required for delete".into())
+                })?;
 
                 let mut cache = self.cache.write().await;
                 let existed = cache.remove(key).is_some();
@@ -239,12 +230,9 @@ impl NodeExecutor for CacheNode {
             }
 
             "has" => {
-                let key = input
-                    .get("key")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| {
-                        NodeError::MissingInput("'key' field required for has".into())
-                    })?;
+                let key = input.get("key").and_then(|v| v.as_str()).ok_or_else(|| {
+                    NodeError::MissingInput("'key' field required for has".into())
+                })?;
 
                 let mut cache = self.cache.write().await;
                 let now = Instant::now();
@@ -299,10 +287,7 @@ mod tests {
 
         // Get the value
         let result = node
-            .execute(
-                serde_json::json!({"operation": "get", "key": "k1"}),
-                &ctx,
-            )
+            .execute(serde_json::json!({"operation": "get", "key": "k1"}), &ctx)
             .await
             .unwrap();
         assert_eq!(result.ports["default"]["hit"], true);
@@ -349,10 +334,7 @@ mod tests {
         assert_eq!(result.ports["default"]["deleted"], true);
 
         let result = node
-            .execute(
-                serde_json::json!({"operation": "get", "key": "k1"}),
-                &ctx,
-            )
+            .execute(serde_json::json!({"operation": "get", "key": "k1"}), &ctx)
             .await
             .unwrap();
         assert_eq!(result.ports["default"]["hit"], false);
@@ -398,10 +380,7 @@ mod tests {
         .unwrap();
 
         let result = node
-            .execute(
-                serde_json::json!({"operation": "has", "key": "k1"}),
-                &ctx,
-            )
+            .execute(serde_json::json!({"operation": "has", "key": "k1"}), &ctx)
             .await
             .unwrap();
         assert_eq!(result.ports["default"]["exists"], true);

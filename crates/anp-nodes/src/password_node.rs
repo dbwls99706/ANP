@@ -72,10 +72,16 @@ fn check_strength(password: &str) -> serde_json::Value {
         .chars()
         .any(|c| !c.is_alphanumeric() && !c.is_whitespace());
 
-    let score = [has_length, has_uppercase, has_lowercase, has_digit, has_special]
-        .iter()
-        .filter(|&&b| b)
-        .count();
+    let score = [
+        has_length,
+        has_uppercase,
+        has_lowercase,
+        has_digit,
+        has_special,
+    ]
+    .iter()
+    .filter(|&&b| b)
+    .count();
 
     let label = match score {
         0..=1 => "weak",
@@ -167,17 +173,14 @@ impl NodeExecutor for PasswordNode {
                 let salt = input
                     .get("salt")
                     .and_then(|v| v.as_str())
-                    .or_else(|| self.salt.as_deref())
+                    .or(self.salt.as_deref())
                     .ok_or_else(|| {
                         NodeError::ExecutionFailed("missing 'salt' in input".to_string())
                     })?;
 
-                let stored_hash = input
-                    .get("hash")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| {
-                        NodeError::ExecutionFailed("missing 'hash' in input".to_string())
-                    })?;
+                let stored_hash = input.get("hash").and_then(|v| v.as_str()).ok_or_else(|| {
+                    NodeError::ExecutionFailed("missing 'hash' in input".to_string())
+                })?;
 
                 let computed = hash_password(password, salt);
                 let valid = computed == stored_hash;
@@ -242,7 +245,10 @@ mod tests {
             .await
             .unwrap();
 
-        let hash_val = hash_output.ports["default"]["hash"].as_str().unwrap().to_string();
+        let hash_val = hash_output.ports["default"]["hash"]
+            .as_str()
+            .unwrap()
+            .to_string();
 
         // Now verify
         let mut verify_node = PasswordNode::new();

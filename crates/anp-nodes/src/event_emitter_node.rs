@@ -334,9 +334,7 @@ mod tests {
     #[tokio::test]
     async fn test_emit_requires_event_name() {
         let mut node = EventEmitterNode::new();
-        let result = node
-            .init(&serde_json::json!({ "operation": "emit" }))
-            .await;
+        let result = node.init(&serde_json::json!({ "operation": "emit" })).await;
         assert!(result.is_err());
     }
 
@@ -351,9 +349,7 @@ mod tests {
         .await
         .unwrap();
 
-        let result = node
-            .execute(serde_json::json!({"data": 1}), &ctx())
-            .await;
+        let result = node.execute(serde_json::json!({"data": 1}), &ctx()).await;
         assert!(result.is_err());
     }
 

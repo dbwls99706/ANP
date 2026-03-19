@@ -31,12 +31,12 @@ impl Default for SummarizeNode {
 const STOP_WORDS: &[&str] = &[
     "the", "a", "an", "is", "are", "was", "were", "be", "been", "being", "have", "has", "had",
     "do", "does", "did", "will", "would", "could", "should", "may", "might", "must", "shall",
-    "can", "to", "of", "in", "for", "on", "with", "at", "by", "from", "as", "into", "about",
-    "it", "its", "this", "that", "these", "those", "and", "but", "or", "not", "no", "if", "then",
-    "so", "than", "too", "very", "just", "also", "only", "up", "out", "how", "all", "each",
-    "every", "both", "few", "more", "most", "other", "some", "such", "what", "which", "who",
-    "when", "where", "why", "i", "me", "my", "we", "our", "you", "your", "he", "him", "his",
-    "she", "her", "they", "them", "their",
+    "can", "to", "of", "in", "for", "on", "with", "at", "by", "from", "as", "into", "about", "it",
+    "its", "this", "that", "these", "those", "and", "but", "or", "not", "no", "if", "then", "so",
+    "than", "too", "very", "just", "also", "only", "up", "out", "how", "all", "each", "every",
+    "both", "few", "more", "most", "other", "some", "such", "what", "which", "who", "when",
+    "where", "why", "i", "me", "my", "we", "our", "you", "your", "he", "him", "his", "she", "her",
+    "they", "them", "their",
 ];
 
 impl SummarizeNode {

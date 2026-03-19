@@ -86,7 +86,7 @@ fn is_truthy(val: &serde_json::Value) -> bool {
     match val {
         serde_json::Value::Null => false,
         serde_json::Value::Bool(b) => *b,
-        serde_json::Value::Number(n) => n.as_f64().map_or(false, |f| f != 0.0),
+        serde_json::Value::Number(n) => n.as_f64().is_some_and(|f| f != 0.0),
         serde_json::Value::String(s) => !s.is_empty(),
         serde_json::Value::Array(a) => !a.is_empty(),
         serde_json::Value::Object(_) => true,
@@ -166,34 +166,27 @@ fn render_template(template: &str, context: &serde_json::Value) -> String {
                         let item_count = items.len();
                         for (idx, item) in items.iter().enumerate() {
                             // Create merged context: parent context + item fields + loop vars
-                            let mut item_ctx =
-                                if let serde_json::Value::Object(parent) = context {
-                                    let mut merged = parent.clone();
-                                    // Overlay item fields if item is an object
-                                    if let serde_json::Value::Object(item_map) = item {
-                                        for (k, v) in item_map {
-                                            merged.insert(k.clone(), v.clone());
-                                        }
+                            let mut item_ctx = if let serde_json::Value::Object(parent) = context {
+                                let mut merged = parent.clone();
+                                // Overlay item fields if item is an object
+                                if let serde_json::Value::Object(item_map) = item {
+                                    for (k, v) in item_map {
+                                        merged.insert(k.clone(), v.clone());
                                     }
-                                    // Store current item as "this"
-                                    merged.insert("this".to_string(), item.clone());
-                                    serde_json::Value::Object(merged)
-                                } else {
-                                    let mut map = serde_json::Map::new();
-                                    map.insert("this".to_string(), item.clone());
-                                    serde_json::Value::Object(map)
-                                };
+                                }
+                                // Store current item as "this"
+                                merged.insert("this".to_string(), item.clone());
+                                serde_json::Value::Object(merged)
+                            } else {
+                                let mut map = serde_json::Map::new();
+                                map.insert("this".to_string(), item.clone());
+                                serde_json::Value::Object(map)
+                            };
 
                             // Add loop variables
                             if let serde_json::Value::Object(map) = &mut item_ctx {
-                                map.insert(
-                                    "@index".to_string(),
-                                    serde_json::json!(idx),
-                                );
-                                map.insert(
-                                    "@first".to_string(),
-                                    serde_json::json!(idx == 0),
-                                );
+                                map.insert("@index".to_string(), serde_json::json!(idx));
+                                map.insert("@first".to_string(), serde_json::json!(idx == 0));
                                 map.insert(
                                     "@last".to_string(),
                                     serde_json::json!(idx == item_count - 1),
@@ -239,19 +232,20 @@ fn render_template(template: &str, context: &serde_json::Value) -> String {
         }
 
         // Check for {{variable}} — skip block tags
-        if i + 2 < len && chars[i] == '{' && chars[i + 1] == '{' {
-            if !template[i..].starts_with("{{#")
-                && !template[i..].starts_with("{{/")
-                && !template[i..].starts_with("{{else}}")
-            {
-                if let Some(end) = template[i + 2..].find("}}") {
-                    let var_name = template[i + 2..i + 2 + end].trim();
-                    if !var_name.is_empty() {
-                        let val = resolve_path(context, var_name);
-                        result.push_str(&value_to_string(&val));
-                        i = i + 2 + end + 2;
-                        continue;
-                    }
+        if i + 2 < len
+            && chars[i] == '{'
+            && chars[i + 1] == '{'
+            && !template[i..].starts_with("{{#")
+            && !template[i..].starts_with("{{/")
+            && !template[i..].starts_with("{{else}}")
+        {
+            if let Some(end) = template[i + 2..].find("}}") {
+                let var_name = template[i + 2..i + 2 + end].trim();
+                if !var_name.is_empty() {
+                    let val = resolve_path(context, var_name);
+                    result.push_str(&value_to_string(&val));
+                    i = i + 2 + end + 2;
+                    continue;
                 }
             }
         }
@@ -339,10 +333,7 @@ mod tests {
                 {"name": "Cherry"}
             ]
         });
-        let result = render_template(
-            "{{#each items}}{{name}},{{/each}}",
-            &data,
-        );
+        let result = render_template("{{#each items}}{{name}},{{/each}}", &data);
         assert_eq!(result, "Apple,Banana,Cherry,");
     }
 
@@ -351,10 +342,7 @@ mod tests {
         let data = serde_json::json!({
             "items": [{"name": "A"}, {"name": "B"}, {"name": "C"}]
         });
-        let result = render_template(
-            "{{#each items}}{{@index}}:{{name}} {{/each}}",
-            &data,
-        );
+        let result = render_template("{{#each items}}{{@index}}:{{name}} {{/each}}", &data);
         assert_eq!(result, "0:A 1:B 2:C ");
     }
 
@@ -363,30 +351,21 @@ mod tests {
         let data = serde_json::json!({
             "items": [{"v": "A"}, {"v": "B"}, {"v": "C"}]
         });
-        let result = render_template(
-            "{{#each items}}{{@first}}-{{@last}},{{/each}}",
-            &data,
-        );
+        let result = render_template("{{#each items}}{{@first}}-{{@last}},{{/each}}", &data);
         assert_eq!(result, "true-false,false-false,false-true,");
     }
 
     #[test]
     fn test_if_true() {
         let data = serde_json::json!({"show": true, "message": "visible"});
-        let result = render_template(
-            "{{#if show}}{{message}}{{/if}}",
-            &data,
-        );
+        let result = render_template("{{#if show}}{{message}}{{/if}}", &data);
         assert_eq!(result, "visible");
     }
 
     #[test]
     fn test_if_false() {
         let data = serde_json::json!({"show": false});
-        let result = render_template(
-            "{{#if show}}visible{{/if}}",
-            &data,
-        );
+        let result = render_template("{{#if show}}visible{{/if}}", &data);
         assert_eq!(result, "");
     }
 
@@ -413,10 +392,7 @@ mod tests {
     #[test]
     fn test_nested_if() {
         let data = serde_json::json!({"a": true, "b": true, "msg": "deep"});
-        let result = render_template(
-            "{{#if a}}{{#if b}}{{msg}}{{/if}}{{/if}}",
-            &data,
-        );
+        let result = render_template("{{#if a}}{{#if b}}{{msg}}{{/if}}{{/if}}", &data);
         assert_eq!(result, "deep");
     }
 
@@ -461,10 +437,7 @@ mod tests {
     #[test]
     fn test_empty_array_each() {
         let data = serde_json::json!({"items": []});
-        let result = render_template(
-            "before{{#each items}}item{{/each}}after",
-            &data,
-        );
+        let result = render_template("before{{#each items}}item{{/each}}after", &data);
         assert_eq!(result, "beforeafter");
     }
 
@@ -522,11 +495,10 @@ mod tests {
     #[tokio::test]
     async fn test_init_empty_template() {
         let mut node = TemplateEngineNode::new();
-        assert!(
-            node.init(&serde_json::json!({"template": ""}))
-                .await
-                .is_err()
-        );
+        assert!(node
+            .init(&serde_json::json!({"template": ""}))
+            .await
+            .is_err());
     }
 
     #[test]
@@ -538,7 +510,8 @@ mod tests {
                 {"name": "Banana", "color": "yellow"}
             ]
         });
-        let template = "<h1>{{title}}</h1><ul>{{#each items}}<li>{{name}} ({{color}})</li>{{/each}}</ul>";
+        let template =
+            "<h1>{{title}}</h1><ul>{{#each items}}<li>{{name}} ({{color}})</li>{{/each}}</ul>";
         let result = render_template(template, &data);
         assert_eq!(
             result,
@@ -552,10 +525,7 @@ mod tests {
             "prefix": "Item",
             "items": [{"id": 1}, {"id": 2}]
         });
-        let result = render_template(
-            "{{#each items}}{{prefix}}-{{id}} {{/each}}",
-            &data,
-        );
+        let result = render_template("{{#each items}}{{prefix}}-{{id}} {{/each}}", &data);
         assert_eq!(result, "Item-1 Item-2 ");
     }
 }

@@ -231,7 +231,10 @@ impl NodeExecutor for HealthCheckNode {
                     .get("name")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| NodeError::MissingInput("name required".into()))?;
-                let status = input.get("status").and_then(|v| v.as_bool()).unwrap_or(true);
+                let status = input
+                    .get("status")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(true);
                 let message = input
                     .get("message")
                     .and_then(|v| v.as_str())
@@ -253,7 +256,10 @@ impl NodeExecutor for HealthCheckNode {
                     .get("name")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| NodeError::MissingInput("name required".into()))?;
-                let status = input.get("status").and_then(|v| v.as_bool()).unwrap_or(true);
+                let status = input
+                    .get("status")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(true);
                 let message = input
                     .get("message")
                     .and_then(|v| v.as_str())

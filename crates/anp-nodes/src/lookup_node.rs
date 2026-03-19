@@ -32,12 +32,8 @@ impl LookupNode {
 fn values_equal(a: &serde_json::Value, b: &serde_json::Value) -> bool {
     // Compare with type coercion for numbers/strings
     match (a, b) {
-        (serde_json::Value::String(sa), serde_json::Value::Number(nb)) => {
-            sa == &nb.to_string()
-        }
-        (serde_json::Value::Number(na), serde_json::Value::String(sb)) => {
-            &na.to_string() == sb
-        }
+        (serde_json::Value::String(sa), serde_json::Value::Number(nb)) => sa == &nb.to_string(),
+        (serde_json::Value::Number(na), serde_json::Value::String(sb)) => &na.to_string() == sb,
         _ => a == b,
     }
 }
@@ -92,9 +88,7 @@ impl NodeExecutor for LookupNode {
         self.lookup_data = config
             .get("lookup_data")
             .and_then(|v| v.as_array())
-            .ok_or_else(|| {
-                NodeError::InvalidConfig("'lookup_data' array is required".into())
-            })?
+            .ok_or_else(|| NodeError::InvalidConfig("'lookup_data' array is required".into()))?
             .clone();
 
         if let Some(rf) = config.get("result_fields").and_then(|v| v.as_array()) {
@@ -126,10 +120,7 @@ impl NodeExecutor for LookupNode {
         _ctx: &ExecutionContext,
     ) -> NodeResult<NodeOutput> {
         let input_key_value = input.get(&self.key_field).ok_or_else(|| {
-            NodeError::ExecutionFailed(format!(
-                "input missing key_field '{}'",
-                self.key_field
-            ))
+            NodeError::ExecutionFailed(format!("input missing key_field '{}'", self.key_field))
         })?;
 
         // Find matching entries
@@ -147,15 +138,9 @@ impl NodeExecutor for LookupNode {
         let mut result = input.as_object().cloned().unwrap_or_default();
 
         if matches.is_empty() {
-            result.insert(
-                "_lookup_found".to_string(),
-                serde_json::Value::Bool(false),
-            );
+            result.insert("_lookup_found".to_string(), serde_json::Value::Bool(false));
         } else {
-            result.insert(
-                "_lookup_found".to_string(),
-                serde_json::Value::Bool(true),
-            );
+            result.insert("_lookup_found".to_string(), serde_json::Value::Bool(true));
 
             match self.mode.as_str() {
                 "first" => {

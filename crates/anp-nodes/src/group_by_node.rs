@@ -100,9 +100,8 @@ impl NodeExecutor for GroupByNode {
         input: serde_json::Value,
         _ctx: &ExecutionContext,
     ) -> NodeResult<NodeOutput> {
-        let arr = extract_array(&input).ok_or_else(|| {
-            NodeError::ExecutionFailed("group_by requires an array input".into())
-        })?;
+        let arr = extract_array(&input)
+            .ok_or_else(|| NodeError::ExecutionFailed("group_by requires an array input".into()))?;
 
         // Group items by field value
         let mut groups: std::collections::BTreeMap<String, Vec<&serde_json::Value>> =

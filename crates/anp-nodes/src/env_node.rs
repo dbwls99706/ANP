@@ -146,10 +146,7 @@ mod tests {
             .unwrap();
         let ctx = ExecutionContext::new();
         let output = node.execute(serde_json::Value::Null, &ctx).await.unwrap();
-        assert_eq!(
-            output.ports["default"]["ANP_NONEXISTENT_VAR_12345"],
-            ""
-        );
+        assert_eq!(output.ports["default"]["ANP_NONEXISTENT_VAR_12345"], "");
     }
 
     #[tokio::test]

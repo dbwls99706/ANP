@@ -107,12 +107,8 @@ fn inline_format(text: &str) -> String {
                 if close_bracket + 1 < len && chars[close_bracket + 1] == '(' {
                     if let Some(close_paren) = find_char(&chars, close_bracket + 2, ')') {
                         let link_text: String = chars[i + 1..close_bracket].iter().collect();
-                        let url: String =
-                            chars[close_bracket + 2..close_paren].iter().collect();
-                        result.push_str(&format!(
-                            "<a href=\"{}\">{}</a>",
-                            url, link_text
-                        ));
+                        let url: String = chars[close_bracket + 2..close_paren].iter().collect();
+                        result.push_str(&format!("<a href=\"{}\">{}</a>", url, link_text));
                         i = close_paren + 1;
                         continue;
                     }
@@ -158,32 +154,16 @@ fn inline_format(text: &str) -> String {
 }
 
 fn find_char(chars: &[char], start: usize, target: char) -> Option<usize> {
-    for i in start..chars.len() {
-        if chars[i] == target {
-            return Some(i);
-        }
-    }
-    None
+    (start..chars.len()).find(|&i| chars[i] == target)
 }
 
 fn find_double_char(chars: &[char], start: usize, target: char) -> Option<usize> {
-    for i in start..chars.len() - 1 {
-        if chars[i] == target && chars[i + 1] == target {
-            return Some(i);
-        }
-    }
-    None
+    (start..chars.len() - 1).find(|&i| chars[i] == target && chars[i + 1] == target)
 }
 
 fn find_single_char_not_double(chars: &[char], start: usize, target: char) -> Option<usize> {
-    for i in start..chars.len() {
-        if chars[i] == target {
-            if i + 1 >= chars.len() || chars[i + 1] != target {
-                return Some(i);
-            }
-        }
-    }
-    None
+    (start..chars.len())
+        .find(|&i| chars[i] == target && (i + 1 >= chars.len() || chars[i + 1] != target))
 }
 
 #[async_trait::async_trait]

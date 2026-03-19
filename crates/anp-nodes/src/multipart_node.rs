@@ -39,10 +39,7 @@ fn build_multipart(parts: &[Value], boundary: &str) -> String {
     for part in parts {
         body.push_str(&format!("--{}\r\n", boundary));
 
-        let name = part
-            .get("name")
-            .and_then(|v| v.as_str())
-            .unwrap_or("field");
+        let name = part.get("name").and_then(|v| v.as_str()).unwrap_or("field");
         let filename = part.get("filename").and_then(|v| v.as_str());
         let content_type = part.get("content_type").and_then(|v| v.as_str());
 
@@ -154,12 +151,11 @@ fn build_url_encoded(fields: &Value) -> String {
     let mut parts = Vec::new();
     if let Some(obj) = fields.as_object() {
         for (key, value) in obj {
-            let v = value.as_str().map(|s| s.to_string()).unwrap_or_else(|| value.to_string());
-            parts.push(format!(
-                "{}={}",
-                url_encode(key),
-                url_encode(&v)
-            ));
+            let v = value
+                .as_str()
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| value.to_string());
+            parts.push(format!("{}={}", url_encode(key), url_encode(&v)));
         }
     }
     parts.join("&")
@@ -215,9 +211,7 @@ impl NodeExecutor for MultipartNode {
                 let parts = input
                     .get("parts")
                     .and_then(|v| v.as_array())
-                    .ok_or_else(|| {
-                        NodeError::MissingInput("parts array required".into())
-                    })?;
+                    .ok_or_else(|| NodeError::MissingInput("parts array required".into()))?;
 
                 let boundary = input
                     .get("boundary")
@@ -252,10 +246,7 @@ impl NodeExecutor for MultipartNode {
                         input
                             .get("content_type")
                             .and_then(|v| v.as_str())
-                            .and_then(|ct| {
-                                ct.find("boundary=")
-                                    .map(|i| &ct[i + 9..])
-                            })
+                            .and_then(|ct| ct.find("boundary=").map(|i| &ct[i + 9..]))
                     })
                     .ok_or_else(|| {
                         NodeError::MissingInput(
@@ -272,9 +263,7 @@ impl NodeExecutor for MultipartNode {
             }
 
             "url_encode" => {
-                let fields = input
-                    .get("fields")
-                    .unwrap_or(&input);
+                let fields = input.get("fields").unwrap_or(&input);
                 let encoded = build_url_encoded(fields);
                 Ok(NodeOutput::data(json!({
                     "body": encoded,
@@ -351,7 +340,9 @@ mod tests {
     #[tokio::test]
     async fn test_url_encode() {
         let mut node = MultipartNode::new();
-        node.init(&json!({"operation": "url_encode"})).await.unwrap();
+        node.init(&json!({"operation": "url_encode"}))
+            .await
+            .unwrap();
 
         let output = node
             .execute(

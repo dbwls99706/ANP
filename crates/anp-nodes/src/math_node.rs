@@ -26,10 +26,8 @@ impl MathNode {
 fn extract_number(input: &serde_json::Value) -> Option<f64> {
     if let Some(n) = input.as_f64() {
         Some(n)
-    } else if let Some(n) = input.get("value").and_then(|v| v.as_f64()) {
-        Some(n)
     } else {
-        None
+        input.get("value").and_then(|v| v.as_f64())
     }
 }
 
@@ -64,8 +62,8 @@ impl NodeExecutor for MathNode {
             .to_string();
 
         let valid_ops = [
-            "add", "subtract", "multiply", "divide", "modulo", "power", "abs", "floor",
-            "ceil", "round", "min", "max", "sum", "avg", "count", "sqrt", "log",
+            "add", "subtract", "multiply", "divide", "modulo", "power", "abs", "floor", "ceil",
+            "round", "min", "max", "sum", "avg", "count", "sqrt", "log",
         ];
         if !valid_ops.contains(&self.operation.as_str()) {
             return Err(NodeError::InvalidConfig(format!(
@@ -99,14 +97,8 @@ impl NodeExecutor for MathNode {
                     "sum" => nums.iter().sum::<f64>(),
                     "avg" => nums.iter().sum::<f64>() / nums.len() as f64,
                     "count" => nums.len() as f64,
-                    "min" => nums
-                        .iter()
-                        .copied()
-                        .fold(f64::INFINITY, f64::min),
-                    "max" => nums
-                        .iter()
-                        .copied()
-                        .fold(f64::NEG_INFINITY, f64::max),
+                    "min" => nums.iter().copied().fold(f64::INFINITY, f64::min),
+                    "max" => nums.iter().copied().fold(f64::NEG_INFINITY, f64::max),
                     _ => unreachable!(),
                 };
 
@@ -119,7 +111,9 @@ impl NodeExecutor for MathNode {
         match self.operation.as_str() {
             "abs" | "floor" | "ceil" | "round" | "sqrt" | "log" => {
                 let num = extract_number(&input).ok_or_else(|| {
-                    NodeError::ExecutionFailed("input must be a number or { \"value\": number }".into())
+                    NodeError::ExecutionFailed(
+                        "input must be a number or { \"value\": number }".into(),
+                    )
                 })?;
 
                 let result = match self.operation.as_str() {

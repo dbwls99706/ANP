@@ -166,12 +166,9 @@ impl NodeExecutor for TotpNode {
                 })))
             }
             "verify" => {
-                let input_code = input
-                    .get("code")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| {
-                        NodeError::ExecutionFailed("missing 'code' in input".to_string())
-                    })?;
+                let input_code = input.get("code").and_then(|v| v.as_str()).ok_or_else(|| {
+                    NodeError::ExecutionFailed("missing 'code' in input".to_string())
+                })?;
 
                 let time_step = self.current_time_step();
 
@@ -215,10 +212,7 @@ mod tests {
         .unwrap();
 
         let ctx = ExecutionContext::new();
-        let output = node
-            .execute(serde_json::json!({}), &ctx)
-            .await
-            .unwrap();
+        let output = node.execute(serde_json::json!({}), &ctx).await.unwrap();
 
         let data = &output.ports["default"];
         let code = data["code"].as_str().unwrap();
@@ -239,10 +233,7 @@ mod tests {
             .unwrap();
 
         let ctx = ExecutionContext::new();
-        let gen_output = gen_node
-            .execute(serde_json::json!({}), &ctx)
-            .await
-            .unwrap();
+        let gen_output = gen_node.execute(serde_json::json!({}), &ctx).await.unwrap();
         let code = gen_output.ports["default"]["code"]
             .as_str()
             .unwrap()
@@ -300,10 +291,7 @@ mod tests {
         let out2 = node.execute(serde_json::json!({}), &ctx).await.unwrap();
 
         // Same time step should produce same code
-        assert_eq!(
-            out1.ports["default"]["code"],
-            out2.ports["default"]["code"]
-        );
+        assert_eq!(out1.ports["default"]["code"], out2.ports["default"]["code"]);
     }
 
     #[tokio::test]
@@ -324,9 +312,7 @@ mod tests {
     #[tokio::test]
     async fn test_invalid_config() {
         let mut node = TotpNode::new();
-        let result = node
-            .init(&serde_json::json!({"interval": 0}))
-            .await;
+        let result = node.init(&serde_json::json!({"interval": 0})).await;
         assert!(result.is_err());
     }
 

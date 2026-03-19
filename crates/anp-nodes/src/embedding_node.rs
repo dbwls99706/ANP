@@ -48,10 +48,7 @@ impl EmbeddingNode {
         if total == 0 {
             return vec![0.0; self.dimensions];
         }
-        counts
-            .iter()
-            .map(|&c| c as f64 / total as f64)
-            .collect()
+        counts.iter().map(|&c| c as f64 / total as f64).collect()
     }
 
     fn cosine_similarity(a: &[f64], b: &[f64]) -> f64 {
@@ -78,8 +75,9 @@ impl EmbeddingNode {
             .ok_or_else(|| NodeError::ExecutionFailed("expected array for vector".into()))?
             .iter()
             .map(|v| {
-                v.as_f64()
-                    .ok_or_else(|| NodeError::ExecutionFailed("vector elements must be numbers".into()))
+                v.as_f64().ok_or_else(|| {
+                    NodeError::ExecutionFailed("vector elements must be numbers".into())
+                })
             })
             .collect()
     }
@@ -127,10 +125,7 @@ impl NodeExecutor for EmbeddingNode {
     ) -> NodeResult<NodeOutput> {
         match self.operation.as_str() {
             "embed" => {
-                let text = input
-                    .get("text")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
+                let text = input.get("text").and_then(|v| v.as_str()).unwrap_or("");
                 let embedding = self.embed_text(text);
                 let result = serde_json::json!({
                     "embedding": embedding,
@@ -140,16 +135,12 @@ impl NodeExecutor for EmbeddingNode {
                 Ok(NodeOutput::data(result))
             }
             "similarity" => {
-                let a = Self::parse_vector(
-                    input.get("a").ok_or_else(|| {
-                        NodeError::ExecutionFailed("similarity requires 'a' vector".into())
-                    })?,
-                )?;
-                let b = Self::parse_vector(
-                    input.get("b").ok_or_else(|| {
-                        NodeError::ExecutionFailed("similarity requires 'b' vector".into())
-                    })?,
-                )?;
+                let a = Self::parse_vector(input.get("a").ok_or_else(|| {
+                    NodeError::ExecutionFailed("similarity requires 'a' vector".into())
+                })?)?;
+                let b = Self::parse_vector(input.get("b").ok_or_else(|| {
+                    NodeError::ExecutionFailed("similarity requires 'b' vector".into())
+                })?)?;
                 if a.len() != b.len() {
                     return Err(NodeError::ExecutionFailed(
                         "vectors must have same dimensions".into(),
@@ -159,16 +150,12 @@ impl NodeExecutor for EmbeddingNode {
                 Ok(NodeOutput::data(serde_json::json!({ "similarity": sim })))
             }
             "distance" => {
-                let a = Self::parse_vector(
-                    input.get("a").ok_or_else(|| {
-                        NodeError::ExecutionFailed("distance requires 'a' vector".into())
-                    })?,
-                )?;
-                let b = Self::parse_vector(
-                    input.get("b").ok_or_else(|| {
-                        NodeError::ExecutionFailed("distance requires 'b' vector".into())
-                    })?,
-                )?;
+                let a = Self::parse_vector(input.get("a").ok_or_else(|| {
+                    NodeError::ExecutionFailed("distance requires 'a' vector".into())
+                })?)?;
+                let b = Self::parse_vector(input.get("b").ok_or_else(|| {
+                    NodeError::ExecutionFailed("distance requires 'b' vector".into())
+                })?)?;
                 if a.len() != b.len() {
                     return Err(NodeError::ExecutionFailed(
                         "vectors must have same dimensions".into(),
@@ -249,10 +236,7 @@ mod tests {
             .unwrap();
         let ctx = ExecutionContext::new();
         let output = node
-            .execute(
-                serde_json::json!({"a": [1.0, 2.0], "b": [1.0, 2.0]}),
-                &ctx,
-            )
+            .execute(serde_json::json!({"a": [1.0, 2.0], "b": [1.0, 2.0]}), &ctx)
             .await
             .unwrap();
         let dist = output.ports["default"]["distance"].as_f64().unwrap();
@@ -267,10 +251,7 @@ mod tests {
             .unwrap();
         let ctx = ExecutionContext::new();
         let output = node
-            .execute(
-                serde_json::json!({"a": [0.0, 0.0], "b": [3.0, 4.0]}),
-                &ctx,
-            )
+            .execute(serde_json::json!({"a": [0.0, 0.0], "b": [3.0, 4.0]}), &ctx)
             .await
             .unwrap();
         let dist = output.ports["default"]["distance"].as_f64().unwrap();

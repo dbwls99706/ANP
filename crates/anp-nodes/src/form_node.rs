@@ -182,10 +182,7 @@ impl NodeExecutor for FormNode {
                     .and_then(|v| v.as_str())
                     .unwrap_or(&name)
                     .to_string();
-                let required = f
-                    .get("required")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false);
+                let required = f.get("required").and_then(|v| v.as_bool()).unwrap_or(false);
                 let placeholder = f
                     .get("placeholder")
                     .and_then(|v| v.as_str())

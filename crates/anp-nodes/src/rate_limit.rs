@@ -117,11 +117,7 @@ impl NodeExecutor for RateLimitNode {
             // Calculate retry_after: time until the oldest request in the window expires
             let oldest = timestamps.first().copied().unwrap_or(now);
             let elapsed = now.duration_since(oldest).as_millis() as u64;
-            let retry_after_ms = if self.window_ms > elapsed {
-                self.window_ms - elapsed
-            } else {
-                0
-            };
+            let retry_after_ms = self.window_ms.saturating_sub(elapsed);
             drop(windows);
 
             let mut ports = HashMap::new();
@@ -135,10 +131,8 @@ impl NodeExecutor for RateLimitNode {
                     "key": key
                 }),
             );
-            Ok(NodeOutput::multi(ports).with_log(format!(
-                "rejected: rate limit exceeded for key '{}'",
-                key
-            )))
+            Ok(NodeOutput::multi(ports)
+                .with_log(format!("rejected: rate limit exceeded for key '{}'", key)))
         }
     }
 }

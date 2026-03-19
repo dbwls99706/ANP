@@ -123,9 +123,7 @@ impl NodeExecutor for RedirectNode {
     async fn init(&mut self, config: &serde_json::Value) -> NodeResult<()> {
         if let Some(url) = config.get("url").and_then(|v| v.as_str()) {
             if url.is_empty() {
-                return Err(NodeError::InvalidConfig(
-                    "url must not be empty".into(),
-                ));
+                return Err(NodeError::InvalidConfig("url must not be empty".into()));
             }
             self.url = url.to_string();
         }
@@ -182,16 +180,13 @@ impl NodeExecutor for RedirectNode {
                 if !query.is_empty() {
                     let query_string: Vec<String> = query
                         .iter()
-                        .filter_map(|(k, v)| {
-                            v.as_str().map(|val| {
-                                format!("{}={}", k, val)
-                            })
-                        })
+                        .filter_map(|(k, v)| v.as_str().map(|val| format!("{}={}", k, val)))
                         .collect();
 
                     if !query_string.is_empty() {
                         let separator = if resolved_url.contains('?') { "&" } else { "?" };
-                        resolved_url = format!("{}{}{}", resolved_url, separator, query_string.join("&"));
+                        resolved_url =
+                            format!("{}{}{}", resolved_url, separator, query_string.join("&"));
                     }
                 }
             }
@@ -227,10 +222,7 @@ mod tests {
         .await
         .unwrap();
 
-        let result = node
-            .execute(serde_json::json!({}), &ctx)
-            .await
-            .unwrap();
+        let result = node.execute(serde_json::json!({}), &ctx).await.unwrap();
 
         let data = &result.ports["default"];
         assert_eq!(data["_redirect"], "https://example.com");
@@ -297,10 +289,7 @@ mod tests {
         .await
         .unwrap();
 
-        let result = node
-            .execute(serde_json::json!({}), &ctx)
-            .await
-            .unwrap();
+        let result = node.execute(serde_json::json!({}), &ctx).await.unwrap();
 
         assert_eq!(result.ports["default"]["_status"], 301);
     }
@@ -339,9 +328,6 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(
-            result.ports["default"]["_redirect"],
-            "https://override.com"
-        );
+        assert_eq!(result.ports["default"]["_redirect"], "https://override.com");
     }
 }

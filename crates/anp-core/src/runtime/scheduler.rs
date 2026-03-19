@@ -132,9 +132,7 @@ pub fn schedule(graph: &AnpGraph) -> Result<ExecutionPlan, ScheduleError> {
     // Build reverse edge map: ToNodeId → [FromNodeId] (deduped)
     let mut reverse_edge_map: HashMap<String, Vec<String>> = HashMap::new();
     for edge in &graph.edges {
-        let sources = reverse_edge_map
-            .entry(edge.to_node.clone())
-            .or_default();
+        let sources = reverse_edge_map.entry(edge.to_node.clone()).or_default();
         if !sources.contains(&edge.from_node) {
             sources.push(edge.from_node.clone());
         }

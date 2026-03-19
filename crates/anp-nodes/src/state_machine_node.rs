@@ -80,18 +80,10 @@ fn evaluate_guard(context: &Value, field: &str, op: &str, value: &Value) -> bool
     match op {
         "eq" => field_value == *value,
         "neq" => field_value != *value,
-        "gt" => {
-            field_value.as_f64().unwrap_or(0.0) > value.as_f64().unwrap_or(0.0)
-        }
-        "gte" => {
-            field_value.as_f64().unwrap_or(0.0) >= value.as_f64().unwrap_or(0.0)
-        }
-        "lt" => {
-            field_value.as_f64().unwrap_or(0.0) < value.as_f64().unwrap_or(0.0)
-        }
-        "lte" => {
-            field_value.as_f64().unwrap_or(0.0) <= value.as_f64().unwrap_or(0.0)
-        }
+        "gt" => field_value.as_f64().unwrap_or(0.0) > value.as_f64().unwrap_or(0.0),
+        "gte" => field_value.as_f64().unwrap_or(0.0) >= value.as_f64().unwrap_or(0.0),
+        "lt" => field_value.as_f64().unwrap_or(0.0) < value.as_f64().unwrap_or(0.0),
+        "lte" => field_value.as_f64().unwrap_or(0.0) <= value.as_f64().unwrap_or(0.0),
         "exists" => !field_value.is_null(),
         "is_null" => field_value.is_null(),
         "contains" => {
@@ -116,8 +108,8 @@ impl NodeExecutor for StateMachineNode {
     async fn init(&mut self, config: &Value) -> NodeResult<()> {
         if let Some(op) = config.get("operation").and_then(|v| v.as_str()) {
             match op {
-                "create" | "transition" | "get_state" | "set_context" | "reset" | "can_transition"
-                | "history" | "destroy" => {
+                "create" | "transition" | "get_state" | "set_context" | "reset"
+                | "can_transition" | "history" | "destroy" => {
                     self.operation = op.to_string();
                 }
                 other => {
@@ -148,8 +140,14 @@ impl NodeExecutor for StateMachineNode {
                         from,
                         to,
                         event,
-                        guard_field: t.get("guard_field").and_then(|v| v.as_str()).map(|s| s.to_string()),
-                        guard_op: t.get("guard_op").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                        guard_field: t
+                            .get("guard_field")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string()),
+                        guard_op: t
+                            .get("guard_op")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string()),
                         guard_value: t.get("guard_value").cloned(),
                     })
                 })
@@ -453,10 +451,7 @@ mod tests {
 
         // Create machine
         let output = node
-            .execute(
-                json!({"operation": "create", "machine_id": "m1"}),
-                &ctx(),
-            )
+            .execute(json!({"operation": "create", "machine_id": "m1"}), &ctx())
             .await
             .unwrap();
         assert_eq!(output.ports["default"]["state"], "idle");
@@ -578,10 +573,7 @@ mod tests {
         .unwrap();
 
         let output = node
-            .execute(
-                json!({"operation": "history", "machine_id": "h1"}),
-                &ctx(),
-            )
+            .execute(json!({"operation": "history", "machine_id": "h1"}), &ctx())
             .await
             .unwrap();
         let history = output.ports["default"]["history"].as_array().unwrap();

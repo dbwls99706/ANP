@@ -62,9 +62,26 @@ impl NodeExecutor for ArrayNode {
             .to_string();
 
         let valid_ops = [
-            "sort", "reverse", "slice", "flatten", "unique", "find", "length", "first",
-            "last", "push", "pop", "compact", "zip", "chunk", "map_field", "pluck",
-            "index_of", "includes", "take", "skip",
+            "sort",
+            "reverse",
+            "slice",
+            "flatten",
+            "unique",
+            "find",
+            "length",
+            "first",
+            "last",
+            "push",
+            "pop",
+            "compact",
+            "zip",
+            "chunk",
+            "map_field",
+            "pluck",
+            "index_of",
+            "includes",
+            "take",
+            "skip",
         ];
         if !valid_ops.contains(&self.operation.as_str()) {
             return Err(NodeError::InvalidConfig(format!(
@@ -118,9 +135,9 @@ impl NodeExecutor for ArrayNode {
             return Ok(NodeOutput::data(serde_json::Value::Array(arr)));
         }
 
-        let arr = input.as_array().ok_or_else(|| {
-            NodeError::ExecutionFailed("input must be an array".into())
-        })?;
+        let arr = input
+            .as_array()
+            .ok_or_else(|| NodeError::ExecutionFailed("input must be an array".into()))?;
 
         let result = match self.operation.as_str() {
             "sort" => {
@@ -131,21 +148,33 @@ impl NodeExecutor for ArrayNode {
                         let a_str = value_sort_key(a);
                         let b_str = value_sort_key(b);
                         if self.order == "desc" {
-                            b_str.partial_cmp(&a_str).unwrap_or(std::cmp::Ordering::Equal)
+                            b_str
+                                .partial_cmp(&a_str)
+                                .unwrap_or(std::cmp::Ordering::Equal)
                         } else {
-                            a_str.partial_cmp(&b_str).unwrap_or(std::cmp::Ordering::Equal)
+                            a_str
+                                .partial_cmp(&b_str)
+                                .unwrap_or(std::cmp::Ordering::Equal)
                         }
                     });
                 } else {
                     // Sort by field
                     let field = self.field.clone();
                     sorted.sort_by(|a, b| {
-                        let a_val = resolve_field(a, &field).map(value_sort_key).unwrap_or_default();
-                        let b_val = resolve_field(b, &field).map(value_sort_key).unwrap_or_default();
+                        let a_val = resolve_field(a, &field)
+                            .map(value_sort_key)
+                            .unwrap_or_default();
+                        let b_val = resolve_field(b, &field)
+                            .map(value_sort_key)
+                            .unwrap_or_default();
                         if self.order == "desc" {
-                            b_val.partial_cmp(&a_val).unwrap_or(std::cmp::Ordering::Equal)
+                            b_val
+                                .partial_cmp(&a_val)
+                                .unwrap_or(std::cmp::Ordering::Equal)
                         } else {
-                            a_val.partial_cmp(&b_val).unwrap_or(std::cmp::Ordering::Equal)
+                            a_val
+                                .partial_cmp(&b_val)
+                                .unwrap_or(std::cmp::Ordering::Equal)
                         }
                     });
                 }
@@ -233,19 +262,14 @@ impl NodeExecutor for ArrayNode {
                 })
             }
             "compact" => {
-                let compacted: Vec<serde_json::Value> = arr
-                    .iter()
-                    .filter(|v| !v.is_null())
-                    .cloned()
-                    .collect();
+                let compacted: Vec<serde_json::Value> =
+                    arr.iter().filter(|v| !v.is_null()).cloned().collect();
                 serde_json::Value::Array(compacted)
             }
             "zip" => {
                 // Expects array of arrays, zips them together
-                let arrays: Vec<&Vec<serde_json::Value>> = arr
-                    .iter()
-                    .filter_map(|v| v.as_array())
-                    .collect();
+                let arrays: Vec<&Vec<serde_json::Value>> =
+                    arr.iter().filter_map(|v| v.as_array()).collect();
                 if arrays.is_empty() {
                     return Ok(NodeOutput::data(serde_json::Value::Array(vec![])));
                 }
@@ -298,7 +322,8 @@ impl NodeExecutor for ArrayNode {
                 serde_json::Value::Array(taken)
             }
             "skip" => {
-                let skipped: Vec<serde_json::Value> = arr.iter().skip(self.count).cloned().collect();
+                let skipped: Vec<serde_json::Value> =
+                    arr.iter().skip(self.count).cloned().collect();
                 serde_json::Value::Array(skipped)
             }
             _ => {
@@ -516,10 +541,7 @@ mod tests {
             {"name": "bob", "age": 25}
         ]);
         let output = node.execute(input, &ctx).await.unwrap();
-        assert_eq!(
-            output.ports["default"],
-            serde_json::json!(["alice", "bob"])
-        );
+        assert_eq!(output.ports["default"], serde_json::json!(["alice", "bob"]));
     }
 }
 

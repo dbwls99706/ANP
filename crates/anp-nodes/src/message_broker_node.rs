@@ -24,21 +24,11 @@ struct BrokerState {
     dead_letters: Vec<DeadLetter>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 struct TopicState {
     messages: Vec<BrokerMessage>,
     total_published: u64,
     total_consumed: u64,
-}
-
-impl Default for TopicState {
-    fn default() -> Self {
-        Self {
-            messages: Vec::new(),
-            total_published: 0,
-            total_consumed: 0,
-        }
-    }
 }
 
 #[derive(Clone)]
@@ -49,20 +39,20 @@ struct BrokerMessage {
     timestamp: u64,
     headers: HashMap<String, String>,
     delivery_count: u32,
-    max_retries: u32,
+    _max_retries: u32,
 }
 
 #[derive(Clone)]
 struct Subscription {
-    subscriber_id: String,
-    pattern: SubscriptionPattern,
-    filter: Option<Value>,
+    _subscriber_id: String,
+    _pattern: SubscriptionPattern,
+    _filter: Option<Value>,
 }
 
 #[derive(Clone)]
 enum SubscriptionPattern {
-    Exact(String),
-    Prefix(String),
+    Exact(#[allow(dead_code)] String),
+    Prefix(#[allow(dead_code)] String),
     All,
 }
 
@@ -105,7 +95,7 @@ impl Default for MessageBrokerNode {
     }
 }
 
-fn matches_pattern(pattern: &SubscriptionPattern, topic: &str) -> bool {
+fn _matches_pattern(pattern: &SubscriptionPattern, topic: &str) -> bool {
     match pattern {
         SubscriptionPattern::Exact(t) => t == topic,
         SubscriptionPattern::Prefix(p) => topic.starts_with(p.as_str()),
@@ -113,7 +103,7 @@ fn matches_pattern(pattern: &SubscriptionPattern, topic: &str) -> bool {
     }
 }
 
-fn matches_filter(filter: &Option<Value>, message: &Value) -> bool {
+fn _matches_filter(filter: &Option<Value>, message: &Value) -> bool {
     if let Some(f) = filter {
         if let Some(obj) = f.as_object() {
             for (key, expected) in obj {
@@ -160,10 +150,7 @@ impl NodeExecutor for MessageBrokerNode {
             let mut broker = self.broker.write().await;
             for topic in topics {
                 if let Some(name) = topic.as_str() {
-                    broker
-                        .topics
-                        .entry(name.to_string())
-                        .or_default();
+                    broker.topics.entry(name.to_string()).or_default();
                 }
             }
         }
@@ -193,7 +180,9 @@ impl NodeExecutor for MessageBrokerNode {
                     for (k, v) in h {
                         headers.insert(
                             k.clone(),
-                            v.as_str().map(|s| s.to_string()).unwrap_or_else(|| v.to_string()),
+                            v.as_str()
+                                .map(|s| s.to_string())
+                                .unwrap_or_else(|| v.to_string()),
                         );
                     }
                 }
@@ -206,7 +195,7 @@ impl NodeExecutor for MessageBrokerNode {
                     timestamp: current_timestamp(),
                     headers,
                     delivery_count: 0,
-                    max_retries,
+                    _max_retries: max_retries,
                 };
 
                 let mut broker = self.broker.write().await;
@@ -235,10 +224,7 @@ impl NodeExecutor for MessageBrokerNode {
                     .get("topic")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| NodeError::MissingInput("topic required".into()))?;
-                let count = input
-                    .get("count")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(1) as usize;
+                let count = input.get("count").and_then(|v| v.as_u64()).unwrap_or(1) as usize;
                 let subscriber_id = input
                     .get("subscriber_id")
                     .and_then(|v| v.as_str())
@@ -278,26 +264,21 @@ impl NodeExecutor for MessageBrokerNode {
                     .get("subscriber_id")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| NodeError::MissingInput("subscriber_id required".into()))?;
-                let topic_pattern = input
-                    .get("topic")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("*");
+                let topic_pattern = input.get("topic").and_then(|v| v.as_str()).unwrap_or("*");
                 let filter = input.get("filter").cloned();
 
                 let pattern = if topic_pattern == "*" {
                     SubscriptionPattern::All
                 } else if topic_pattern.ends_with('*') {
-                    SubscriptionPattern::Prefix(
-                        topic_pattern.trim_end_matches('*').to_string(),
-                    )
+                    SubscriptionPattern::Prefix(topic_pattern.trim_end_matches('*').to_string())
                 } else {
                     SubscriptionPattern::Exact(topic_pattern.to_string())
                 };
 
                 let sub = Subscription {
-                    subscriber_id: subscriber_id.to_string(),
-                    pattern,
-                    filter,
+                    _subscriber_id: subscriber_id.to_string(),
+                    _pattern: pattern,
+                    _filter: filter,
                 };
 
                 let mut broker = self.broker.write().await;
@@ -341,10 +322,7 @@ impl NodeExecutor for MessageBrokerNode {
             }
 
             "nack" => {
-                let topic = input
-                    .get("topic")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
+                let topic = input.get("topic").and_then(|v| v.as_str()).unwrap_or("");
                 let message_id = input
                     .get("message_id")
                     .and_then(|v| v.as_str())
@@ -372,7 +350,7 @@ impl NodeExecutor for MessageBrokerNode {
                             timestamp: current_timestamp(),
                             headers: HashMap::new(),
                             delivery_count,
-                            max_retries,
+                            _max_retries: max_retries,
                         },
                         reason: "max_retries_exceeded".to_string(),
                         timestamp: current_timestamp(),
@@ -392,7 +370,7 @@ impl NodeExecutor for MessageBrokerNode {
                         timestamp: current_timestamp(),
                         headers: HashMap::new(),
                         delivery_count,
-                        max_retries,
+                        _max_retries: max_retries,
                     });
                     Ok(NodeOutput::data(json!({
                         "message_id": message_id,
@@ -459,10 +437,7 @@ impl NodeExecutor for MessageBrokerNode {
                     .get("topic")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| NodeError::MissingInput("topic required".into()))?;
-                let count = input
-                    .get("count")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(1) as usize;
+                let count = input.get("count").and_then(|v| v.as_u64()).unwrap_or(1) as usize;
 
                 let broker = self.broker.read().await;
                 let messages: Vec<Value> = broker
@@ -538,21 +513,9 @@ impl NodeExecutor for MessageBrokerNode {
 
             "stats" => {
                 let broker = self.broker.read().await;
-                let total_messages: usize = broker
-                    .topics
-                    .values()
-                    .map(|s| s.messages.len())
-                    .sum();
-                let total_published: u64 = broker
-                    .topics
-                    .values()
-                    .map(|s| s.total_published)
-                    .sum();
-                let total_consumed: u64 = broker
-                    .topics
-                    .values()
-                    .map(|s| s.total_consumed)
-                    .sum();
+                let total_messages: usize = broker.topics.values().map(|s| s.messages.len()).sum();
+                let total_published: u64 = broker.topics.values().map(|s| s.total_published).sum();
+                let total_consumed: u64 = broker.topics.values().map(|s| s.total_consumed).sum();
 
                 Ok(NodeOutput::data(json!({
                     "topic_count": broker.topics.len(),

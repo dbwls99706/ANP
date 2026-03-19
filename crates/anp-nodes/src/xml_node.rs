@@ -150,10 +150,11 @@ fn extract_text_input(input: &serde_json::Value, field: &str) -> Option<String> 
         Some(s.to_string())
     } else if let Some(s) = input.get(field).and_then(|v| v.as_str()) {
         Some(s.to_string())
-    } else if let Some(s) = input.get("data").and_then(|v| v.as_str()) {
-        Some(s.to_string())
     } else {
-        None
+        input
+            .get("data")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
     }
 }
 

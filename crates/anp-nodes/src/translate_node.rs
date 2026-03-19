@@ -182,10 +182,7 @@ impl NodeExecutor for TranslateNode {
         _ctx: &ExecutionContext,
     ) -> NodeResult<NodeOutput> {
         let text = self.resolve_field(&input).ok_or_else(|| {
-            NodeError::ExecutionFailed(format!(
-                "field '{}' not found or not a string",
-                self.field
-            ))
+            NodeError::ExecutionFailed(format!("field '{}' not found or not a string", self.field))
         })?;
 
         let result = match self.operation.as_str() {

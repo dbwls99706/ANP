@@ -165,10 +165,7 @@ mod tests {
             .await
             .unwrap();
         let ctx = ExecutionContext::new();
-        let output = node
-            .execute(serde_json::Value::Null, &ctx)
-            .await
-            .unwrap();
+        let output = node.execute(serde_json::Value::Null, &ctx).await.unwrap();
         let data = &output.ports["default"];
         assert_eq!(data["iteration"], 0);
         assert_eq!(data["state"], "running");
@@ -250,18 +247,14 @@ mod tests {
     #[tokio::test]
     async fn test_invalid_operation() {
         let mut node = AgentLoopNode::new();
-        let result = node
-            .init(&serde_json::json!({"operation": "run"}))
-            .await;
+        let result = node.init(&serde_json::json!({"operation": "run"})).await;
         assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn test_zero_max_iterations() {
         let mut node = AgentLoopNode::new();
-        let result = node
-            .init(&serde_json::json!({"max_iterations": 0}))
-            .await;
+        let result = node.init(&serde_json::json!({"max_iterations": 0})).await;
         assert!(result.is_err());
     }
 

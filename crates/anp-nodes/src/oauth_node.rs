@@ -26,7 +26,7 @@ pub struct OAuthNode {
 #[derive(Clone)]
 struct TokenEntry {
     access_token: String,
-    refresh_token: Option<String>,
+    _refresh_token: Option<String>,
     expires_at: u64,
     token_type: String,
     scopes: Vec<String>,
@@ -78,7 +78,9 @@ fn url_encode_simple(s: &str) -> String {
 
 fn generate_state() -> String {
     let now = current_timestamp();
-    let random_part = now.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+    let random_part = now
+        .wrapping_mul(6364136223846793005)
+        .wrapping_add(1442695040888963407);
     format!("{:016x}", random_part)
 }
 
@@ -89,7 +91,9 @@ fn generate_pkce_verifier() -> String {
     let chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
     let chars_bytes = chars.as_bytes();
     for _ in 0..43 {
-        state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        state = state
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         let idx = (state >> 33) as usize % chars_bytes.len();
         verifier.push(chars_bytes[idx] as char);
     }
@@ -114,8 +118,16 @@ fn base64url_encode(data: &[u8]) -> String {
     let mut i = 0;
     while i < data.len() {
         let b0 = data[i] as u32;
-        let b1 = if i + 1 < data.len() { data[i + 1] as u32 } else { 0 };
-        let b2 = if i + 2 < data.len() { data[i + 2] as u32 } else { 0 };
+        let b1 = if i + 1 < data.len() {
+            data[i + 1] as u32
+        } else {
+            0
+        };
+        let b2 = if i + 2 < data.len() {
+            data[i + 2] as u32
+        } else {
+            0
+        };
         let triple = (b0 << 16) | (b1 << 8) | b2;
         result.push(CHARS[((triple >> 18) & 0x3F) as usize] as char);
         result.push(CHARS[((triple >> 12) & 0x3F) as usize] as char);
@@ -160,7 +172,8 @@ impl NodeExecutor for OAuthNode {
             match p {
                 "google" => {
                     if self.authorize_url.is_empty() {
-                        self.authorize_url = "https://accounts.google.com/o/oauth2/v2/auth".to_string();
+                        self.authorize_url =
+                            "https://accounts.google.com/o/oauth2/v2/auth".to_string();
                     }
                     if self.token_url.is_empty() {
                         self.token_url = "https://oauth2.googleapis.com/token".to_string();
@@ -176,10 +189,14 @@ impl NodeExecutor for OAuthNode {
                 }
                 "microsoft" => {
                     if self.authorize_url.is_empty() {
-                        self.authorize_url = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize".to_string();
+                        self.authorize_url =
+                            "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
+                                .to_string();
                     }
                     if self.token_url.is_empty() {
-                        self.token_url = "https://login.microsoftonline.com/common/oauth2/v2.0/token".to_string();
+                        self.token_url =
+                            "https://login.microsoftonline.com/common/oauth2/v2.0/token"
+                                .to_string();
                     }
                 }
                 _ => {}
@@ -385,7 +402,7 @@ impl NodeExecutor for OAuthNode {
                         "expired": entry.expires_at <= now,
                         "token_type": entry.token_type,
                         "scopes": entry.scopes,
-                        "expires_in": if entry.expires_at > now { entry.expires_at - now } else { 0 },
+                        "expires_in": entry.expires_at.saturating_sub(now),
                     })))
                 } else {
                     Ok(NodeOutput::data(json!({
@@ -437,9 +454,7 @@ mod tests {
         .unwrap();
 
         let output = node.execute(json!({}), &ctx()).await.unwrap();
-        let url = output.ports["default"]["authorize_url"]
-            .as_str()
-            .unwrap();
+        let url = output.ports["default"]["authorize_url"].as_str().unwrap();
         assert!(url.starts_with("https://auth.example.com/authorize?"));
         assert!(url.contains("client_id=test-client-id"));
         assert!(url.contains("response_type=code"));
@@ -495,7 +510,10 @@ mod tests {
 
         let output = node.execute(json!({}), &ctx()).await.unwrap();
         let data = &output.ports["default"];
-        assert!(data["authorize_url"].as_str().unwrap().contains("code_challenge="));
+        assert!(data["authorize_url"]
+            .as_str()
+            .unwrap()
+            .contains("code_challenge="));
         assert!(data["code_verifier"].as_str().is_some());
         assert!(data["code_challenge"].as_str().is_some());
     }

@@ -75,9 +75,7 @@ impl NodeExecutor for BatchNode {
             }
             self.batch_size = size as usize;
         } else {
-            return Err(NodeError::InvalidConfig(
-                "batch_size is required".into(),
-            ));
+            return Err(NodeError::InvalidConfig("batch_size is required".into()));
         }
 
         if let Some(field) = config.get("flush_field").and_then(|v| v.as_str()) {
@@ -94,10 +92,7 @@ impl NodeExecutor for BatchNode {
     ) -> NodeResult<NodeOutput> {
         // Check if flush is triggered
         let flush = if let Some(ref field) = self.flush_field {
-            input
-                .get(field)
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false)
+            input.get(field).and_then(|v| v.as_bool()).unwrap_or(false)
         } else {
             false
         };

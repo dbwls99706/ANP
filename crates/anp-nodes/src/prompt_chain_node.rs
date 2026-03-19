@@ -196,7 +196,10 @@ mod tests {
         .unwrap();
         let ctx = ExecutionContext::new();
         let output = node
-            .execute(serde_json::json!({"name": "Alice", "place": "Wonderland"}), &ctx)
+            .execute(
+                serde_json::json!({"name": "Alice", "place": "Wonderland"}),
+                &ctx,
+            )
             .await
             .unwrap();
         let data = &output.ports["default"];
@@ -279,12 +282,12 @@ mod tests {
         .await
         .unwrap();
         let ctx = ExecutionContext::new();
-        let output = node
-            .execute(serde_json::json!({}), &ctx)
-            .await
-            .unwrap();
+        let output = node.execute(serde_json::json!({}), &ctx).await.unwrap();
         // Unresolved variables remain as-is
-        assert_eq!(output.ports["default"]["final_output"], "Hello {{unknown}}!");
+        assert_eq!(
+            output.ports["default"]["final_output"],
+            "Hello {{unknown}}!"
+        );
     }
 
     #[tokio::test]

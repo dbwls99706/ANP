@@ -55,10 +55,7 @@ fn html_escape(s: &str) -> String {
 }
 
 fn path_to_breadcrumbs(path: &str) -> Vec<BreadcrumbItem> {
-    let segments: Vec<&str> = path
-        .split('/')
-        .filter(|s| !s.is_empty())
-        .collect();
+    let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
 
     let mut items = Vec::new();
     let mut accumulated = String::new();
@@ -174,10 +171,7 @@ impl NodeExecutor for BreadcrumbNode {
         for (i, item) in all_items.iter().enumerate() {
             if i == all_items.len() - 1 {
                 // Last item: plain text (current page)
-                parts.push(format!(
-                    "<span>{}</span>",
-                    html_escape(&item.label)
-                ));
+                parts.push(format!("<span>{}</span>", html_escape(&item.label)));
             } else {
                 parts.push(format!(
                     "<a href=\"{}\">{}</a>",

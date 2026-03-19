@@ -81,12 +81,7 @@ fn find_closing_braces(chars: &[char], start: usize) -> Option<usize> {
     if len < 2 {
         return None;
     }
-    for i in start..len - 1 {
-        if chars[i] == '}' && chars[i + 1] == '}' {
-            return Some(i);
-        }
-    }
-    None
+    (start..len - 1).find(|&i| chars[i] == '}' && chars[i + 1] == '}')
 }
 
 fn resolve_path(value: &serde_json::Value, path: &str) -> Option<String> {

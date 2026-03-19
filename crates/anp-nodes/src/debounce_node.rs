@@ -74,14 +74,14 @@ impl NodeExecutor for DebounceNode {
         let mut state = self.state.write().await;
 
         match state.last_time {
-            Some(last_time) if now.duration_since(last_time).as_millis() < self.delay_ms as u128 => {
+            Some(last_time)
+                if now.duration_since(last_time).as_millis() < self.delay_ms as u128 =>
+            {
                 // Within delay window — store and skip
                 state.last_input = Some(input);
                 state.last_time = Some(now);
-                Ok(NodeOutput::skip().with_log(format!(
-                    "debounced (within {}ms window)",
-                    self.delay_ms
-                )))
+                Ok(NodeOutput::skip()
+                    .with_log(format!("debounced (within {}ms window)", self.delay_ms)))
             }
             _ => {
                 // Outside delay window (or first call) — emit the input
@@ -95,10 +95,8 @@ impl NodeExecutor for DebounceNode {
                 state.last_time = Some(now);
                 state.last_input = None;
 
-                Ok(NodeOutput::data(output).with_log(format!(
-                    "emitted after {}ms delay window",
-                    self.delay_ms
-                )))
+                Ok(NodeOutput::data(output)
+                    .with_log(format!("emitted after {}ms delay window", self.delay_ms)))
             }
         }
     }

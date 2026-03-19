@@ -42,10 +42,11 @@ impl StringNode {
 fn extract_text(input: &serde_json::Value) -> Option<String> {
     if let Some(s) = input.as_str() {
         Some(s.to_string())
-    } else if let Some(s) = input.get("text").and_then(|v| v.as_str()) {
-        Some(s.to_string())
     } else {
-        None
+        input
+            .get("text")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
     }
 }
 
@@ -67,9 +68,22 @@ impl NodeExecutor for StringNode {
             .to_string();
 
         let valid_ops = [
-            "split", "join", "trim", "replace", "uppercase", "lowercase", "slice",
-            "pad_start", "pad_end", "repeat", "contains", "starts_with", "ends_with",
-            "length", "reverse", "substring",
+            "split",
+            "join",
+            "trim",
+            "replace",
+            "uppercase",
+            "lowercase",
+            "slice",
+            "pad_start",
+            "pad_end",
+            "repeat",
+            "contains",
+            "starts_with",
+            "ends_with",
+            "length",
+            "reverse",
+            "substring",
         ];
         if !valid_ops.contains(&self.operation.as_str()) {
             return Err(NodeError::InvalidConfig(format!(
@@ -181,7 +195,7 @@ impl NodeExecutor for StringNode {
                     serde_json::Value::String(text)
                 } else {
                     let padding: String =
-                        std::iter::repeat(pad_char).take(self.length - current_len).collect();
+                        std::iter::repeat_n(pad_char, self.length - current_len).collect();
                     serde_json::Value::String(format!("{}{}", padding, text))
                 }
             }
@@ -192,7 +206,7 @@ impl NodeExecutor for StringNode {
                     serde_json::Value::String(text)
                 } else {
                     let padding: String =
-                        std::iter::repeat(pad_char).take(self.length - current_len).collect();
+                        std::iter::repeat_n(pad_char, self.length - current_len).collect();
                     serde_json::Value::String(format!("{}{}", text, padding))
                 }
             }

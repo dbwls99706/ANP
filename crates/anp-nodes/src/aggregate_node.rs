@@ -64,11 +64,13 @@ fn resolve_dot_path(value: &serde_json::Value, path: &str) -> Option<serde_json:
     Some(current.clone())
 }
 
-fn find_input_array(input: &serde_json::Value, input_field: &Option<String>) -> Option<Vec<serde_json::Value>> {
+fn find_input_array(
+    input: &serde_json::Value,
+    input_field: &Option<String>,
+) -> Option<Vec<serde_json::Value>> {
     // If input_field is specified, use it
     if let Some(ref field) = input_field {
-        return resolve_dot_path(input, field)
-            .and_then(|v| v.as_array().cloned());
+        return resolve_dot_path(input, field).and_then(|v| v.as_array().cloned());
     }
 
     // Try common field names
@@ -104,9 +106,7 @@ impl NodeExecutor for AggregateNode {
         let aggs = config
             .get("aggregations")
             .and_then(|v| v.as_array())
-            .ok_or_else(|| {
-                NodeError::InvalidConfig("'aggregations' array is required".into())
-            })?;
+            .ok_or_else(|| NodeError::InvalidConfig("'aggregations' array is required".into()))?;
 
         if aggs.is_empty() {
             return Err(NodeError::InvalidConfig(
@@ -191,17 +191,11 @@ impl NodeExecutor for AggregateNode {
                     serde_json::json!(values.len())
                 }
                 "sum" => {
-                    let sum: f64 = values
-                        .iter()
-                        .filter_map(|v| v.as_f64())
-                        .sum();
+                    let sum: f64 = values.iter().filter_map(|v| v.as_f64()).sum();
                     serde_json::json!(sum)
                 }
                 "avg" => {
-                    let nums: Vec<f64> = values
-                        .iter()
-                        .filter_map(|v| v.as_f64())
-                        .collect();
+                    let nums: Vec<f64> = values.iter().filter_map(|v| v.as_f64()).collect();
                     if nums.is_empty() {
                         serde_json::Value::Null
                     } else {
@@ -209,32 +203,24 @@ impl NodeExecutor for AggregateNode {
                         serde_json::json!(avg)
                     }
                 }
-                "min" => {
-                    values
-                        .iter()
-                        .filter_map(|v| v.as_f64())
-                        .fold(None, |min: Option<f64>, x| {
-                            Some(min.map_or(x, |m| m.min(x)))
-                        })
-                        .map(|v| serde_json::json!(v))
-                        .unwrap_or(serde_json::Value::Null)
-                }
-                "max" => {
-                    values
-                        .iter()
-                        .filter_map(|v| v.as_f64())
-                        .fold(None, |max: Option<f64>, x| {
-                            Some(max.map_or(x, |m| m.max(x)))
-                        })
-                        .map(|v| serde_json::json!(v))
-                        .unwrap_or(serde_json::Value::Null)
-                }
-                "first" => {
-                    values.first().cloned().unwrap_or(serde_json::Value::Null)
-                }
-                "last" => {
-                    values.last().cloned().unwrap_or(serde_json::Value::Null)
-                }
+                "min" => values
+                    .iter()
+                    .filter_map(|v| v.as_f64())
+                    .fold(None, |min: Option<f64>, x| {
+                        Some(min.map_or(x, |m| m.min(x)))
+                    })
+                    .map(|v| serde_json::json!(v))
+                    .unwrap_or(serde_json::Value::Null),
+                "max" => values
+                    .iter()
+                    .filter_map(|v| v.as_f64())
+                    .fold(None, |max: Option<f64>, x| {
+                        Some(max.map_or(x, |m| m.max(x)))
+                    })
+                    .map(|v| serde_json::json!(v))
+                    .unwrap_or(serde_json::Value::Null),
+                "first" => values.first().cloned().unwrap_or(serde_json::Value::Null),
+                "last" => values.last().cloned().unwrap_or(serde_json::Value::Null),
                 "concat" => {
                     let strings: Vec<String> = values
                         .iter()

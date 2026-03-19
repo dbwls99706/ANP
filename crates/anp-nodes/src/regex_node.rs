@@ -28,10 +28,11 @@ impl RegexNode {
 fn extract_text(input: &serde_json::Value) -> Option<String> {
     if let Some(s) = input.as_str() {
         Some(s.to_string())
-    } else if let Some(s) = input.get("text").and_then(|v| v.as_str()) {
-        Some(s.to_string())
     } else {
-        None
+        input
+            .get("text")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
     }
 }
 
@@ -257,7 +258,11 @@ mod simple_regex {
                 len,
                 Box::new(move |c: char| {
                     let found = char_set.contains(&c);
-                    if negated { !found } else { found }
+                    if negated {
+                        !found
+                    } else {
+                        found
+                    }
                 }),
             )
         } else if pat[pi] == '.' {
@@ -406,7 +411,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_replace_literal() {
-        let node = make_node(json!({"pattern": "world", "operation": "replace", "replacement": "rust"})).await;
+        let node =
+            make_node(json!({"pattern": "world", "operation": "replace", "replacement": "rust"}))
+                .await;
         let ctx = ExecutionContext::new();
         let output = node.execute(json!("hello world"), &ctx).await.unwrap();
         assert_eq!(output.ports["default"], "hello rust");
@@ -414,7 +421,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_replace_pattern() {
-        let node = make_node(json!({"pattern": "\\d+", "operation": "replace", "replacement": "N"})).await;
+        let node =
+            make_node(json!({"pattern": "\\d+", "operation": "replace", "replacement": "N"})).await;
         let ctx = ExecutionContext::new();
         let output = node.execute(json!("a1b2c3"), &ctx).await.unwrap();
         assert_eq!(output.ports["default"], "aNbNcN");

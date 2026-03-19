@@ -25,16 +25,41 @@ impl SentimentNode {
         Self {
             field: "text".to_string(),
             positive_words: vec![
-                "happy", "good", "great", "excellent", "love", "wonderful", "amazing",
-                "fantastic", "beautiful", "perfect", "best", "awesome", "nice", "brilliant",
+                "happy",
+                "good",
+                "great",
+                "excellent",
+                "love",
+                "wonderful",
+                "amazing",
+                "fantastic",
+                "beautiful",
+                "perfect",
+                "best",
+                "awesome",
+                "nice",
+                "brilliant",
                 "superb",
             ]
             .into_iter()
             .map(String::from)
             .collect(),
             negative_words: vec![
-                "bad", "terrible", "awful", "hate", "horrible", "worst", "ugly", "poor",
-                "stupid", "boring", "annoying", "disgusting", "dreadful", "pathetic", "useless",
+                "bad",
+                "terrible",
+                "awful",
+                "hate",
+                "horrible",
+                "worst",
+                "ugly",
+                "poor",
+                "stupid",
+                "boring",
+                "annoying",
+                "disgusting",
+                "dreadful",
+                "pathetic",
+                "useless",
             ]
             .into_iter()
             .map(String::from)
@@ -94,14 +119,9 @@ impl NodeExecutor for SentimentNode {
         input: serde_json::Value,
         _ctx: &ExecutionContext,
     ) -> NodeResult<NodeOutput> {
-        let text = self
-            .resolve_field(&input)
-            .ok_or_else(|| {
-                NodeError::ExecutionFailed(format!(
-                    "field '{}' not found or not a string",
-                    self.field
-                ))
-            })?;
+        let text = self.resolve_field(&input).ok_or_else(|| {
+            NodeError::ExecutionFailed(format!("field '{}' not found or not a string", self.field))
+        })?;
 
         let words = Self::extract_words(text);
         let word_count = words.len();
@@ -190,10 +210,7 @@ mod tests {
         node.init(&serde_json::json!({})).await.unwrap();
         let ctx = ExecutionContext::new();
         let output = node
-            .execute(
-                serde_json::json!({"text": "The cat sat on the mat"}),
-                &ctx,
-            )
+            .execute(serde_json::json!({"text": "The cat sat on the mat"}), &ctx)
             .await
             .unwrap();
         let data = &output.ports["default"];

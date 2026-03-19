@@ -78,10 +78,7 @@ fn evaluate_condition(row: &Value, condition: &Value) -> bool {
         .get("field")
         .and_then(|v| v.as_str())
         .unwrap_or("");
-    let op = condition
-        .get("op")
-        .and_then(|v| v.as_str())
-        .unwrap_or("eq");
+    let op = condition.get("op").and_then(|v| v.as_str()).unwrap_or("eq");
     let value = condition.get("value").cloned().unwrap_or(Value::Null);
 
     let field_value = get_field(row, field);
@@ -185,10 +182,7 @@ fn aggregate_values(values: &[Value], func: &str) -> Value {
     match func.to_lowercase().as_str() {
         "count" => json!(values.len()),
         "sum" => {
-            let sum: f64 = values
-                .iter()
-                .filter_map(|v| v.as_f64())
-                .sum();
+            let sum: f64 = values.iter().filter_map(|v| v.as_f64()).sum();
             json!(sum)
         }
         "avg" => {
@@ -270,9 +264,7 @@ impl NodeExecutor for SqlQueryNode {
                 let rows = tables
                     .get(table_name)
                     .cloned()
-                    .or_else(|| {
-                        input.get("data").and_then(|v| v.as_array()).cloned()
-                    })
+                    .or_else(|| input.get("data").and_then(|v| v.as_array()).cloned())
                     .unwrap_or_default();
 
                 // WHERE
@@ -286,10 +278,7 @@ impl NodeExecutor for SqlQueryNode {
 
                 // JOIN
                 if let Some(join) = input.get("join") {
-                    let join_table = join
-                        .get("table")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("");
+                    let join_table = join.get("table").and_then(|v| v.as_str()).unwrap_or("");
                     let on_left = join.get("on_left").and_then(|v| v.as_str()).unwrap_or("");
                     let on_right = join.get("on_right").and_then(|v| v.as_str()).unwrap_or("");
                     let join_type = join.get("type").and_then(|v| v.as_str()).unwrap_or("inner");
@@ -304,7 +293,9 @@ impl NodeExecutor for SqlQueryNode {
                             let right_val = get_field(right, on_right);
                             if left_val == right_val {
                                 let mut merged = left.clone();
-                                if let (Some(l), Some(r)) = (merged.as_object_mut(), right.as_object()) {
+                                if let (Some(l), Some(r)) =
+                                    (merged.as_object_mut(), right.as_object())
+                                {
                                     for (k, v) in r {
                                         l.entry(k.clone()).or_insert_with(|| v.clone());
                                     }
@@ -342,18 +333,18 @@ impl NodeExecutor for SqlQueryNode {
 
                         if let Some(aggs) = aggregates {
                             for agg in aggs {
-                                let func = agg.get("func").and_then(|v| v.as_str()).unwrap_or("count");
-                                let field = agg.get("field").and_then(|v| v.as_str()).unwrap_or("*");
+                                let func =
+                                    agg.get("func").and_then(|v| v.as_str()).unwrap_or("count");
+                                let field =
+                                    agg.get("field").and_then(|v| v.as_str()).unwrap_or("*");
                                 let default_alias = format!("{}_{}", func, field);
                                 let alias = agg
                                     .get("as")
                                     .and_then(|v| v.as_str())
                                     .unwrap_or(&default_alias);
 
-                                let values: Vec<Value> = group_rows
-                                    .iter()
-                                    .map(|r| get_field(r, field))
-                                    .collect();
+                                let values: Vec<Value> =
+                                    group_rows.iter().map(|r| get_field(r, field)).collect();
                                 row[alias] = aggregate_values(&values, func);
                             }
                         }

@@ -118,18 +118,15 @@ impl NodeExecutor for QueueNode {
 
         match op {
             "enqueue" => {
-                let value = input
-                    .get("value")
-                    .cloned()
-                    .unwrap_or_else(|| {
-                        // If no explicit "value" field, use the entire input minus control fields
-                        let mut data = input.clone();
-                        if let Some(obj) = data.as_object_mut() {
-                            obj.remove("operation");
-                            obj.remove("queue_name");
-                        }
-                        data
-                    });
+                let value = input.get("value").cloned().unwrap_or_else(|| {
+                    // If no explicit "value" field, use the entire input minus control fields
+                    let mut data = input.clone();
+                    if let Some(obj) = data.as_object_mut() {
+                        obj.remove("operation");
+                        obj.remove("queue_name");
+                    }
+                    data
+                });
 
                 let mut queues = self.queues.write().await;
                 let queue = queues.entry(queue_name.clone()).or_default();
@@ -362,7 +359,9 @@ mod tests {
     async fn test_max_size() {
         let mut node = QueueNode::new();
         let ctx = ExecutionContext::new();
-        node.init(&serde_json::json!({"max_size": 2})).await.unwrap();
+        node.init(&serde_json::json!({"max_size": 2}))
+            .await
+            .unwrap();
 
         node.execute(
             serde_json::json!({"operation": "enqueue", "value": 1}),

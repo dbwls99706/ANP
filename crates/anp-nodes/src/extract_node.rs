@@ -50,7 +50,9 @@ impl ExtractNode {
     fn extract_emails(text: &str) -> Vec<String> {
         text.split_whitespace()
             .filter(|token| {
-                let t = token.trim_matches(|c: char| !c.is_alphanumeric() && c != '@' && c != '.' && c != '_' && c != '-' && c != '+');
+                let t = token.trim_matches(|c: char| {
+                    !c.is_alphanumeric() && c != '@' && c != '.' && c != '_' && c != '-' && c != '+'
+                });
                 if let Some(at_pos) = t.find('@') {
                     let before = &t[..at_pos];
                     let after = &t[at_pos + 1..];
@@ -59,7 +61,12 @@ impl ExtractNode {
                     false
                 }
             })
-            .map(|t| t.trim_matches(|c: char| !c.is_alphanumeric() && c != '@' && c != '.' && c != '_' && c != '-' && c != '+').to_string())
+            .map(|t| {
+                t.trim_matches(|c: char| {
+                    !c.is_alphanumeric() && c != '@' && c != '.' && c != '_' && c != '-' && c != '+'
+                })
+                .to_string()
+            })
             .collect()
     }
 
@@ -197,10 +204,7 @@ impl NodeExecutor for ExtractNode {
         _ctx: &ExecutionContext,
     ) -> NodeResult<NodeOutput> {
         let text = self.resolve_field(&input).ok_or_else(|| {
-            NodeError::ExecutionFailed(format!(
-                "field '{}' not found or not a string",
-                self.field
-            ))
+            NodeError::ExecutionFailed(format!("field '{}' not found or not a string", self.field))
         })?;
 
         let mut result = serde_json::Map::new();
@@ -247,7 +251,10 @@ impl NodeExecutor for ExtractNode {
             }
         }
 
-        result.insert("extracted_count".to_string(), serde_json::json!(total_count));
+        result.insert(
+            "extracted_count".to_string(),
+            serde_json::json!(total_count),
+        );
         Ok(NodeOutput::data(serde_json::Value::Object(result)))
     }
 }

@@ -316,8 +316,7 @@ async fn handle_request(
             if let Some(content_type) = result.get("_content_type").and_then(|v| v.as_str()) {
                 // Handle 304 Not Modified (ETag match from static_file)
                 if result.get("_status").and_then(|v| v.as_u64()) == Some(304) {
-                    let mut response =
-                        axum::response::Response::new(axum::body::Body::empty());
+                    let mut response = axum::response::Response::new(axum::body::Body::empty());
                     *response.status_mut() = StatusCode::NOT_MODIFIED;
                     if let Some(etag) = result.get("_etag").and_then(|v| v.as_str()) {
                         if let Ok(val) = HeaderValue::from_str(etag) {

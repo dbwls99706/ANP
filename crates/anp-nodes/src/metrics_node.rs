@@ -149,10 +149,7 @@ impl NodeExecutor for MetricsNode {
         match self.operation.as_str() {
             "increment" => {
                 let name = self.metric_name.as_ref().unwrap();
-                let value = input
-                    .get("value")
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(1.0);
+                let value = input.get("value").and_then(|v| v.as_f64()).unwrap_or(1.0);
 
                 let mut metrics = self.metrics.write().await;
                 let entry = metrics
@@ -178,10 +175,7 @@ impl NodeExecutor for MetricsNode {
             }
             "decrement" => {
                 let name = self.metric_name.as_ref().unwrap();
-                let value = input
-                    .get("value")
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(1.0);
+                let value = input.get("value").and_then(|v| v.as_f64()).unwrap_or(1.0);
 
                 let mut metrics = self.metrics.write().await;
                 let entry = metrics
@@ -207,12 +201,9 @@ impl NodeExecutor for MetricsNode {
             }
             "set" => {
                 let name = self.metric_name.as_ref().unwrap();
-                let value = input
-                    .get("value")
-                    .and_then(|v| v.as_f64())
-                    .ok_or_else(|| {
-                        NodeError::ExecutionFailed("'value' field required for set".into())
-                    })?;
+                let value = input.get("value").and_then(|v| v.as_f64()).ok_or_else(|| {
+                    NodeError::ExecutionFailed("'value' field required for set".into())
+                })?;
 
                 let mut metrics = self.metrics.write().await;
                 metrics.insert(name.clone(), MetricData::Gauge(value));
@@ -229,25 +220,22 @@ impl NodeExecutor for MetricsNode {
                 let metrics = self.metrics.read().await;
 
                 match metrics.get(name) {
-                    Some(MetricData::Counter(v)) => {
-                        Ok(NodeOutput::data(serde_json::json!({
-                            "metric": name,
-                            "type": "counter",
-                            "value": *v,
-                            "operation": "get",
-                        })))
-                    }
-                    Some(MetricData::Gauge(v)) => {
-                        Ok(NodeOutput::data(serde_json::json!({
-                            "metric": name,
-                            "type": "gauge",
-                            "value": *v,
-                            "operation": "get",
-                        })))
-                    }
+                    Some(MetricData::Counter(v)) => Ok(NodeOutput::data(serde_json::json!({
+                        "metric": name,
+                        "type": "counter",
+                        "value": *v,
+                        "operation": "get",
+                    }))),
+                    Some(MetricData::Gauge(v)) => Ok(NodeOutput::data(serde_json::json!({
+                        "metric": name,
+                        "type": "gauge",
+                        "value": *v,
+                        "operation": "get",
+                    }))),
                     Some(MetricData::Histogram(values)) => {
                         let mut sorted = values.clone();
-                        sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                        sorted
+                            .sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
                         let count = sorted.len();
                         let sum: f64 = sorted.iter().sum();
                         let avg = if count > 0 { sum / count as f64 } else { 0.0 };
@@ -271,25 +259,20 @@ impl NodeExecutor for MetricsNode {
                             "operation": "get",
                         })))
                     }
-                    None => {
-                        Ok(NodeOutput::data(serde_json::json!({
-                            "metric": name,
-                            "type": null,
-                            "value": null,
-                            "operation": "get",
-                            "found": false,
-                        })))
-                    }
+                    None => Ok(NodeOutput::data(serde_json::json!({
+                        "metric": name,
+                        "type": null,
+                        "value": null,
+                        "operation": "get",
+                        "found": false,
+                    }))),
                 }
             }
             "record" => {
                 let name = self.metric_name.as_ref().unwrap();
-                let value = input
-                    .get("value")
-                    .and_then(|v| v.as_f64())
-                    .ok_or_else(|| {
-                        NodeError::ExecutionFailed("'value' field required for record".into())
-                    })?;
+                let value = input.get("value").and_then(|v| v.as_f64()).ok_or_else(|| {
+                    NodeError::ExecutionFailed("'value' field required for record".into())
+                })?;
 
                 let mut metrics = self.metrics.write().await;
                 let entry = metrics
@@ -392,10 +375,7 @@ mod tests {
         .await
         .unwrap();
 
-        let r1 = node
-            .execute(serde_json::json!({}), &ctx())
-            .await
-            .unwrap();
+        let r1 = node.execute(serde_json::json!({}), &ctx()).await.unwrap();
         let out = r1.ports.get("default").unwrap();
         assert_eq!(out["value"], 1.0);
         assert_eq!(out["metric"], "requests");
@@ -543,10 +523,7 @@ mod tests {
         .await
         .unwrap();
 
-        let r = node
-            .execute(serde_json::json!({}), &ctx())
-            .await
-            .unwrap();
+        let r = node.execute(serde_json::json!({}), &ctx()).await.unwrap();
         let out = r.ports.get("default").unwrap();
         assert_eq!(out["found"], false);
     }

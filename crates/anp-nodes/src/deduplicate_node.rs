@@ -76,9 +76,7 @@ impl NodeExecutor for DeduplicateNode {
         self.key_field = config
             .get("key_field")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| {
-                NodeError::InvalidConfig("'key_field' is required".to_string())
-            })?
+            .ok_or_else(|| NodeError::InvalidConfig("'key_field' is required".to_string()))?
             .to_string();
 
         if let Some(window) = config.get("window_size").and_then(|v| v.as_u64()) {
@@ -103,10 +101,7 @@ impl NodeExecutor for DeduplicateNode {
         _ctx: &ExecutionContext,
     ) -> NodeResult<NodeOutput> {
         let key_value = resolve_field(&input, &self.key_field).ok_or_else(|| {
-            NodeError::ExecutionFailed(format!(
-                "key field '{}' not found in input",
-                self.key_field
-            ))
+            NodeError::ExecutionFailed(format!("key field '{}' not found in input", self.key_field))
         })?;
 
         let now = now_ms();

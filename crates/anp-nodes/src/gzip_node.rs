@@ -37,8 +37,16 @@ fn to_base64(data: &[u8]) -> String {
     let mut i = 0;
     while i < data.len() {
         let b0 = data[i] as u32;
-        let b1 = if i + 1 < data.len() { data[i + 1] as u32 } else { 0 };
-        let b2 = if i + 2 < data.len() { data[i + 2] as u32 } else { 0 };
+        let b1 = if i + 1 < data.len() {
+            data[i + 1] as u32
+        } else {
+            0
+        };
+        let b2 = if i + 2 < data.len() {
+            data[i + 2] as u32
+        } else {
+            0
+        };
         let triple = (b0 << 16) | (b1 << 8) | b2;
         result.push(CHARS[((triple >> 18) & 0x3F) as usize] as char);
         result.push(CHARS[((triple >> 12) & 0x3F) as usize] as char);
@@ -59,8 +67,11 @@ fn to_base64(data: &[u8]) -> String {
 
 fn from_base64(s: &str) -> Result<Vec<u8>, &'static str> {
     let mut result = Vec::new();
-    let bytes: Vec<u8> = s.bytes().filter(|&b| b != b'\n' && b != b'\r' && b != b' ').collect();
-    if bytes.len() % 4 != 0 {
+    let bytes: Vec<u8> = s
+        .bytes()
+        .filter(|&b| b != b'\n' && b != b'\r' && b != b' ')
+        .collect();
+    if !bytes.len().is_multiple_of(4) {
         return Err("invalid base64 length");
     }
     fn decode_char(c: u8) -> Result<u8, &'static str> {
@@ -151,8 +162,7 @@ impl NodeExecutor for GzipNode {
                     .and_then(|v| v.as_u64())
                     .unwrap_or(self.level as u64) as u32;
 
-                let mut encoder =
-                    GzEncoder::new(data.as_bytes(), Compression::new(level));
+                let mut encoder = GzEncoder::new(data.as_bytes(), Compression::new(level));
                 let mut compressed = Vec::new();
                 encoder.read_to_end(&mut compressed).map_err(|e| {
                     NodeError::ExecutionFailed(format!("compression failed: {}", e))
@@ -186,9 +196,8 @@ impl NodeExecutor for GzipNode {
                         NodeError::MissingInput("compressed or data field required".into())
                     })?;
 
-                let compressed = from_base64(encoded).map_err(|e| {
-                    NodeError::ExecutionFailed(format!("invalid base64: {}", e))
-                })?;
+                let compressed = from_base64(encoded)
+                    .map_err(|e| NodeError::ExecutionFailed(format!("invalid base64: {}", e)))?;
 
                 let mut decoder = GzDecoder::new(&compressed[..]);
                 let mut decompressed = String::new();
@@ -229,9 +238,7 @@ mod tests {
             .execute(json!({"data": original}), &ctx())
             .await
             .unwrap();
-        let compressed = comp_out.ports["default"]["compressed"]
-            .as_str()
-            .unwrap();
+        let compressed = comp_out.ports["default"]["compressed"].as_str().unwrap();
 
         let mut decomp = GzipNode::new();
         decomp
@@ -251,10 +258,7 @@ mod tests {
         node.init(&json!({"operation": "compress"})).await.unwrap();
 
         let data = "A".repeat(1000);
-        let output = node
-            .execute(json!({"data": data}), &ctx())
-            .await
-            .unwrap();
+        let output = node.execute(json!({"data": data}), &ctx()).await.unwrap();
 
         let original_size = output.ports["default"]["original_size"].as_u64().unwrap();
         let compressed_size = output.ports["default"]["compressed_size"].as_u64().unwrap();

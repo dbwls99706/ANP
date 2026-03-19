@@ -244,10 +244,7 @@ impl NodeExecutor for WebSocketEnhancedNode {
                     .get("event_type")
                     .and_then(|v| v.as_str())
                     .unwrap_or("broadcast");
-                let exclude = input
-                    .get("exclude")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
+                let exclude = input.get("exclude").and_then(|v| v.as_str()).unwrap_or("");
 
                 let mut state = self.state.write().await;
 
@@ -368,10 +365,7 @@ impl NodeExecutor for WebSocketEnhancedNode {
                     .get("event_type")
                     .and_then(|v| v.as_str())
                     .unwrap_or("room_message");
-                let exclude = input
-                    .get("exclude")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
+                let exclude = input.get("exclude").and_then(|v| v.as_str()).unwrap_or("");
 
                 let mut state = self.state.write().await;
 
@@ -463,10 +457,7 @@ impl NodeExecutor for WebSocketEnhancedNode {
 
             "history" => {
                 let state = self.state.read().await;
-                let limit = input
-                    .get("limit")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(50) as usize;
+                let limit = input.get("limit").and_then(|v| v.as_u64()).unwrap_or(50) as usize;
                 let room_filter = input.get("room").and_then(|v| v.as_str());
 
                 let messages: Vec<Value> = state
@@ -587,12 +578,18 @@ mod tests {
         node.init(&json!({})).await.unwrap();
 
         // Connect two users
-        node.execute(json!({"operation": "connect", "connection_id": "u1"}), &ctx())
-            .await
-            .unwrap();
-        node.execute(json!({"operation": "connect", "connection_id": "u2"}), &ctx())
-            .await
-            .unwrap();
+        node.execute(
+            json!({"operation": "connect", "connection_id": "u1"}),
+            &ctx(),
+        )
+        .await
+        .unwrap();
+        node.execute(
+            json!({"operation": "connect", "connection_id": "u2"}),
+            &ctx(),
+        )
+        .await
+        .unwrap();
 
         // Join room
         node.execute(
@@ -632,15 +629,24 @@ mod tests {
         let mut node = WebSocketEnhancedNode::new();
         node.init(&json!({})).await.unwrap();
 
-        node.execute(json!({"operation": "connect", "connection_id": "a"}), &ctx())
-            .await
-            .unwrap();
-        node.execute(json!({"operation": "connect", "connection_id": "b"}), &ctx())
-            .await
-            .unwrap();
-        node.execute(json!({"operation": "connect", "connection_id": "c"}), &ctx())
-            .await
-            .unwrap();
+        node.execute(
+            json!({"operation": "connect", "connection_id": "a"}),
+            &ctx(),
+        )
+        .await
+        .unwrap();
+        node.execute(
+            json!({"operation": "connect", "connection_id": "b"}),
+            &ctx(),
+        )
+        .await
+        .unwrap();
+        node.execute(
+            json!({"operation": "connect", "connection_id": "c"}),
+            &ctx(),
+        )
+        .await
+        .unwrap();
 
         let output = node
             .execute(
@@ -661,12 +667,18 @@ mod tests {
         let mut node = WebSocketEnhancedNode::new();
         node.init(&json!({"max_history": 10})).await.unwrap();
 
-        node.execute(json!({"operation": "connect", "connection_id": "u1"}), &ctx())
-            .await
-            .unwrap();
-        node.execute(json!({"operation": "connect", "connection_id": "u2"}), &ctx())
-            .await
-            .unwrap();
+        node.execute(
+            json!({"operation": "connect", "connection_id": "u1"}),
+            &ctx(),
+        )
+        .await
+        .unwrap();
+        node.execute(
+            json!({"operation": "connect", "connection_id": "u2"}),
+            &ctx(),
+        )
+        .await
+        .unwrap();
 
         node.execute(
             json!({"operation": "send", "from": "u1", "to": "u2", "data": {"msg": "hi"}}),

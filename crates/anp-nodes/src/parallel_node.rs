@@ -127,10 +127,7 @@ mod tests {
         .unwrap();
 
         let ctx = ExecutionContext::new();
-        let output = node
-            .execute(serde_json::json!(42), &ctx)
-            .await
-            .unwrap();
+        let output = node.execute(serde_json::json!(42), &ctx).await.unwrap();
 
         assert_eq!(output.ports.len(), 1);
         assert!(output.ports.contains_key("only"));

@@ -98,7 +98,7 @@ impl NodeExecutor for PaginateNode {
         let total_pages = if total_items == 0 {
             1
         } else {
-            (total_items + self.page_size - 1) / self.page_size
+            total_items.div_ceil(self.page_size)
         };
 
         // Clamp page to valid range

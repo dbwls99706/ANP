@@ -52,18 +52,33 @@ impl ValidateNode {
 }
 
 fn parse_rule(config: &serde_json::Value) -> Result<ValidationRule, NodeError> {
-    let obj = config.as_object().ok_or_else(|| {
-        NodeError::InvalidConfig("each rule must be an object".into())
-    })?;
+    let obj = config
+        .as_object()
+        .ok_or_else(|| NodeError::InvalidConfig("each rule must be an object".into()))?;
 
     Ok(ValidationRule {
-        expected_type: obj.get("type").and_then(|v| v.as_str()).map(|s| s.to_string()),
-        required: obj.get("required").and_then(|v| v.as_bool()).unwrap_or(false),
+        expected_type: obj
+            .get("type")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        required: obj
+            .get("required")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
         min: obj.get("min").and_then(|v| v.as_f64()),
         max: obj.get("max").and_then(|v| v.as_f64()),
-        min_length: obj.get("min_length").and_then(|v| v.as_u64()).map(|n| n as usize),
-        max_length: obj.get("max_length").and_then(|v| v.as_u64()).map(|n| n as usize),
-        pattern: obj.get("pattern").and_then(|v| v.as_str()).map(|s| s.to_string()),
+        min_length: obj
+            .get("min_length")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as usize),
+        max_length: obj
+            .get("max_length")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as usize),
+        pattern: obj
+            .get("pattern")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
         enum_values: obj.get("enum").and_then(|v| v.as_array()).cloned(),
     })
 }
@@ -217,8 +232,8 @@ fn json_type_name(value: &serde_json::Value) -> &'static str {
 /// - Exact match if no special characters
 /// - `^` anchor at start, `$` anchor at end
 /// - `.` matches any character, `*` matches zero or more of preceding (simplified)
-/// For full regex, we do a simple character-by-character approach.
-/// Actually, let's use a straightforward contains-based approach with anchors.
+///   For full regex, we do a simple character-by-character approach.
+///   Actually, let's use a straightforward contains-based approach with anchors.
 fn simple_pattern_match(pattern: &str, text: &str) -> bool {
     // Handle anchor-based patterns
     let (must_start, pat) = if let Some(p) = pattern.strip_prefix('^') {
@@ -233,7 +248,12 @@ fn simple_pattern_match(pattern: &str, text: &str) -> bool {
     };
 
     // For patterns with special regex chars beyond anchors, do char-by-char matching
-    if pat.contains('[') || pat.contains('+') || pat.contains('*') || pat.contains('?') || pat.contains('.') {
+    if pat.contains('[')
+        || pat.contains('+')
+        || pat.contains('*')
+        || pat.contains('?')
+        || pat.contains('.')
+    {
         // Use a simple NFA-style matcher for basic regex
         return basic_regex_match(pat, text, must_start, must_end);
     }
@@ -276,7 +296,8 @@ fn match_at(pat: &[u8], text: &[u8], pi: usize, ti: usize, must_end: bool) -> bo
     let (matches_char, next_pi) = parse_pattern_element(pat, pi);
 
     // Check for quantifier
-    if next_pi < pat.len() && (pat[next_pi] == b'+' || pat[next_pi] == b'*' || pat[next_pi] == b'?') {
+    if next_pi < pat.len() && (pat[next_pi] == b'+' || pat[next_pi] == b'*' || pat[next_pi] == b'?')
+    {
         let quantifier = pat[next_pi];
         let after_quant = next_pi + 1;
 

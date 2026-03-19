@@ -76,19 +76,15 @@ impl NodeExecutor for AccumulatorNode {
         if buf.len() >= self.target_count {
             let items: Vec<serde_json::Value> = buf.drain(..).collect();
             let count = items.len();
-            Ok(
-                NodeOutput::data(serde_json::json!({
-                    "items": items,
-                    "count": count
-                }))
-                .with_log(format!("flushed {} accumulated items", count)),
-            )
+            Ok(NodeOutput::data(serde_json::json!({
+                "items": items,
+                "count": count
+            }))
+            .with_log(format!("flushed {} accumulated items", count)))
         } else {
             let current = buf.len();
-            Ok(NodeOutput::skip().with_log(format!(
-                "buffered {}/{} items",
-                current, self.target_count
-            )))
+            Ok(NodeOutput::skip()
+                .with_log(format!("buffered {}/{} items", current, self.target_count)))
         }
     }
 }
@@ -161,9 +157,7 @@ mod tests {
     #[tokio::test]
     async fn test_invalid_target_count_zero() {
         let mut node = AccumulatorNode::new();
-        let result = node
-            .init(&serde_json::json!({"target_count": 0}))
-            .await;
+        let result = node.init(&serde_json::json!({"target_count": 0})).await;
         assert!(result.is_err());
     }
 }

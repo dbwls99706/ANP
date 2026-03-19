@@ -109,10 +109,11 @@ fn extract_data(input: &serde_json::Value) -> Option<String> {
         Some(s.to_string())
     } else if let Some(s) = input.get("data").and_then(|v| v.as_str()) {
         Some(s.to_string())
-    } else if let Some(s) = input.get("text").and_then(|v| v.as_str()) {
-        Some(s.to_string())
     } else {
-        None
+        input
+            .get("text")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
     }
 }
 
@@ -161,8 +162,9 @@ impl NodeExecutor for Base64Node {
                 serde_json::Value::String(encoded)
             }
             "decode" => {
-                let decoded_bytes = base64_decode(&data, self.url_safe)
-                    .map_err(|e| NodeError::ExecutionFailed(format!("base64 decode error: {}", e)))?;
+                let decoded_bytes = base64_decode(&data, self.url_safe).map_err(|e| {
+                    NodeError::ExecutionFailed(format!("base64 decode error: {}", e))
+                })?;
                 let decoded_str = String::from_utf8(decoded_bytes).map_err(|e| {
                     NodeError::ExecutionFailed(format!("decoded data is not valid UTF-8: {}", e))
                 })?;
@@ -284,10 +286,7 @@ mod tests {
     async fn test_input_from_data_field() {
         let node = make_node("encode", false).await;
         let ctx = ExecutionContext::new();
-        let output = node
-            .execute(json!({"data": "test"}), &ctx)
-            .await
-            .unwrap();
+        let output = node.execute(json!({"data": "test"}), &ctx).await.unwrap();
         assert_eq!(output.ports["default"], json!("dGVzdA=="));
     }
 }
