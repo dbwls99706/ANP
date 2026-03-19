@@ -139,12 +139,12 @@ impl NodeExecutor for GroupByNode {
                     let values: Vec<f64> = items
                         .iter()
                         .filter_map(|item| {
-                            let v = if agg_field.is_empty() {
-                                Some(item)
+                            let val: &serde_json::Value = if agg_field.is_empty() {
+                                item
                             } else {
-                                get_dot_path(item, agg_field)
+                                get_dot_path(item, agg_field)?
                             };
-                            v.and_then(|val| val.as_f64())
+                            val.as_f64()
                         })
                         .collect();
 
