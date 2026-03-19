@@ -30,7 +30,7 @@ Programs are not written — they are **generated from intent**. The fundamental
 ### Crate Structure
 
 - **anp-core**: Graph spec, validation, runtime engine, execution scheduler, GraphOp editor
-- **anp-nodes**: Built-in node implementations (console, file_io, transform, filter, database, http_server, llm_call, http_client, template, conditional, memory, tool_router)
+- **anp-nodes**: Built-in node implementations (console, file_io, transform, filter, database, http_server, llm_call, http_client, template, conditional, memory, tool_router, html_template, static_file)
 - **anp-planner**: LLM integration — generates graphs from prompts, edit ops from instructions
 - **anp-cli**: CLI entry point (`anp run`, `anp prompt`, `anp edit`, etc.)
 
@@ -39,7 +39,7 @@ Programs are not written — they are **generated from intent**. The fundamental
 | Kind | Behavior | Example |
 |------|----------|---------|
 | Source | Produces data, no inputs, executes once | file_read |
-| Processor | Transforms data, has inputs and outputs | transform, filter, database, llm_call, http_client, template, conditional, memory, tool_router |
+| Processor | Transforms data, has inputs and outputs | transform, filter, database, llm_call, http_client, template, conditional, memory, tool_router, html_template, static_file |
 | Sink | Consumes data, no outputs | console, file_write |
 | Service | Long-running event loop, triggers downstream | http_server |
 
@@ -72,6 +72,9 @@ Programs are not written — they are **generated from intent**. The fundamental
 - Memory node: session-based conversation history (max_history limit) + key-value state
 - Tool Router: LLM-powered agentic routing — AI decides which tool/port to use
 - Execution tracing: per-node timing (NodeTrace), success/failure tracking, output port recording
+- HTML Template node: full HTML rendering with `{{variable}}` placeholders, XSS-safe escaping, `{{{raw}}}` for unescaped output
+- Static File node: serves CSS/JS/images with auto content-type detection, path traversal prevention
+- HTTP Server: supports HTML responses via `_content_type` field from pipeline results
 
 ## Roadmap
 

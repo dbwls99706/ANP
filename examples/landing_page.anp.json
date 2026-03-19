@@ -1,0 +1,65 @@
+{
+  "version": "0.1",
+  "metadata": {
+    "name": "landing-page",
+    "description": "A landing page served entirely as an ANP graph — no frontend code needed"
+  },
+  "nodes": [
+    {
+      "id": "server",
+      "node_type": "http_server",
+      "kind": "service",
+      "config": {
+        "port": 3000,
+        "routes": [
+          { "path": "/", "method": "GET", "output_port": "page" }
+        ]
+      },
+      "outputs": [
+        { "name": "page" }
+      ]
+    },
+    {
+      "id": "page_data",
+      "node_type": "transform",
+      "kind": "processor",
+      "config": {
+        "type": "map",
+        "mapping": {
+          "title": "'ANP — AI Native Programming'",
+          "subtitle": "'Software defined as executable graphs, not source code'",
+          "feature1_title": "'Prompt → Graph → Run'",
+          "feature1_desc": "'Describe what you want in natural language. The AI generates an executable graph. Run it instantly.'",
+          "feature2_title": "'No Compilation'",
+          "feature2_desc": "'Graphs are interpreted directly. Change JSON, see results immediately. No build step.'",
+          "feature3_title": "'AI is a First-Class Node'",
+          "feature3_desc": "'LLM calls, agentic routing, and tool selection are built-in graph nodes — not external APIs to wrangle.'"
+        }
+      }
+    },
+    {
+      "id": "render",
+      "node_type": "html_template",
+      "kind": "processor",
+      "config": {
+        "html": "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>{{title}}</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1a1a2e;background:#f8f9fa}.hero{text-align:center;padding:100px 20px 80px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white}.hero h1{font-size:3rem;margin-bottom:16px;letter-spacing:-1px}.hero p{font-size:1.25rem;opacity:0.9;max-width:600px;margin:0 auto}.features{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:32px;padding:80px 40px;max-width:1200px;margin:0 auto}.feature{background:white;border-radius:12px;padding:32px;box-shadow:0 2px 12px rgba(0,0,0,0.08);transition:transform 0.2s}.feature:hover{transform:translateY(-4px)}.feature h3{font-size:1.25rem;margin-bottom:12px;color:#667eea}.feature p{color:#555;line-height:1.6}.cta{text-align:center;padding:60px 20px;background:#1a1a2e;color:white}.cta h2{font-size:2rem;margin-bottom:16px}.cta code{background:rgba(255,255,255,0.1);padding:12px 24px;border-radius:8px;font-size:1.1rem;display:inline-block;margin-top:12px}</style></head><body><section class=\"hero\"><h1>{{title}}</h1><p>{{subtitle}}</p></section><section class=\"features\"><div class=\"feature\"><h3>{{feature1_title}}</h3><p>{{feature1_desc}}</p></div><div class=\"feature\"><h3>{{feature2_title}}</h3><p>{{feature2_desc}}</p></div><div class=\"feature\"><h3>{{feature3_title}}</h3><p>{{feature3_desc}}</p></div></section><section class=\"cta\"><h2>Get Started</h2><p>Install ANP and run your first graph in seconds.</p><code>anp prompt \"Create a REST API\" --run</code></section></body></html>"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from_node": "server",
+      "from_port": "page",
+      "to_node": "page_data",
+      "to_port": "default"
+    },
+    {
+      "id": "e2",
+      "from_node": "page_data",
+      "from_port": "default",
+      "to_node": "render",
+      "to_port": "default"
+    }
+  ]
+}

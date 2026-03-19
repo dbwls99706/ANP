@@ -3,10 +3,12 @@ pub mod console;
 pub mod database;
 pub mod file_io;
 pub mod filter;
+pub mod html_template;
 pub mod http_client;
 pub mod http_server;
 pub mod llm_call;
 pub mod memory;
+pub mod static_file;
 pub mod template;
 pub mod tool_router;
 pub mod transform;
@@ -276,6 +278,44 @@ pub fn register_all(registry: &mut NodeRegistry) {
                 "properties": {
                     "max_history": { "type": "integer", "minimum": 1, "maximum": 1000, "default": 50 },
                     "initial_state": { "type": "object", "description": "Initial key-value pairs" }
+                }
+            }),
+        },
+    });
+
+    // HTML Template (Processor) — renders full HTML pages with variable substitution
+    registry.register(NodeInfo {
+        factory: || Box::new(html_template::HtmlTemplateNode::new()),
+        schema: NodeSchema {
+            node_type: "html_template".to_string(),
+            kind: NodeKind::Processor,
+            description: "Renders HTML templates with {{variable}} placeholders. Outputs {html, _content_type} for http_server to serve as text/html. Use {{{triple}}} for raw/unescaped output.".to_string(),
+            inputs: vec![PortSpec::new("default")],
+            outputs: vec![PortSpec::new("default")],
+            config_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "html": { "type": "string", "description": "HTML template with {{placeholders}} for variable substitution" }
+                },
+                "required": ["html"]
+            }),
+        },
+    });
+
+    // Static File (Processor) — reads and serves static files with content type detection
+    registry.register(NodeInfo {
+        factory: || Box::new(static_file::StaticFileNode::new()),
+        schema: NodeSchema {
+            node_type: "static_file".to_string(),
+            kind: NodeKind::Processor,
+            description: "Reads static files (CSS, JS, images) and outputs {body, _content_type} for http_server. Auto-detects content type from extension.".to_string(),
+            inputs: vec![PortSpec::new("default")],
+            outputs: vec![PortSpec::new("default")],
+            config_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string", "description": "File path to serve" },
+                    "base_dir": { "type": "string", "description": "Base directory for path resolution (security boundary)" }
                 }
             }),
         },
