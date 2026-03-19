@@ -1,3 +1,4 @@
+pub mod bench;
 pub mod compile;
 pub mod diff;
 pub mod editor;
