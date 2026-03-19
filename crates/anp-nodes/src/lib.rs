@@ -68,14 +68,6 @@ pub mod webhook_node;
 pub mod websocket_node;
 pub mod yaml_node;
 
-pub mod batch_node;
-pub mod throttle_node;
-pub mod priority_queue_node;
-pub mod aggregate_node;
-pub mod event_emitter_node;
-pub mod metrics_node;
-pub mod kv_store_node;
-
 use anp_core::graph::spec::{NodeKind, PortSpec};
 use anp_core::node::plugin::NodePlugin;
 use anp_core::node::registry::{NodeInfo, NodeRegistry, NodeSchema};
