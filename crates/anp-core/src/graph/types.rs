@@ -612,9 +612,7 @@ pub fn unify(a: &PortType, b: &PortType) -> Option<PortType> {
         (PortType::Array(a_elem), PortType::Array(b_elem)) => match (a_elem, b_elem) {
             (None, None) => Some(PortType::Array(None)),
             (Some(e), None) | (None, Some(e)) => Some(PortType::Array(Some(e.clone()))),
-            (Some(ea), Some(eb)) => {
-                unify(ea, eb).map(|u| PortType::Array(Some(Box::new(u))))
-            }
+            (Some(ea), Some(eb)) => unify(ea, eb).map(|u| PortType::Array(Some(Box::new(u)))),
         },
 
         // Union unification: unify if there is at least one compatible variant.
@@ -688,11 +686,7 @@ impl fmt::Display for TypeInferenceResult {
             self.ports_narrowed,
             if self.ports_narrowed == 1 { "" } else { "s" }
         )?;
-        write!(
-            f,
-            "Contradictions: {}",
-            self.contradictions.len()
-        )?;
+        write!(f, "Contradictions: {}", self.contradictions.len())?;
 
         if !self.contradictions.is_empty() {
             writeln!(f)?;
@@ -778,8 +772,13 @@ pub fn infer_types(graph: &super::spec::AnpGraph) -> TypeInferenceResult {
                     // Types are incompatible — record contradiction.
                     let msg = format!(
                         "Edge {}: {}.{} ({}) conflicts with {}.{} ({})",
-                        edge.id, edge.from_node, edge.from_port, from_type,
-                        edge.to_node, edge.to_port, to_type,
+                        edge.id,
+                        edge.from_node,
+                        edge.from_port,
+                        from_type,
+                        edge.to_node,
+                        edge.to_port,
+                        to_type,
                     );
                     if !contradictions.contains(&msg) {
                         contradictions.push(msg);
@@ -1157,18 +1156,39 @@ mod tests {
 
     #[test]
     fn unify_any_with_concrete() {
-        assert_eq!(unify(&PortType::Any, &PortType::String), Some(PortType::String));
-        assert_eq!(unify(&PortType::Number, &PortType::Any), Some(PortType::Number));
+        assert_eq!(
+            unify(&PortType::Any, &PortType::String),
+            Some(PortType::String)
+        );
+        assert_eq!(
+            unify(&PortType::Number, &PortType::Any),
+            Some(PortType::Number)
+        );
         assert_eq!(unify(&PortType::Any, &PortType::Any), Some(PortType::Any));
     }
 
     #[test]
     fn unify_identical_primitives() {
-        assert_eq!(unify(&PortType::String, &PortType::String), Some(PortType::String));
-        assert_eq!(unify(&PortType::Number, &PortType::Number), Some(PortType::Number));
-        assert_eq!(unify(&PortType::Boolean, &PortType::Boolean), Some(PortType::Boolean));
-        assert_eq!(unify(&PortType::Null, &PortType::Null), Some(PortType::Null));
-        assert_eq!(unify(&PortType::Binary, &PortType::Binary), Some(PortType::Binary));
+        assert_eq!(
+            unify(&PortType::String, &PortType::String),
+            Some(PortType::String)
+        );
+        assert_eq!(
+            unify(&PortType::Number, &PortType::Number),
+            Some(PortType::Number)
+        );
+        assert_eq!(
+            unify(&PortType::Boolean, &PortType::Boolean),
+            Some(PortType::Boolean)
+        );
+        assert_eq!(
+            unify(&PortType::Null, &PortType::Null),
+            Some(PortType::Null)
+        );
+        assert_eq!(
+            unify(&PortType::Binary, &PortType::Binary),
+            Some(PortType::Binary)
+        );
     }
 
     #[test]
@@ -1181,8 +1201,14 @@ mod tests {
     #[test]
     fn unify_html_and_string() {
         // Html is more specific than String — unification yields Html.
-        assert_eq!(unify(&PortType::Html, &PortType::String), Some(PortType::Html));
-        assert_eq!(unify(&PortType::String, &PortType::Html), Some(PortType::Html));
+        assert_eq!(
+            unify(&PortType::Html, &PortType::String),
+            Some(PortType::Html)
+        );
+        assert_eq!(
+            unify(&PortType::String, &PortType::Html),
+            Some(PortType::Html)
+        );
     }
 
     #[test]
@@ -1209,10 +1235,7 @@ mod tests {
         let mut fb = HashMap::new();
         fb.insert("age".into(), PortType::Number);
 
-        let result = unify(
-            &PortType::Object(Some(fa)),
-            &PortType::Object(Some(fb)),
-        );
+        let result = unify(&PortType::Object(Some(fa)), &PortType::Object(Some(fb)));
 
         let mut expected = HashMap::new();
         expected.insert("name".into(), PortType::String);
@@ -1243,10 +1266,7 @@ mod tests {
         let mut fb = HashMap::new();
         fb.insert("data".into(), PortType::String);
 
-        let result = unify(
-            &PortType::Object(Some(fa)),
-            &PortType::Object(Some(fb)),
-        );
+        let result = unify(&PortType::Object(Some(fa)), &PortType::Object(Some(fb)));
 
         let mut expected = HashMap::new();
         expected.insert("data".into(), PortType::String);
@@ -1256,7 +1276,10 @@ mod tests {
     #[test]
     fn unify_arrays() {
         assert_eq!(
-            unify(&PortType::Array(None), &PortType::Array(Some(Box::new(PortType::String)))),
+            unify(
+                &PortType::Array(None),
+                &PortType::Array(Some(Box::new(PortType::String)))
+            ),
             Some(PortType::Array(Some(Box::new(PortType::String))))
         );
         assert_eq!(
