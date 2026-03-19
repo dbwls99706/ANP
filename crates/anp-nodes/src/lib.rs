@@ -1,17 +1,15 @@
-pub mod diff_node;
-pub mod group_by_node;
-pub mod lookup_node;
-pub mod pivot_node;
-pub mod url_encode_node;
-pub mod toml_node;
-pub mod xml_node;
-pub mod markdown_node;
 pub mod accumulator;
+pub mod agent_loop_node;
+pub mod aggregate_node;
 pub mod api_key_node;
 pub mod array_node;
 pub mod base64_node;
+pub mod batch_node;
+pub mod breadcrumb_node;
 pub mod cache_node;
+pub mod chart_node;
 pub mod circuit_breaker_node;
+pub mod classify_node;
 pub mod conditional;
 pub mod console;
 pub mod cors_node;
@@ -21,12 +19,18 @@ pub mod csv_node;
 pub mod database;
 pub mod debounce_node;
 pub mod deduplicate_node;
+pub mod diff_node;
 pub mod email_node;
+pub mod embedding_node;
 pub mod encrypt_node;
 pub mod env_node;
+pub mod event_emitter_node;
+pub mod extract_node;
 pub mod file_io;
 pub mod filter;
 pub mod foreach;
+pub mod form_node;
+pub mod group_by_node;
 pub mod hash_node;
 pub mod html_template;
 pub mod http_client;
@@ -34,38 +38,57 @@ pub mod http_server;
 pub mod image_resize;
 pub mod json_parse;
 pub mod jwt_node;
+pub mod kv_store_node;
+pub mod layout_node;
 pub mod llm_call;
 pub mod log_node;
+pub mod lookup_node;
+pub mod markdown_node;
+pub mod markdown_render_node;
 pub mod math_node;
 pub mod memory;
 pub mod merge;
+pub mod meta_node;
+pub mod metrics_node;
+pub mod paginate_node;
 pub mod parallel_node;
 pub mod password_node;
+pub mod pivot_node;
+pub mod priority_queue_node;
+pub mod prompt_chain_node;
 pub mod queue_node;
 pub mod random_node;
 pub mod rate_limit;
 pub mod redirect_node;
 pub mod regex_node;
+pub mod retry_node;
 pub mod sanitize_node;
 pub mod semaphore_node;
-pub mod retry_node;
+pub mod sentiment_node;
 pub mod session_node;
 pub mod sleep_node;
 pub mod sse_node;
 pub mod static_file;
 pub mod string_node;
+pub mod summarize_node;
 pub mod switch_node;
+pub mod table_node;
 pub mod template;
 pub mod template_engine;
+pub mod throttle_node;
 pub mod timestamp_node;
+pub mod toml_node;
 pub mod tool_router;
 pub mod totp_node;
 pub mod transform;
+pub mod translate_node;
 pub mod try_catch;
+pub mod url_encode_node;
 pub mod uuid_node;
 pub mod validate_node;
 pub mod webhook_node;
 pub mod websocket_node;
+pub mod xml_node;
 pub mod yaml_node;
 
 use anp_core::graph::spec::{NodeKind, PortSpec};
@@ -1000,5 +1023,172 @@ pub fn register_all(registry: &mut NodeRegistry) {
     registry.register(NodeInfo {
         factory: || Box::new(template_engine::TemplateEngineNode::new()),
         schema: NodeSchema { node_type: "template_engine".to_string(), kind: NodeKind::Processor, description: "Advanced templates with {{#each}}, {{#if}}/{{else}}, {{@index}}".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"template": {"type": "string"}}, "required": ["template"]}) },
+    });
+
+    // === AI/ML NODES ===
+
+    registry.register(NodeInfo {
+        factory: || Box::new(embedding_node::EmbeddingNode::new()),
+        schema: NodeSchema { node_type: "embedding".to_string(), kind: NodeKind::Processor, description: "Generates text embeddings via character frequency analysis. Operations: embed, similarity, distance.".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"operation": {"type": "string", "enum": ["embed","similarity","distance"]}, "dimensions": {"type": "integer", "default": 26}}}) },
+    });
+    registry.register(NodeInfo {
+        factory: || Box::new(sentiment_node::SentimentNode::new()),
+        schema: NodeSchema { node_type: "sentiment".to_string(), kind: NodeKind::Processor, description: "Keyword-based sentiment analysis. Returns score (-1 to 1), label, and word counts.".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"field": {"type": "string", "default": "text"}, "custom_positive": {"type": "array"}, "custom_negative": {"type": "array"}}}) },
+    });
+    registry.register(NodeInfo {
+        factory: || Box::new(summarize_node::SummarizeNode::new()),
+        schema: NodeSchema { node_type: "summarize".to_string(), kind: NodeKind::Processor, description: "Extractive text summarization: sentences, truncate, keywords.".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"operation": {"type": "string", "enum": ["sentences","truncate","keywords"], "default": "sentences"}, "max_sentences": {"type": "integer", "default": 3}, "max_length": {"type": "integer", "default": 200}, "top_n": {"type": "integer", "default": 10}}}) },
+    });
+    registry.register(NodeInfo {
+        factory: || Box::new(classify_node::ClassifyNode::new()),
+        schema: NodeSchema { node_type: "classify".to_string(), kind: NodeKind::Processor, description: "Rule-based text classification with configurable keyword categories.".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"field": {"type": "string", "default": "text"}, "categories": {"type": "object"}, "threshold": {"type": "integer", "default": 1}}, "required": ["categories"]}) },
+    });
+    registry.register(NodeInfo {
+        factory: || Box::new(extract_node::ExtractNode::new()),
+        schema: NodeSchema { node_type: "extract".to_string(), kind: NodeKind::Processor, description: "Pattern-based extraction: emails, urls, numbers, dates, mentions, hashtags, IPs.".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"extractors": {"type": "array"}, "field": {"type": "string", "default": "text"}}}) },
+    });
+    registry.register(NodeInfo {
+        factory: || Box::new(translate_node::TranslateNode::new()),
+        schema: NodeSchema { node_type: "translate".to_string(), kind: NodeKind::Processor, description: "Text transformation: reverse, pig_latin, rot13, morse, leetspeak.".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"operation": {"type": "string", "enum": ["reverse","pig_latin","rot13","morse","leetspeak"]}, "field": {"type": "string", "default": "text"}}, "required": ["operation"]}) },
+    });
+    registry.register(NodeInfo {
+        factory: || Box::new(prompt_chain_node::PromptChainNode::new()),
+        schema: NodeSchema { node_type: "prompt_chain".to_string(), kind: NodeKind::Processor, description: "Chains multiple template prompts with {{variable}} substitution and context propagation.".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"steps": {"type": "array"}, "initial_context": {"type": "object"}}, "required": ["steps"]}) },
+    });
+    registry.register(NodeInfo {
+        factory: || Box::new(agent_loop_node::AgentLoopNode::new()),
+        schema: NodeSchema { node_type: "agent_loop".to_string(), kind: NodeKind::Processor, description: "Agentic loop pattern: start, iterate, check, reset with max_iterations and termination.".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"max_iterations": {"type": "integer", "default": 10}, "termination_field": {"type": "string"}, "operation": {"type": "string", "enum": ["start","iterate","check","reset"], "default": "iterate"}}}) },
+    });
+
+    // === AUTH/SECURITY NODES ===
+
+    registry.register(NodeInfo {
+        factory: || Box::new(api_key_node::ApiKeyNode::new()),
+        schema: NodeSchema { node_type: "api_key".to_string(), kind: NodeKind::Processor, description: "API key validation, generation, and masking.".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("valid"), PortSpec::new("invalid")], config_schema: serde_json::json!({"type": "object", "properties": {"operation": {"type": "string", "enum": ["validate","generate","mask"]}, "valid_keys": {"type": "array"}, "header_field": {"type": "string", "default": "x-api-key"}}}) },
+    });
+    registry.register(NodeInfo {
+        factory: || Box::new(password_node::PasswordNode::new()),
+        schema: NodeSchema { node_type: "password".to_string(), kind: NodeKind::Processor, description: "Password hashing (FNV), verification, and strength analysis.".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"operation": {"type": "string", "enum": ["hash","verify","strength"]}, "salt": {"type": "string"}}, "required": ["operation"]}) },
+    });
+    registry.register(NodeInfo {
+        factory: || Box::new(totp_node::TotpNode::new()),
+        schema: NodeSchema { node_type: "totp".to_string(), kind: NodeKind::Processor, description: "Time-based OTP generation and verification (simplified).".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"operation": {"type": "string", "enum": ["generate","verify"], "default": "generate"}, "secret_env": {"type": "string", "default": "TOTP_SECRET"}, "interval": {"type": "integer", "default": 30}, "digits": {"type": "integer", "default": 6}}}) },
+    });
+    registry.register(NodeInfo {
+        factory: || Box::new(circuit_breaker_node::CircuitBreakerNode::new()),
+        schema: NodeSchema { node_type: "circuit_breaker".to_string(), kind: NodeKind::Processor, description: "Circuit breaker pattern: closed/open/half_open state transitions for fault tolerance.".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"failure_threshold": {"type": "integer", "default": 5}, "reset_timeout_ms": {"type": "integer", "default": 30000}, "half_open_max": {"type": "integer", "default": 1}}}) },
+    });
+    registry.register(NodeInfo {
+        factory: || Box::new(semaphore_node::SemaphoreNode::new()),
+        schema: NodeSchema { node_type: "semaphore".to_string(), kind: NodeKind::Processor, description: "Concurrency limiter: acquire/release/status with atomic permit tracking.".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"max_permits": {"type": "integer", "default": 5}, "operation": {"type": "string", "enum": ["acquire","release","status"]}}}) },
+    });
+    registry.register(NodeInfo {
+        factory: || Box::new(deduplicate_node::DeduplicateNode::new()),
+        schema: NodeSchema { node_type: "deduplicate".to_string(), kind: NodeKind::Processor, description: "Deduplication by key field with configurable window and TTL.".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"key_field": {"type": "string"}, "window_size": {"type": "integer", "default": 1000}, "ttl_ms": {"type": "integer", "default": 0}}, "required": ["key_field"]}) },
+    });
+    registry.register(NodeInfo {
+        factory: || Box::new(sanitize_node::SanitizeNode::new()),
+        schema: NodeSchema { node_type: "sanitize".to_string(), kind: NodeKind::Processor, description: "Input sanitization: html, sql, xss, trim, all. Recursive string processing.".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"operation": {"type": "string", "enum": ["html","sql","xss","trim","all"], "default": "all"}, "field": {"type": "string"}, "max_length": {"type": "integer"}}}) },
+    });
+
+    // === DATA PROCESSING NODES ===
+
+    registry.register(NodeInfo {
+        factory: || Box::new(xml_node::XmlNode::new()),
+        schema: NodeSchema { node_type: "xml".to_string(), kind: NodeKind::Processor, description: "Simple XML parse/stringify for flat and one-level-nested elements.".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"operation": {"type": "string", "enum": ["parse","stringify"], "default": "parse"}, "root_tag": {"type": "string", "default": "root"}, "field": {"type": "string", "default": "text"}}}) },
+    });
+    registry.register(NodeInfo {
+        factory: || Box::new(markdown_node::MarkdownNode::new()),
+        schema: NodeSchema { node_type: "markdown".to_string(), kind: NodeKind::Processor, description: "Markdown to HTML conversion: headings, bold, italic, code, lists, links, hr.".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"field": {"type": "string", "default": "text"}, "wrap": {"type": "boolean", "default": true}}}) },
+    });
+    registry.register(NodeInfo {
+        factory: || Box::new(diff_node::DiffNode::new()),
+        schema: NodeSchema { node_type: "diff".to_string(), kind: NodeKind::Processor, description: "JSON diffing, patching, and equality checking.".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"operation": {"type": "string", "enum": ["diff","patch","equals"], "default": "diff"}}}) },
+    });
+    registry.register(NodeInfo {
+        factory: || Box::new(group_by_node::GroupByNode::new()),
+        schema: NodeSchema { node_type: "group_by".to_string(), kind: NodeKind::Processor, description: "Group array items by field value with optional aggregations (count, sum, avg, min, max).".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"field": {"type": "string"}, "aggregate": {"type": "string", "enum": ["count","sum","avg","min","max","list"]}, "aggregate_field": {"type": "string"}}, "required": ["field"]}) },
+    });
+    registry.register(NodeInfo {
+        factory: || Box::new(pivot_node::PivotNode::new()),
+        schema: NodeSchema { node_type: "pivot".to_string(), kind: NodeKind::Processor, description: "Pivot (rows→columns), unpivot (columns→rows), and transpose operations.".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"operation": {"type": "string", "enum": ["pivot","unpivot","transpose"]}, "row_field": {"type": "string"}, "column_field": {"type": "string"}, "value_field": {"type": "string"}, "key_name": {"type": "string"}, "value_name": {"type": "string"}, "exclude": {"type": "array"}}, "required": ["operation"]}) },
+    });
+    registry.register(NodeInfo {
+        factory: || Box::new(lookup_node::LookupNode::new()),
+        schema: NodeSchema { node_type: "lookup".to_string(), kind: NodeKind::Processor, description: "Lookup/join between input and static dataset. Modes: first (merge), all (array).".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"lookup_data": {"type": "array"}, "key_field": {"type": "string"}, "lookup_key": {"type": "string"}, "result_fields": {"type": "array"}, "mode": {"type": "string", "enum": ["first","all"], "default": "first"}}, "required": ["lookup_data", "key_field"]}) },
+    });
+    registry.register(NodeInfo {
+        factory: || Box::new(url_encode_node::UrlEncodeNode::new()),
+        schema: NodeSchema { node_type: "url_encode".to_string(), kind: NodeKind::Processor, description: "URL encode/decode, parse URLs to components, build URLs from parts.".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"operation": {"type": "string", "enum": ["encode","decode","parse","build"], "default": "encode"}, "field": {"type": "string"}}}) },
+    });
+    registry.register(NodeInfo {
+        factory: || Box::new(toml_node::TomlNode::new()),
+        schema: NodeSchema { node_type: "toml".to_string(), kind: NodeKind::Processor, description: "TOML parse/stringify with sections, strings, numbers, booleans.".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"operation": {"type": "string", "enum": ["parse","stringify"], "default": "parse"}, "field": {"type": "string", "default": "text"}}}) },
+    });
+
+    // === UI/FRONTEND NODES ===
+
+    registry.register(NodeInfo {
+        factory: || Box::new(form_node::FormNode::new()),
+        schema: NodeSchema { node_type: "form".to_string(), kind: NodeKind::Processor, description: "HTML form builder with field types: text, email, password, number, textarea, select, checkbox, hidden.".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"action": {"type": "string"}, "method": {"type": "string", "default": "POST"}, "fields": {"type": "array"}, "css_class": {"type": "string"}, "submit_text": {"type": "string", "default": "Submit"}}, "required": ["action", "fields"]}) },
+    });
+    registry.register(NodeInfo {
+        factory: || Box::new(chart_node::ChartNode::new()),
+        schema: NodeSchema { node_type: "chart".to_string(), kind: NodeKind::Processor, description: "SVG chart generation: bar, line, pie charts from data arrays.".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"chart_type": {"type": "string", "enum": ["bar","line","pie"], "default": "bar"}, "title": {"type": "string"}, "x_field": {"type": "string"}, "y_field": {"type": "string"}, "width": {"type": "integer", "default": 400}, "height": {"type": "integer", "default": 300}}}) },
+    });
+    registry.register(NodeInfo {
+        factory: || Box::new(table_node::TableNode::new()),
+        schema: NodeSchema { node_type: "table".to_string(), kind: NodeKind::Processor, description: "HTML table generation from arrays with auto-column detection, striped rows, XSS escaping.".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"columns": {"type": "array"}, "css_class": {"type": "string"}, "striped": {"type": "boolean", "default": true}, "sortable": {"type": "boolean", "default": false}, "caption": {"type": "string"}, "empty_text": {"type": "string", "default": "No data available"}}}) },
+    });
+    registry.register(NodeInfo {
+        factory: || Box::new(markdown_render_node::MarkdownRenderNode::new()),
+        schema: NodeSchema { node_type: "markdown_render".to_string(), kind: NodeKind::Processor, description: "Styled markdown rendering with light/dark themes for web display.".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"theme": {"type": "string", "enum": ["light","dark"], "default": "light"}, "max_width": {"type": "string", "default": "800px"}, "font_family": {"type": "string"}, "code_theme": {"type": "string"}}}) },
+    });
+    registry.register(NodeInfo {
+        factory: || Box::new(paginate_node::PaginateNode::new()),
+        schema: NodeSchema { node_type: "paginate".to_string(), kind: NodeKind::Processor, description: "Array pagination with page metadata (total_pages, has_next, has_prev).".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"page_size": {"type": "integer", "default": 10}, "page_field": {"type": "string", "default": "page"}}}) },
+    });
+    registry.register(NodeInfo {
+        factory: || Box::new(breadcrumb_node::BreadcrumbNode::new()),
+        schema: NodeSchema { node_type: "breadcrumb".to_string(), kind: NodeKind::Processor, description: "Breadcrumb navigation HTML generator with path parsing.".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"separator": {"type": "string", "default": " / "}, "items": {"type": "array"}, "home_label": {"type": "string", "default": "Home"}, "home_url": {"type": "string", "default": "/"}}}) },
+    });
+    registry.register(NodeInfo {
+        factory: || Box::new(layout_node::LayoutNode::new()),
+        schema: NodeSchema { node_type: "layout".to_string(), kind: NodeKind::Processor, description: "HTML5 page layout wrapper with header/nav/footer, CSS, and {{variable}} support.".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"title": {"type": "string"}, "head_extra": {"type": "string"}, "body_class": {"type": "string"}, "header_html": {"type": "string"}, "footer_html": {"type": "string"}, "nav_html": {"type": "string"}, "css": {"type": "string"}}}) },
+    });
+    registry.register(NodeInfo {
+        factory: || Box::new(meta_node::MetaNode::new()),
+        schema: NodeSchema { node_type: "meta".to_string(), kind: NodeKind::Processor, description: "HTML meta tags and SEO metadata generation (Open Graph, canonical, robots).".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"defaults": {"type": "object"}}}) },
+    });
+
+    // === ADVANCED WORKFLOW NODES ===
+
+    registry.register(NodeInfo {
+        factory: || Box::new(batch_node::BatchNode::new()),
+        schema: NodeSchema { node_type: "batch".to_string(), kind: NodeKind::Processor, description: "Batch processing: collects inputs into batches, emits when full or flushed.".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"batch_size": {"type": "integer"}, "flush_field": {"type": "string"}}, "required": ["batch_size"]}) },
+    });
+    registry.register(NodeInfo {
+        factory: || Box::new(throttle_node::ThrottleNode::new()),
+        schema: NodeSchema { node_type: "throttle".to_string(), kind: NodeKind::Processor, description: "Throttle execution rate with configurable interval and drop/queue modes.".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"interval_ms": {"type": "integer", "default": 1000}, "drop_mode": {"type": "string", "enum": ["skip","queue"], "default": "skip"}}}) },
+    });
+    registry.register(NodeInfo {
+        factory: || Box::new(priority_queue_node::PriorityQueueNode::new()),
+        schema: NodeSchema { node_type: "priority_queue".to_string(), kind: NodeKind::Processor, description: "Priority queue: enqueue/dequeue/peek/size/clear with priority-based ordering.".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"priority_field": {"type": "string", "default": "priority"}, "max_size": {"type": "integer", "default": 100}, "operation": {"type": "string", "enum": ["enqueue","dequeue","peek","size","clear"]}}, "required": ["operation"]}) },
+    });
+    registry.register(NodeInfo {
+        factory: || Box::new(aggregate_node::AggregateNode::new()),
+        schema: NodeSchema { node_type: "aggregate".to_string(), kind: NodeKind::Processor, description: "Multi-field aggregation pipeline: sum, avg, min, max, count, first, last, concat.".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"aggregations": {"type": "array"}, "input_field": {"type": "string"}}, "required": ["aggregations"]}) },
+    });
+    registry.register(NodeInfo {
+        factory: || Box::new(event_emitter_node::EventEmitterNode::new()),
+        schema: NodeSchema { node_type: "event_emitter".to_string(), kind: NodeKind::Processor, description: "Pub/sub event system: emit, subscribe, unsubscribe, list events.".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"operation": {"type": "string", "enum": ["emit","subscribe","unsubscribe","list"]}, "event_name": {"type": "string"}, "events": {"type": "array"}}}) },
+    });
+    registry.register(NodeInfo {
+        factory: || Box::new(metrics_node::MetricsNode::new()),
+        schema: NodeSchema { node_type: "metrics".to_string(), kind: NodeKind::Processor, description: "Metrics collection: counters, gauges, histograms with percentile summaries.".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"operation": {"type": "string", "enum": ["increment","decrement","set","get","record","summary"]}, "metric_name": {"type": "string"}, "metric_type": {"type": "string", "enum": ["counter","gauge","histogram"]}}}) },
+    });
+    registry.register(NodeInfo {
+        factory: || Box::new(kv_store_node::KvStoreNode::new()),
+        schema: NodeSchema { node_type: "kv_store".to_string(), kind: NodeKind::Processor, description: "Key-value store with namespaces: get, set, delete, list, has, count, clear.".to_string(), inputs: vec![PortSpec::new("default")], outputs: vec![PortSpec::new("default")], config_schema: serde_json::json!({"type": "object", "properties": {"namespace": {"type": "string", "default": "default"}, "operation": {"type": "string", "enum": ["get","set","delete","list","has","count","clear"]}}, "required": ["operation"]}) },
     });
 }
