@@ -551,6 +551,269 @@ pub fn type_check(graph: &AnpGraph) -> TypeCheckResult {
     }
 }
 
+// ─── Type Unification ───────────────────────────────────────────────────────
+
+/// Unify two types into the most specific compatible type.
+///
+/// This implements a simplified Hindley-Milner-style unification for ANP's
+/// dataflow type system. `Any` acts as a type variable — it unifies with
+/// everything. Concrete types unify only with themselves (or structurally
+/// compatible compound types).
+///
+/// Returns `None` if the types are incompatible.
+pub fn unify(a: &PortType, b: &PortType) -> Option<PortType> {
+    // Any acts as a type variable — unifies with anything.
+    if matches!(a, PortType::Any) {
+        return Some(b.clone());
+    }
+    if matches!(b, PortType::Any) {
+        return Some(a.clone());
+    }
+
+    match (a, b) {
+        // Identical primitives.
+        (PortType::String, PortType::String) => Some(PortType::String),
+        (PortType::Number, PortType::Number) => Some(PortType::Number),
+        (PortType::Boolean, PortType::Boolean) => Some(PortType::Boolean),
+        (PortType::Null, PortType::Null) => Some(PortType::Null),
+        (PortType::Binary, PortType::Binary) => Some(PortType::Binary),
+        (PortType::Html, PortType::Html) => Some(PortType::Html),
+
+        // Html is a subtype of String — Html is more specific.
+        (PortType::Html, PortType::String) | (PortType::String, PortType::Html) => {
+            Some(PortType::Html)
+        }
+
+        // Object unification.
+        (PortType::Object(a_fields), PortType::Object(b_fields)) => match (a_fields, b_fields) {
+            (None, None) => Some(PortType::Object(None)),
+            (Some(f), None) | (None, Some(f)) => Some(PortType::Object(Some(f.clone()))),
+            (Some(fa), Some(fb)) => {
+                // Merge fields with recursive unification.
+                let mut merged = fa.clone();
+                for (key, b_ty) in fb {
+                    if let Some(a_ty) = merged.get(key) {
+                        // Both sides have this field — unify recursively.
+                        match unify(a_ty, b_ty) {
+                            Some(unified) => {
+                                merged.insert(key.clone(), unified);
+                            }
+                            None => return None, // Field type conflict.
+                        }
+                    } else {
+                        merged.insert(key.clone(), b_ty.clone());
+                    }
+                }
+                Some(PortType::Object(Some(merged)))
+            }
+        },
+
+        // Array unification.
+        (PortType::Array(a_elem), PortType::Array(b_elem)) => match (a_elem, b_elem) {
+            (None, None) => Some(PortType::Array(None)),
+            (Some(e), None) | (None, Some(e)) => Some(PortType::Array(Some(e.clone()))),
+            (Some(ea), Some(eb)) => {
+                unify(ea, eb).map(|u| PortType::Array(Some(Box::new(u))))
+            }
+        },
+
+        // Union unification: unify if there is at least one compatible variant.
+        (PortType::Union(variants), other) | (other, PortType::Union(variants)) => {
+            // Try to find a variant that unifies with the other type.
+            for v in variants {
+                if let Some(u) = unify(v, other) {
+                    return Some(u);
+                }
+            }
+            None
+        }
+
+        // Everything else is incompatible.
+        _ => None,
+    }
+}
+
+// ─── Type Inference ─────────────────────────────────────────────────────────
+
+/// Result of type inference over a graph.
+#[derive(Debug, Clone)]
+pub struct TypeInferenceResult {
+    /// Inferred type for each (node_id, port_name) pair.
+    pub port_types: HashMap<(String, String), PortType>,
+    /// Whether inference found any contradictions.
+    pub has_contradictions: bool,
+    /// Contradiction details.
+    pub contradictions: Vec<String>,
+    /// Number of ports with types narrowed from Any.
+    pub ports_narrowed: usize,
+    /// Total ports analyzed.
+    pub total_ports: usize,
+}
+
+impl fmt::Display for TypeInferenceResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "ANP Type Inference")?;
+        writeln!(f, "\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}")?;
+
+        // Count unique nodes from ports.
+        let node_ids: std::collections::HashSet<&str> = self
+            .port_types
+            .keys()
+            .map(|(node_id, _)| node_id.as_str())
+            .collect();
+        writeln!(
+            f,
+            "Analyzed {} ports across {} nodes",
+            self.total_ports,
+            node_ids.len()
+        )?;
+        writeln!(f)?;
+
+        writeln!(f, "Inferred Types:")?;
+        // Sort entries for deterministic output.
+        let mut entries: Vec<_> = self.port_types.iter().collect();
+        entries.sort_by(|a, b| a.0.cmp(b.0));
+        for ((node_id, port_name), ty) in &entries {
+            write!(f, "  {}.{:<12} \u{2192} {}", node_id, port_name, ty)?;
+            // Check if this was narrowed (we mark it in the display).
+            // We don't store the original type separately, so we rely on the
+            // narrowed count for the summary.
+            writeln!(f)?;
+        }
+
+        writeln!(f)?;
+        writeln!(
+            f,
+            "Narrowed: {} port{} (from any \u{2192} specific type)",
+            self.ports_narrowed,
+            if self.ports_narrowed == 1 { "" } else { "s" }
+        )?;
+        write!(
+            f,
+            "Contradictions: {}",
+            self.contradictions.len()
+        )?;
+
+        if !self.contradictions.is_empty() {
+            writeln!(f)?;
+            for c in &self.contradictions {
+                write!(f, "  \u{2717} {}", c)?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// Infer concrete types for ports by propagating known types through the graph.
+///
+/// Uses a constraint-based approach inspired by Hindley-Milner:
+/// 1. Collect initial constraints from node signatures
+/// 2. Propagate type information along edges using unification
+/// 3. Iterate until fixed point (no more changes)
+/// 4. Report inferred types and any contradictions
+pub fn infer_types(graph: &super::spec::AnpGraph) -> TypeInferenceResult {
+    // Phase 1: Initialize each port with its node signature type.
+    let mut port_types: HashMap<(String, String), PortType> = HashMap::new();
+
+    // Track which ports started as Any so we can count narrowings.
+    let mut initially_any: std::collections::HashSet<(String, String)> =
+        std::collections::HashSet::new();
+
+    for node in &graph.nodes {
+        let sig = get_node_signature(&node.node_type);
+        for (port_name, port_type) in &sig.inputs {
+            let key = (node.id.clone(), port_name.clone());
+            if matches!(port_type, PortType::Any) {
+                initially_any.insert(key.clone());
+            }
+            port_types.insert(key, port_type.clone());
+        }
+        for (port_name, port_type) in &sig.outputs {
+            let key = (node.id.clone(), port_name.clone());
+            if matches!(port_type, PortType::Any) {
+                initially_any.insert(key.clone());
+            }
+            port_types.insert(key, port_type.clone());
+        }
+    }
+
+    let total_ports = port_types.len();
+    let mut contradictions: Vec<String> = Vec::new();
+
+    // Phase 2: Fixed-point iteration — propagate types along edges.
+    // We iterate until no port type changes.
+    let max_iterations = 100; // Safety bound to prevent infinite loops.
+    for _iteration in 0..max_iterations {
+        let mut changed = false;
+
+        for edge in &graph.edges {
+            let from_key = (edge.from_node.clone(), edge.from_port.clone());
+            let to_key = (edge.to_node.clone(), edge.to_port.clone());
+
+            let from_type = match port_types.get(&from_key) {
+                Some(t) => t.clone(),
+                None => continue, // Unknown port, skip.
+            };
+            let to_type = match port_types.get(&to_key) {
+                Some(t) => t.clone(),
+                None => continue,
+            };
+
+            // Try to unify the output type with the input type.
+            match unify(&from_type, &to_type) {
+                Some(unified) => {
+                    // Propagate: if the input side was less specific, narrow it.
+                    if unified != to_type {
+                        port_types.insert(to_key.clone(), unified.clone());
+                        changed = true;
+                    }
+                    // Back-propagate: if the output side was less specific, narrow it.
+                    if unified != from_type {
+                        port_types.insert(from_key.clone(), unified);
+                        changed = true;
+                    }
+                }
+                None => {
+                    // Types are incompatible — record contradiction.
+                    let msg = format!(
+                        "Edge {}: {}.{} ({}) conflicts with {}.{} ({})",
+                        edge.id, edge.from_node, edge.from_port, from_type,
+                        edge.to_node, edge.to_port, to_type,
+                    );
+                    if !contradictions.contains(&msg) {
+                        contradictions.push(msg);
+                    }
+                }
+            }
+        }
+
+        if !changed {
+            break;
+        }
+    }
+
+    // Phase 3: Count how many ports were narrowed from Any.
+    let ports_narrowed = initially_any
+        .iter()
+        .filter(|key| {
+            port_types
+                .get(*key)
+                .is_some_and(|t| !matches!(t, PortType::Any))
+        })
+        .count();
+
+    let has_contradictions = !contradictions.is_empty();
+
+    TypeInferenceResult {
+        port_types,
+        has_contradictions,
+        contradictions,
+        ports_narrowed,
+        total_ports,
+    }
+}
+
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -888,5 +1151,366 @@ mod tests {
             let back: PortType = serde_json::from_str(&json).unwrap();
             assert_eq!(t, back);
         }
+    }
+
+    // ── Type Unification ────────────────────────────────────────────────
+
+    #[test]
+    fn unify_any_with_concrete() {
+        assert_eq!(unify(&PortType::Any, &PortType::String), Some(PortType::String));
+        assert_eq!(unify(&PortType::Number, &PortType::Any), Some(PortType::Number));
+        assert_eq!(unify(&PortType::Any, &PortType::Any), Some(PortType::Any));
+    }
+
+    #[test]
+    fn unify_identical_primitives() {
+        assert_eq!(unify(&PortType::String, &PortType::String), Some(PortType::String));
+        assert_eq!(unify(&PortType::Number, &PortType::Number), Some(PortType::Number));
+        assert_eq!(unify(&PortType::Boolean, &PortType::Boolean), Some(PortType::Boolean));
+        assert_eq!(unify(&PortType::Null, &PortType::Null), Some(PortType::Null));
+        assert_eq!(unify(&PortType::Binary, &PortType::Binary), Some(PortType::Binary));
+    }
+
+    #[test]
+    fn unify_incompatible_primitives() {
+        assert_eq!(unify(&PortType::String, &PortType::Number), None);
+        assert_eq!(unify(&PortType::Boolean, &PortType::String), None);
+        assert_eq!(unify(&PortType::Number, &PortType::Boolean), None);
+    }
+
+    #[test]
+    fn unify_html_and_string() {
+        // Html is more specific than String — unification yields Html.
+        assert_eq!(unify(&PortType::Html, &PortType::String), Some(PortType::Html));
+        assert_eq!(unify(&PortType::String, &PortType::Html), Some(PortType::Html));
+    }
+
+    #[test]
+    fn unify_objects_none_with_some() {
+        let mut fields = HashMap::new();
+        fields.insert("name".into(), PortType::String);
+        let typed = PortType::Object(Some(fields.clone()));
+
+        assert_eq!(
+            unify(&PortType::Object(None), &typed),
+            Some(PortType::Object(Some(fields.clone())))
+        );
+        assert_eq!(
+            unify(&typed, &PortType::Object(None)),
+            Some(PortType::Object(Some(fields)))
+        );
+    }
+
+    #[test]
+    fn unify_objects_merge_fields() {
+        let mut fa = HashMap::new();
+        fa.insert("name".into(), PortType::String);
+
+        let mut fb = HashMap::new();
+        fb.insert("age".into(), PortType::Number);
+
+        let result = unify(
+            &PortType::Object(Some(fa)),
+            &PortType::Object(Some(fb)),
+        );
+
+        let mut expected = HashMap::new();
+        expected.insert("name".into(), PortType::String);
+        expected.insert("age".into(), PortType::Number);
+        assert_eq!(result, Some(PortType::Object(Some(expected))));
+    }
+
+    #[test]
+    fn unify_objects_recursive_field_conflict() {
+        let mut fa = HashMap::new();
+        fa.insert("x".into(), PortType::String);
+
+        let mut fb = HashMap::new();
+        fb.insert("x".into(), PortType::Number);
+
+        // "x" is String in one, Number in the other — conflict.
+        assert_eq!(
+            unify(&PortType::Object(Some(fa)), &PortType::Object(Some(fb))),
+            None
+        );
+    }
+
+    #[test]
+    fn unify_objects_recursive_field_narrowing() {
+        let mut fa = HashMap::new();
+        fa.insert("data".into(), PortType::Any);
+
+        let mut fb = HashMap::new();
+        fb.insert("data".into(), PortType::String);
+
+        let result = unify(
+            &PortType::Object(Some(fa)),
+            &PortType::Object(Some(fb)),
+        );
+
+        let mut expected = HashMap::new();
+        expected.insert("data".into(), PortType::String);
+        assert_eq!(result, Some(PortType::Object(Some(expected))));
+    }
+
+    #[test]
+    fn unify_arrays() {
+        assert_eq!(
+            unify(&PortType::Array(None), &PortType::Array(Some(Box::new(PortType::String)))),
+            Some(PortType::Array(Some(Box::new(PortType::String))))
+        );
+        assert_eq!(
+            unify(
+                &PortType::Array(Some(Box::new(PortType::String))),
+                &PortType::Array(Some(Box::new(PortType::String)))
+            ),
+            Some(PortType::Array(Some(Box::new(PortType::String))))
+        );
+        assert_eq!(
+            unify(
+                &PortType::Array(Some(Box::new(PortType::String))),
+                &PortType::Array(Some(Box::new(PortType::Number)))
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn unify_union_with_concrete() {
+        let u = PortType::Union(vec![PortType::String, PortType::Number]);
+        // String is in the union — unifies to String.
+        assert_eq!(unify(&u, &PortType::String), Some(PortType::String));
+        assert_eq!(unify(&PortType::Number, &u), Some(PortType::Number));
+        // Boolean is not in the union — fails.
+        assert_eq!(unify(&u, &PortType::Boolean), None);
+    }
+
+    // ── Type Inference ──────────────────────────────────────────────────
+
+    #[test]
+    fn infer_types_narrows_any_from_upstream() {
+        // file_read (output: String) → console (input: Any)
+        // Console's input should be narrowed from Any to String.
+        let graph = AnpGraph {
+            version: GraphVersion::V0_1,
+            metadata: GraphMetadata {
+                name: "narrow".into(),
+                description: "".into(),
+            },
+            nodes: vec![
+                make_node("reader", "file_read", NodeKind::Source),
+                make_node("out", "console", NodeKind::Sink),
+            ],
+            edges: vec![make_edge("e1", "reader", "out")],
+        };
+
+        let result = infer_types(&graph);
+        assert!(!result.has_contradictions);
+        assert!(result.ports_narrowed >= 1);
+
+        // Console's default input should now be String, not Any.
+        let console_input = result
+            .port_types
+            .get(&("out".into(), "default".into()))
+            .unwrap();
+        assert_eq!(*console_input, PortType::String);
+    }
+
+    #[test]
+    fn infer_types_propagates_through_chain() {
+        // file_read (String) → llm_call (Any→String) → console (Any)
+        // llm_call's input should be narrowed to String,
+        // console's input should be narrowed to String.
+        let graph = AnpGraph {
+            version: GraphVersion::V0_1,
+            metadata: GraphMetadata {
+                name: "chain".into(),
+                description: "".into(),
+            },
+            nodes: vec![
+                make_node("reader", "file_read", NodeKind::Source),
+                make_node("llm", "llm_call", NodeKind::Processor),
+                make_node("out", "console", NodeKind::Sink),
+            ],
+            edges: vec![
+                make_edge("e1", "reader", "llm"),
+                make_edge("e2", "llm", "out"),
+            ],
+        };
+
+        let result = infer_types(&graph);
+        assert!(!result.has_contradictions);
+
+        // llm_call input narrowed from Any to String.
+        let llm_input = result
+            .port_types
+            .get(&("llm".into(), "default".into()))
+            .unwrap();
+        assert_eq!(*llm_input, PortType::String);
+
+        // Console input narrowed from Any to String (from llm_call output).
+        let console_input = result
+            .port_types
+            .get(&("out".into(), "default".into()))
+            .unwrap();
+        assert_eq!(*console_input, PortType::String);
+    }
+
+    #[test]
+    fn infer_types_detects_contradiction() {
+        // file_read (String) → filter (Object) — incompatible.
+        let graph = AnpGraph {
+            version: GraphVersion::V0_1,
+            metadata: GraphMetadata {
+                name: "conflict".into(),
+                description: "".into(),
+            },
+            nodes: vec![
+                make_node("reader", "file_read", NodeKind::Source),
+                make_node("filt", "filter", NodeKind::Processor),
+            ],
+            edges: vec![make_edge("e1", "reader", "filt")],
+        };
+
+        let result = infer_types(&graph);
+        assert!(result.has_contradictions);
+        assert_eq!(result.contradictions.len(), 1);
+        assert!(result.contradictions[0].contains("conflicts"));
+    }
+
+    #[test]
+    fn infer_types_object_narrowing() {
+        // http_server (Object(None)) → transform (Any→Object(None))
+        // Transform input should be narrowed from Any to Object(None).
+        let graph = AnpGraph {
+            version: GraphVersion::V0_1,
+            metadata: GraphMetadata {
+                name: "obj".into(),
+                description: "".into(),
+            },
+            nodes: vec![
+                make_node("server", "http_server", NodeKind::Service),
+                make_node("xform", "transform", NodeKind::Processor),
+            ],
+            edges: vec![make_edge("e1", "server", "xform")],
+        };
+
+        let result = infer_types(&graph);
+        assert!(!result.has_contradictions);
+
+        let xform_input = result
+            .port_types
+            .get(&("xform".into(), "default".into()))
+            .unwrap();
+        assert_eq!(*xform_input, PortType::Object(None));
+        assert!(result.ports_narrowed >= 1);
+    }
+
+    #[test]
+    fn infer_types_back_propagation() {
+        // sleep (Any→Any) → file_write (String input)
+        // sleep's output should be back-propagated to String.
+        let graph = AnpGraph {
+            version: GraphVersion::V0_1,
+            metadata: GraphMetadata {
+                name: "backprop".into(),
+                description: "".into(),
+            },
+            nodes: vec![
+                make_node("wait", "sleep", NodeKind::Processor),
+                make_node("writer", "file_write", NodeKind::Sink),
+            ],
+            edges: vec![make_edge("e1", "wait", "writer")],
+        };
+
+        let result = infer_types(&graph);
+        assert!(!result.has_contradictions);
+
+        // sleep's output should be narrowed from Any to String.
+        let sleep_output = result
+            .port_types
+            .get(&("wait".into(), "default".into()))
+            .unwrap();
+        assert_eq!(*sleep_output, PortType::String);
+    }
+
+    #[test]
+    fn infer_types_empty_graph() {
+        let graph = AnpGraph {
+            version: GraphVersion::V0_1,
+            metadata: GraphMetadata {
+                name: "empty".into(),
+                description: "".into(),
+            },
+            nodes: vec![],
+            edges: vec![],
+        };
+
+        let result = infer_types(&graph);
+        assert!(!result.has_contradictions);
+        assert_eq!(result.ports_narrowed, 0);
+        assert_eq!(result.total_ports, 0);
+    }
+
+    #[test]
+    fn infer_types_display_format() {
+        let graph = AnpGraph {
+            version: GraphVersion::V0_1,
+            metadata: GraphMetadata {
+                name: "display".into(),
+                description: "".into(),
+            },
+            nodes: vec![
+                make_node("reader", "file_read", NodeKind::Source),
+                make_node("out", "console", NodeKind::Sink),
+            ],
+            edges: vec![make_edge("e1", "reader", "out")],
+        };
+
+        let result = infer_types(&graph);
+        let text = result.to_string();
+        assert!(text.contains("ANP Type Inference"));
+        assert!(text.contains("Analyzed"));
+        assert!(text.contains("Inferred Types:"));
+        assert!(text.contains("Narrowed:"));
+        assert!(text.contains("Contradictions: 0"));
+    }
+
+    #[test]
+    fn infer_types_multi_output_conditional() {
+        // http_server → conditional (Any→Any true/false) → console
+        // conditional's input should narrow to Object(None) from the server.
+        let graph = AnpGraph {
+            version: GraphVersion::V0_1,
+            metadata: GraphMetadata {
+                name: "cond".into(),
+                description: "".into(),
+            },
+            nodes: vec![
+                make_node("server", "http_server", NodeKind::Service),
+                make_node("cond", "conditional", NodeKind::Processor),
+                make_node("out", "console", NodeKind::Sink),
+            ],
+            edges: vec![
+                make_edge("e1", "server", "cond"),
+                Edge {
+                    id: "e2".into(),
+                    from_node: "cond".into(),
+                    from_port: "true".into(),
+                    to_node: "out".into(),
+                    to_port: "default".into(),
+                },
+            ],
+        };
+
+        let result = infer_types(&graph);
+        assert!(!result.has_contradictions);
+
+        // Conditional's input should narrow to Object(None).
+        let cond_input = result
+            .port_types
+            .get(&("cond".into(), "default".into()))
+            .unwrap();
+        assert_eq!(*cond_input, PortType::Object(None));
     }
 }
