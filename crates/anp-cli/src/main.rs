@@ -99,6 +99,17 @@ enum Commands {
         #[arg(short, long)]
         output: Option<PathBuf>,
     },
+    /// Compile a graph to optimized binary format (.anp.compiled)
+    Compile {
+        /// Path to the .anp.json graph file
+        graph: PathBuf,
+        /// Output path for compiled graph
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+        /// Optimization level: none, basic, full
+        #[arg(long, default_value = "full")]
+        opt: String,
+    },
 }
 
 /// Unified error type for CLI operations.
@@ -175,6 +186,11 @@ async fn main() -> ExitCode {
             new_graph,
         } => cmd_diff(old_graph, new_graph),
         Commands::Optimize { graph: path, output } => cmd_optimize(path, output),
+        Commands::Compile {
+            graph: path,
+            output,
+            opt,
+        } => cmd_compile(path, output, opt),
     };
 
     match result {
@@ -613,16 +629,47 @@ fn cmd_diff(old_path: PathBuf, new_path: PathBuf) -> CliResult {
 
 fn cmd_optimize(path: PathBuf, output: Option<PathBuf>) -> CliResult {
     let graph = load_graph(&path)?;
-    println!("Optimizer not yet available.");
-    // When anp_core::graph::optimize is implemented, this will run
-    // optimization passes and save the result.
+    let result = anp_core::graph::optimize::optimize(&graph);
+    println!("{}", result);
+
     if let Some(out_path) = output {
-        let json = serde_json::to_string_pretty(&graph)
+        let json = serde_json::to_string_pretty(&result.graph)
             .map_err(|e| CliError::Message(format!("Error serializing graph: {}", e)))?;
         std::fs::write(&out_path, &json)
             .map_err(|e| CliError::Message(format!("Error writing file: {}", e)))?;
-        println!("Graph copied to {}", out_path.display());
+        println!("Optimized graph saved to {}", out_path.display());
     }
+    Ok(())
+}
+
+fn cmd_compile(path: PathBuf, output: Option<PathBuf>, opt: String) -> CliResult {
+    let graph = load_graph(&path)?;
+
+    let opt_level = match opt.as_str() {
+        "none" => anp_core::graph::compile::OptLevel::None,
+        "basic" => anp_core::graph::compile::OptLevel::Basic,
+        _ => anp_core::graph::compile::OptLevel::Full,
+    };
+
+    let compiled = anp_core::graph::compile::compile(
+        &graph,
+        Some(&path.display().to_string()),
+        opt_level,
+    )
+    .map_err(|e| CliError::Message(format!("Compilation failed: {}", e)))?;
+
+    println!("{}", compiled);
+
+    let out_path = output.unwrap_or_else(|| {
+        let mut p = path.clone();
+        p.set_extension("compiled");
+        p
+    });
+
+    anp_core::graph::compile::save_to_file(&compiled, &out_path)
+        .map_err(|e| CliError::Message(format!("Error saving compiled graph: {}", e)))?;
+
+    println!("\nSaved to {}", out_path.display());
     Ok(())
 }
 
