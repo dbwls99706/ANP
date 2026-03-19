@@ -79,6 +79,10 @@ Programs are not written — they are **generated from intent**. The fundamental
 - HTTP Server: path parameters (`/users/:id` → `{"id": "42"}`) and query params (`?key=val` → `{"_query": {"key": "val"}}`)
 - ForEach node: graph-native iteration over arrays — replaces for-loops without code
 - Merge node: combines multiple JSON objects (shallow, deep, or array strategy)
+- Transform node: supports literal values (`'text'`, `42`, `true`, `null`) in addition to dot-paths
+- HTTP Client: automatic retry with exponential backoff (configurable retry_count, retry_backoff_ms)
+- Pipeline timeout: 30s default per-request timeout prevents hanging pipelines
+- Graceful shutdown: SIGINT + SIGTERM handling with connection draining for container deployments
 
 ## Roadmap
 

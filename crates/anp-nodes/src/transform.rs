@@ -4,7 +4,7 @@ use anp_core::graph::spec::NodeKind;
 use anp_core::node::traits::{NodeError, NodeExecutor, NodeOutput, NodeResult};
 use anp_core::runtime::context::ExecutionContext;
 
-/// Transform node — maps input fields using dot-path notation
+/// Transform node — maps input fields using dot-path notation or literal values
 ///
 /// Config example:
 /// ```json
@@ -12,10 +12,20 @@ use anp_core::runtime::context::ExecutionContext;
 ///   "type": "map",
 ///   "mapping": {
 ///     "name": "user.name",
-///     "age": "user.age"
+///     "age": "user.age",
+///     "greeting": "'Hello World'",
+///     "count": "42",
+///     "active": "true"
 ///   }
 /// }
 /// ```
+///
+/// Mapping values can be:
+/// - Dot-path: `"user.name"` → resolves from input
+/// - Literal string: `"'some text'"` → single-quoted literal
+/// - Literal number: `"42"`, `"3.14"` → parsed as number
+/// - Literal boolean: `"true"`, `"false"` → parsed as boolean
+/// - Literal null: `"null"` → JSON null
 pub struct TransformNode {
     mapping: HashMap<String, String>,
 }
@@ -125,6 +135,40 @@ fn transform_single(
     transform_single_with_report(input, mapping).0
 }
 
+/// Try to parse a mapping value as a literal.
+/// Returns Some(value) if it's a literal, None if it should be treated as a dot-path.
+fn parse_literal(s: &str) -> Option<serde_json::Value> {
+    // Single-quoted string literal: 'hello world'
+    if s.starts_with('\'') && s.ends_with('\'') && s.len() >= 2 {
+        return Some(serde_json::Value::String(s[1..s.len() - 1].to_string()));
+    }
+
+    // Boolean
+    if s == "true" {
+        return Some(serde_json::Value::Bool(true));
+    }
+    if s == "false" {
+        return Some(serde_json::Value::Bool(false));
+    }
+
+    // Null
+    if s == "null" {
+        return Some(serde_json::Value::Null);
+    }
+
+    // Number (integer or float)
+    if let Ok(n) = s.parse::<i64>() {
+        return Some(serde_json::json!(n));
+    }
+    if let Ok(n) = s.parse::<f64>() {
+        if n.is_finite() {
+            return Some(serde_json::json!(n));
+        }
+    }
+
+    None
+}
+
 fn transform_single_with_report(
     input: &serde_json::Value,
     mapping: &HashMap<String, String>,
@@ -133,6 +177,13 @@ fn transform_single_with_report(
     let mut missing = Vec::new();
 
     for (output_key, input_path) in mapping {
+        // First check if this is a literal value
+        if let Some(literal) = parse_literal(input_path) {
+            result.insert(output_key.clone(), literal);
+            continue;
+        }
+
+        // Otherwise resolve as dot-path
         match resolve_dot_path(input, input_path) {
             Some(value) => {
                 result.insert(output_key.clone(), value);
@@ -185,5 +236,67 @@ mod tests {
         let result = transform_single(&input, &mapping);
         assert_eq!(result["name"], "Bob");
         assert_eq!(result["age"], 30);
+    }
+
+    #[test]
+    fn test_parse_literal_string() {
+        assert_eq!(
+            parse_literal("'Hello World'"),
+            Some(serde_json::json!("Hello World"))
+        );
+        assert_eq!(
+            parse_literal("'ANP — AI Native'"),
+            Some(serde_json::json!("ANP — AI Native"))
+        );
+    }
+
+    #[test]
+    fn test_parse_literal_number() {
+        assert_eq!(parse_literal("42"), Some(serde_json::json!(42)));
+        assert_eq!(parse_literal("3.14"), Some(serde_json::json!(3.14)));
+        assert_eq!(parse_literal("-1"), Some(serde_json::json!(-1)));
+    }
+
+    #[test]
+    fn test_parse_literal_boolean_null() {
+        assert_eq!(parse_literal("true"), Some(serde_json::json!(true)));
+        assert_eq!(parse_literal("false"), Some(serde_json::json!(false)));
+        assert_eq!(parse_literal("null"), Some(serde_json::Value::Null));
+    }
+
+    #[test]
+    fn test_parse_literal_not_literal() {
+        // Dot paths should NOT be parsed as literals
+        assert_eq!(parse_literal("user.name"), None);
+        assert_eq!(parse_literal("data"), None);
+    }
+
+    #[test]
+    fn test_transform_with_literals() {
+        let input = serde_json::json!({"user": {"name": "Alice"}});
+
+        let mut mapping = HashMap::new();
+        mapping.insert("name".to_string(), "user.name".to_string());
+        mapping.insert("title".to_string(), "'Hello World'".to_string());
+        mapping.insert("count".to_string(), "42".to_string());
+        mapping.insert("active".to_string(), "true".to_string());
+
+        let result = transform_single(&input, &mapping);
+        assert_eq!(result["name"], "Alice");
+        assert_eq!(result["title"], "Hello World");
+        assert_eq!(result["count"], 42);
+        assert_eq!(result["active"], true);
+    }
+
+    #[test]
+    fn test_transform_mixed_path_and_literal() {
+        let input = serde_json::json!({});
+        let mut mapping = HashMap::new();
+        mapping.insert("greeting".to_string(), "'Welcome'".to_string());
+        mapping.insert("missing".to_string(), "nonexistent.path".to_string());
+
+        let (result, missing) = transform_single_with_report(&input, &mapping);
+        assert_eq!(result["greeting"], "Welcome");
+        assert_eq!(missing, vec!["nonexistent.path"]);
     }
 }

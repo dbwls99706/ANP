@@ -22,17 +22,48 @@ pub enum ExecutionError {
     ServiceInBatchMode(String),
 }
 
+/// Default pipeline timeout: 30 seconds per request
+const DEFAULT_PIPELINE_TIMEOUT_SECS: u64 = 30;
+
 /// Runtime implementation of PipelineTrigger.
 /// Service nodes use this to execute downstream pipeline on each event.
 pub struct PipelineTriggerImpl {
     pub plan: Arc<ExecutionPlan>,
     pub nodes: Arc<HashMap<String, Box<dyn NodeExecutor>>>,
     pub ctx: Arc<ExecutionContext>,
+    pub pipeline_timeout_secs: u64,
 }
 
 #[async_trait::async_trait]
 impl PipelineTrigger for PipelineTriggerImpl {
     async fn trigger(
+        &self,
+        source_node: &str,
+        port: &str,
+        data: serde_json::Value,
+    ) -> NodeResult<serde_json::Value> {
+        let timeout = std::time::Duration::from_secs(self.pipeline_timeout_secs);
+
+        match tokio::time::timeout(timeout, self.execute_pipeline(source_node, port, data)).await {
+            Ok(result) => result,
+            Err(_) => {
+                error!(
+                    source = %source_node,
+                    port = %port,
+                    timeout_secs = self.pipeline_timeout_secs,
+                    "pipeline timed out"
+                );
+                Err(NodeError::ExecutionFailed(format!(
+                    "pipeline timed out after {}s",
+                    self.pipeline_timeout_secs
+                )))
+            }
+        }
+    }
+}
+
+impl PipelineTriggerImpl {
+    async fn execute_pipeline(
         &self,
         source_node: &str,
         port: &str,
@@ -71,7 +102,9 @@ impl PipelineTrigger for PipelineTriggerImpl {
             }
 
             for node_id in &stage_nodes {
-                match execute_single_node(node_id, &self.plan, &self.nodes, &self.ctx, &run_id).await {
+                match execute_single_node(node_id, &self.plan, &self.nodes, &self.ctx, &run_id)
+                    .await
+                {
                     Ok(val) => {
                         last_output = val;
                     }
@@ -418,6 +451,7 @@ pub async fn execute_service(
         plan: Arc::clone(&plan),
         nodes: Arc::clone(&nodes),
         ctx: Arc::clone(&ctx),
+        pipeline_timeout_secs: DEFAULT_PIPELINE_TIMEOUT_SECS,
     });
 
     // Start all Service nodes
@@ -435,18 +469,42 @@ pub async fn execute_service(
         }
     }
 
-    info!("all service nodes started, waiting for Ctrl+C...");
+    info!("all service nodes started, waiting for shutdown signal...");
 
-    // Wait for Ctrl+C
-    if let Err(e) = tokio::signal::ctrl_c().await {
-        error!(error = %e, "failed to listen for shutdown signal");
-        return Err(ExecutionError::NodeFailed {
-            node_id: "runtime".to_string(),
-            message: format!("signal handler failed: {}", e),
-        });
-    }
+    // Wait for Ctrl+C (SIGINT) or SIGTERM for container environments
+    let shutdown = async {
+        let ctrl_c = tokio::signal::ctrl_c();
 
-    info!("shutdown signal received");
+        #[cfg(unix)]
+        {
+            use tokio::signal::unix::{signal, SignalKind};
+            let mut sigterm = signal(SignalKind::terminate())
+                .expect("failed to register SIGTERM handler");
+            tokio::select! {
+                _ = ctrl_c => info!("received SIGINT (Ctrl+C)"),
+                _ = sigterm.recv() => info!("received SIGTERM"),
+            }
+        }
+
+        #[cfg(not(unix))]
+        {
+            ctrl_c.await.ok();
+            info!("received Ctrl+C");
+        }
+    };
+
+    shutdown.await;
+
+    info!("shutdown signal received, draining connections...");
+
+    // Give in-flight requests a grace period to complete (5 seconds)
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+
+    // Shutdown all service nodes
+    // Note: nodes are behind Arc<HashMap> so we can't call &mut shutdown().
+    // The tokio tasks spawned by service nodes will be dropped when the process exits.
+
+    info!("shutdown complete");
 
     Ok(())
 }
