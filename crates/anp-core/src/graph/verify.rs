@@ -113,7 +113,7 @@ fn is_state(t: &str) -> bool {
 // ---------------------------------------------------------------------------
 
 /// Build adjacency list (forward edges): node_id -> vec of neighbor ids.
-fn build_adj<'a>(graph: &'a AnpGraph) -> HashMap<&'a str, Vec<&'a str>> {
+fn build_adj(graph: &AnpGraph) -> HashMap<&str, Vec<&str>> {
     let mut adj: HashMap<&str, Vec<&str>> = HashMap::new();
     for n in &graph.nodes {
         adj.entry(n.id.as_str()).or_default();
@@ -128,7 +128,7 @@ fn build_adj<'a>(graph: &'a AnpGraph) -> HashMap<&'a str, Vec<&'a str>> {
 
 /// Compute topological layers via Kahn's algorithm.
 /// Returns a Vec of layers, each layer being a Vec of node ids.
-fn topological_layers<'a>(graph: &'a AnpGraph) -> Vec<Vec<&'a str>> {
+fn topological_layers(graph: &AnpGraph) -> Vec<Vec<&str>> {
     let adj = build_adj(graph);
     let mut in_deg: HashMap<&str, usize> = HashMap::new();
     for n in &graph.nodes {
@@ -574,27 +574,14 @@ impl fmt::Display for CheckStatus {
 
 impl fmt::Display for VerificationReport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let top = format!(
-            "\u{2554}{}\u{2557}",
-            "\u{2550}".repeat(BOX_WIDTH - 2)
-        );
-        let mid = format!(
-            "\u{2560}{}\u{2563}",
-            "\u{2550}".repeat(BOX_WIDTH - 2)
-        );
-        let bot = format!(
-            "\u{255a}{}\u{255d}",
-            "\u{2550}".repeat(BOX_WIDTH - 2)
-        );
+        let top = format!("\u{2554}{}\u{2557}", "\u{2550}".repeat(BOX_WIDTH - 2));
+        let mid = format!("\u{2560}{}\u{2563}", "\u{2550}".repeat(BOX_WIDTH - 2));
+        let bot = format!("\u{255a}{}\u{255d}", "\u{2550}".repeat(BOX_WIDTH - 2));
 
         // Header
         writeln!(f, "{}", top)?;
         writeln!(f, "{}", pad_line("ANP Graph Verification Report"))?;
-        writeln!(
-            f,
-            "{}",
-            pad_line(&format!("Graph: {}", self.graph_name))
-        )?;
+        writeln!(f, "{}", pad_line(&format!("Graph: {}", self.graph_name)))?;
         writeln!(f, "{}", mid)?;
 
         // Checks
@@ -604,10 +591,7 @@ impl fmt::Display for VerificationReport {
             } else {
                 check.details[0].clone()
             };
-            let line = format!(
-                "{:<6} {:<16} {}",
-                check.status, check.name, summary
-            );
+            let line = format!("{:<6} {:<16} {}", check.status, check.name, summary);
             writeln!(f, "{}", pad_line(&line))?;
         }
 
@@ -642,11 +626,7 @@ impl fmt::Display for VerificationReport {
             resources.push("State: yes".to_string());
         }
         if !resources.is_empty() {
-            writeln!(
-                f,
-                "{}",
-                pad_line(&format!("  {}", resources.join("  ")))
-            )?;
+            writeln!(f, "{}", pad_line(&format!("  {}", resources.join("  "))))?;
         }
 
         // Verdict
@@ -779,7 +759,12 @@ mod tests {
         let report = verify(&graph);
         assert!(report.overall_pass);
         for check in &report.checks {
-            assert_ne!(check.status, CheckStatus::Fail, "check {} failed", check.name);
+            assert_ne!(
+                check.status,
+                CheckStatus::Fail,
+                "check {} failed",
+                check.name
+            );
         }
     }
 
@@ -789,7 +774,12 @@ mod tests {
     fn test_unreachable_node() {
         let graph = make_graph(
             "unreachable",
-            vec![source("s1"), processor("p1"), processor("orphan"), sink("k1")],
+            vec![
+                source("s1"),
+                processor("p1"),
+                processor("orphan"),
+                sink("k1"),
+            ],
             vec![edge("e1", "s1", "p1"), edge("e2", "p1", "k1")],
         );
         let report = verify(&graph);
@@ -1046,11 +1036,7 @@ mod tests {
 
     #[test]
     fn test_display_failed() {
-        let graph = make_graph(
-            "broken",
-            vec![processor("orphan")],
-            vec![],
-        );
+        let graph = make_graph("broken", vec![processor("orphan")], vec![]);
         let report = verify(&graph);
         assert!(!report.overall_pass);
         let output = format!("{}", report);

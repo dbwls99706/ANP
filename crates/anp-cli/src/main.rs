@@ -110,6 +110,16 @@ enum Commands {
         #[arg(long, default_value = "full")]
         opt: String,
     },
+    /// Benchmark a graph — measure complexity and predict performance
+    Bench {
+        /// Path to the .anp.json graph file
+        graph: PathBuf,
+    },
+    /// Type-check a graph — verify port type compatibility
+    TypeCheck {
+        /// Path to the .anp.json graph file
+        graph: PathBuf,
+    },
 }
 
 /// Unified error type for CLI operations.
@@ -185,12 +195,17 @@ async fn main() -> ExitCode {
             old_graph,
             new_graph,
         } => cmd_diff(old_graph, new_graph),
-        Commands::Optimize { graph: path, output } => cmd_optimize(path, output),
+        Commands::Optimize {
+            graph: path,
+            output,
+        } => cmd_optimize(path, output),
         Commands::Compile {
             graph: path,
             output,
             opt,
         } => cmd_compile(path, output, opt),
+        Commands::Bench { graph: path } => cmd_bench(path),
+        Commands::TypeCheck { graph: path } => cmd_type_check(path),
     };
 
     match result {
@@ -651,12 +666,9 @@ fn cmd_compile(path: PathBuf, output: Option<PathBuf>, opt: String) -> CliResult
         _ => anp_core::graph::compile::OptLevel::Full,
     };
 
-    let compiled = anp_core::graph::compile::compile(
-        &graph,
-        Some(&path.display().to_string()),
-        opt_level,
-    )
-    .map_err(|e| CliError::Message(format!("Compilation failed: {}", e)))?;
+    let compiled =
+        anp_core::graph::compile::compile(&graph, Some(&path.display().to_string()), opt_level)
+            .map_err(|e| CliError::Message(format!("Compilation failed: {}", e)))?;
 
     println!("{}", compiled);
 
@@ -671,6 +683,24 @@ fn cmd_compile(path: PathBuf, output: Option<PathBuf>, opt: String) -> CliResult
 
     println!("\nSaved to {}", out_path.display());
     Ok(())
+}
+
+fn cmd_bench(path: PathBuf) -> CliResult {
+    let graph = load_graph(&path)?;
+    let report = anp_core::graph::bench::benchmark(&graph);
+    println!("{}", report);
+    Ok(())
+}
+
+fn cmd_type_check(path: PathBuf) -> CliResult {
+    let graph = load_graph(&path)?;
+    let result = anp_core::graph::types::type_check(&graph);
+    println!("{}", result);
+    if result.is_sound {
+        Ok(())
+    } else {
+        Err(CliError::Message("type check failed".to_string()))
+    }
 }
 
 fn cmd_graph(path: PathBuf) -> CliResult {

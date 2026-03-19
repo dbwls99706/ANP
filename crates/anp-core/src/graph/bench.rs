@@ -117,14 +117,14 @@ fn count_connected_components(graph: &AnpGraph) -> usize {
     let mut parent: Vec<usize> = (0..n).collect();
     let mut rank: Vec<usize> = vec![0; n];
 
-    fn find(parent: &mut Vec<usize>, x: usize) -> usize {
+    fn find(parent: &mut [usize], x: usize) -> usize {
         if parent[x] != x {
             parent[x] = find(parent, parent[x]);
         }
         parent[x]
     }
 
-    fn union(parent: &mut Vec<usize>, rank: &mut Vec<usize>, a: usize, b: usize) {
+    fn union(parent: &mut [usize], rank: &mut [usize], a: usize, b: usize) {
         let ra = find(parent, a);
         let rb = find(parent, b);
         if ra == rb {
@@ -172,7 +172,10 @@ fn classify_io(node_type: &str) -> (bool, bool, bool) {
             | "static_file"
             | "oauth"
     );
-    let disk = matches!(node_type, "file_read" | "file_write" | "database" | "sql_query");
+    let disk = matches!(
+        node_type,
+        "file_read" | "file_write" | "database" | "sql_query"
+    );
     let ai = matches!(
         node_type,
         "llm_call"
@@ -203,7 +206,12 @@ pub fn benchmark(graph: &AnpGraph) -> BenchmarkReport {
     let (stage_count, max_stage_width, depth) = match &plan_result {
         Ok(plan) => {
             let sc = plan.stages.len();
-            let msw = plan.stages.iter().map(|s| s.node_ids.len()).max().unwrap_or(0);
+            let msw = plan
+                .stages
+                .iter()
+                .map(|s| s.node_ids.len())
+                .max()
+                .unwrap_or(0);
             (sc, msw, sc)
         }
         Err(_) => (0, 0, 0),
@@ -404,7 +412,10 @@ impl fmt::Display for BenchmarkReport {
         // Build I/O lines with context
         let net_label = if self.predictions.network_ops > 0 {
             let net_types: Vec<&str> = vec!["http_server", "http_client", "webhook", "websocket"];
-            format!(" ({})", net_types[..self.predictions.network_ops.min(net_types.len())].join(", "))
+            format!(
+                " ({})",
+                net_types[..self.predictions.network_ops.min(net_types.len())].join(", ")
+            )
         } else {
             String::new()
         };
@@ -500,10 +511,7 @@ mod tests {
 
     #[test]
     fn test_single_node() {
-        let graph = make_graph(
-            vec![make_node("n1", "console", NodeKind::Sink)],
-            vec![],
-        );
+        let graph = make_graph(vec![make_node("n1", "console", NodeKind::Sink)], vec![]);
         let report = benchmark(&graph);
         assert_eq!(report.complexity.nodes, 1);
         assert_eq!(report.complexity.edges, 0);
@@ -645,7 +653,10 @@ mod tests {
             vec![make_edge("e1", "a", "b")],
         );
         let report = benchmark(&graph);
-        assert_eq!(report.comparison.input_gathering_speedup, "~1x faster (O(1) vs O(E))");
+        assert_eq!(
+            report.comparison.input_gathering_speedup,
+            "~1x faster (O(1) vs O(E))"
+        );
     }
 
     #[test]
@@ -672,7 +683,10 @@ mod tests {
 
         let graph = make_graph(nodes, edges);
         let report = benchmark(&graph);
-        assert!(report.comparison.input_gathering_speedup.starts_with("~10x"));
+        assert!(report
+            .comparison
+            .input_gathering_speedup
+            .starts_with("~10x"));
     }
 
     #[test]
@@ -752,10 +766,7 @@ mod tests {
 
     #[test]
     fn test_complexity_label_simple() {
-        let graph = make_graph(
-            vec![make_node("a", "console", NodeKind::Sink)],
-            vec![],
-        );
+        let graph = make_graph(vec![make_node("a", "console", NodeKind::Sink)], vec![]);
         let report = benchmark(&graph);
         let output = format!("{}", report);
         assert!(output.contains("simple"));

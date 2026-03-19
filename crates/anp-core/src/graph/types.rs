@@ -90,7 +90,7 @@ impl PortType {
                     b_fields.iter().all(|(key, b_ty)| {
                         a_fields
                             .get(key)
-                            .map_or(false, |a_ty| a_ty.is_compatible_with(b_ty))
+                            .is_some_and(|a_ty| a_ty.is_compatible_with(b_ty))
                     })
                 }
             },
@@ -237,10 +237,10 @@ pub fn get_node_signature(node_type: &str) -> NodeTypeSignature {
             ]),
         },
         "base64" => NodeTypeSignature {
-            inputs: HashMap::from([("default".into(), PortType::Union(vec![
-                PortType::String,
-                PortType::Binary,
-            ]))]),
+            inputs: HashMap::from([(
+                "default".into(),
+                PortType::Union(vec![PortType::String, PortType::Binary]),
+            )]),
             outputs: HashMap::from([("default".into(), PortType::String)]),
         },
         "env" => NodeTypeSignature {
@@ -361,14 +361,13 @@ pub fn type_check(graph: &AnpGraph) -> TypeCheckResult {
         graph.nodes.iter().map(|n| (n.id.as_str(), n)).collect();
 
     // Check for sink nodes that have no incoming edges.
-    let nodes_with_incoming: std::collections::HashSet<&str> = graph
-        .edges
-        .iter()
-        .map(|e| e.to_node.as_str())
-        .collect();
+    let nodes_with_incoming: std::collections::HashSet<&str> =
+        graph.edges.iter().map(|e| e.to_node.as_str()).collect();
 
     for node in &graph.nodes {
-        if node.kind == super::spec::NodeKind::Sink && !nodes_with_incoming.contains(node.id.as_str()) {
+        if node.kind == super::spec::NodeKind::Sink
+            && !nodes_with_incoming.contains(node.id.as_str())
+        {
             warnings.push(TypeCheckWarning {
                 node_id: node.id.clone(),
                 message: "Sink node has no incoming edges".into(),
@@ -377,11 +376,8 @@ pub fn type_check(graph: &AnpGraph) -> TypeCheckResult {
     }
 
     // Check for source nodes that have no outgoing edges.
-    let nodes_with_outgoing: std::collections::HashSet<&str> = graph
-        .edges
-        .iter()
-        .map(|e| e.from_node.as_str())
-        .collect();
+    let nodes_with_outgoing: std::collections::HashSet<&str> =
+        graph.edges.iter().map(|e| e.from_node.as_str()).collect();
 
     for node in &graph.nodes {
         if node.kind == super::spec::NodeKind::Source
@@ -597,15 +593,12 @@ mod tests {
         consumer.insert("name".into(), PortType::String);
 
         // Producer has more fields — width subtyping OK.
-        assert!(
-            PortType::Object(Some(producer.clone()))
-                .is_compatible_with(&PortType::Object(Some(consumer.clone())))
-        );
+        assert!(PortType::Object(Some(producer.clone()))
+            .is_compatible_with(&PortType::Object(Some(consumer.clone()))));
 
         // Consumer wants a field the producer lacks — fail.
         assert!(
-            !PortType::Object(Some(consumer))
-                .is_compatible_with(&PortType::Object(Some(producer)))
+            !PortType::Object(Some(consumer)).is_compatible_with(&PortType::Object(Some(producer)))
         );
     }
 
@@ -614,22 +607,14 @@ mod tests {
     #[test]
     fn array_compatibility() {
         assert!(PortType::Array(None).is_compatible_with(&PortType::Array(None)));
-        assert!(
-            PortType::Array(Some(Box::new(PortType::String)))
-                .is_compatible_with(&PortType::Array(None))
-        );
-        assert!(
-            PortType::Array(None)
-                .is_compatible_with(&PortType::Array(Some(Box::new(PortType::Number))))
-        );
-        assert!(
-            PortType::Array(Some(Box::new(PortType::String)))
-                .is_compatible_with(&PortType::Array(Some(Box::new(PortType::String))))
-        );
-        assert!(
-            !PortType::Array(Some(Box::new(PortType::String)))
-                .is_compatible_with(&PortType::Array(Some(Box::new(PortType::Number))))
-        );
+        assert!(PortType::Array(Some(Box::new(PortType::String)))
+            .is_compatible_with(&PortType::Array(None)));
+        assert!(PortType::Array(None)
+            .is_compatible_with(&PortType::Array(Some(Box::new(PortType::Number)))));
+        assert!(PortType::Array(Some(Box::new(PortType::String)))
+            .is_compatible_with(&PortType::Array(Some(Box::new(PortType::String)))));
+        assert!(!PortType::Array(Some(Box::new(PortType::String)))
+            .is_compatible_with(&PortType::Array(Some(Box::new(PortType::Number)))));
     }
 
     // ── Union compatibility ──────────────────────────────────────────────
