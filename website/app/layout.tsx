@@ -5,6 +5,9 @@ export const metadata: Metadata = {
   title: "ANP — AI Native Programming",
   description:
     "Software defined as executable graphs, not source code. Prompt → Graph → Run.",
+  icons: {
+    icon: "/icon.svg",
+  },
   openGraph: {
     title: "ANP — AI Native Programming",
     description:

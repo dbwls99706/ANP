@@ -167,13 +167,33 @@ pub fn compile(
         .map_err(|e| CompileError::SerializationError(e.to_string()))?;
     let fingerprint = fnv1a_hash(&json);
 
-    // Timestamp
+    // Timestamp in ISO 8601 format
     let compiled_at = {
         let secs = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
-        format!("{}", secs)
+        // Convert epoch seconds to ISO 8601 UTC: YYYY-MM-DDTHH:MM:SSZ
+        let days_since_epoch = secs / 86400;
+        let time_of_day = secs % 86400;
+        let hours = time_of_day / 3600;
+        let minutes = (time_of_day % 3600) / 60;
+        let seconds = time_of_day % 60;
+        // Civil date from days since 1970-01-01 (algorithm from Howard Hinnant)
+        let z = days_since_epoch as i64 + 719468;
+        let era = (if z >= 0 { z } else { z - 146096 }) / 146097;
+        let doe = (z - era * 146097) as u64;
+        let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+        let y = yoe as i64 + era * 400;
+        let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+        let mp = (5 * doy + 2) / 153;
+        let d = doy - (153 * mp + 2) / 5 + 1;
+        let m = if mp < 10 { mp + 3 } else { mp - 9 };
+        let y = if m <= 2 { y + 1 } else { y };
+        format!(
+            "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
+            y, m, d, hours, minutes, seconds
+        )
     };
 
     Ok(CompiledGraph {

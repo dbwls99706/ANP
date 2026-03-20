@@ -211,7 +211,18 @@ fn find_fusible_transforms(graph: &AnpGraph) -> Option<(String, String)> {
                 .count();
 
             if incoming_count == 1 && outgoing_count == 1 {
-                return Some((edge.from_node.clone(), edge.to_node.clone()));
+                // Verify both transforms only use "default" ports before fusing
+                let first_ports_ok = graph.edges.iter().all(|e| {
+                    (e.from_node != edge.from_node || e.from_port == "default")
+                        && (e.to_node != edge.from_node || e.to_port == "default")
+                });
+                let second_ports_ok = graph.edges.iter().all(|e| {
+                    (e.from_node != edge.to_node || e.from_port == "default")
+                        && (e.to_node != edge.to_node || e.to_port == "default")
+                });
+                if first_ports_ok && second_ports_ok {
+                    return Some((edge.from_node.clone(), edge.to_node.clone()));
+                }
             }
         }
     }
