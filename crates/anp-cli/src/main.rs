@@ -552,6 +552,14 @@ fn describe_node(node: &anp_core::graph::spec::Node) -> String {
         "conditional" => "Conditional router".to_string(),
         "memory" => "Session memory".to_string(),
         "tool_router" => "AI tool router (agentic)".to_string(),
+        "decision" => {
+            let question = node
+                .config
+                .get("question")
+                .and_then(|v| v.as_str())
+                .unwrap_or("?");
+            format!("Decision ({})", question)
+        }
         "html_template" => "HTML template renderer".to_string(),
         "static_file" => "Static file server".to_string(),
         "foreach" => "ForEach iterator".to_string(),

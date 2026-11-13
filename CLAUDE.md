@@ -31,7 +31,7 @@ Programs are not written — they are **generated from intent**. The fundamental
 ### Crate Structure
 
 - **anp-core**: Graph spec, validation, runtime engine, execution scheduler, GraphOp editor
-- **anp-nodes**: 103 built-in node implementations across 12 categories (see Node Catalog below)
+- **anp-nodes**: 104 built-in node implementations across 12 categories (see Node Catalog below)
 - **anp-planner**: LLM integration — generates graphs from prompts, edit ops from instructions
 - **anp-cli**: CLI entry point (`anp run`, `anp prompt`, `anp edit`, etc.)
 
@@ -44,7 +44,7 @@ Programs are not written — they are **generated from intent**. The fundamental
 | Sink | Consumes data, no outputs | console, file_write, log, email |
 | Service | Long-running event loop, triggers downstream | http_server, cron, websocket |
 
-### Node Catalog (103 nodes)
+### Node Catalog (104 nodes)
 
 **I/O & Core** (16): console, file_read, file_write, transform, filter, foreach, merge, template, template_engine, conditional, switch, try_catch, parallel, accumulator, debounce, sleep
 
@@ -56,7 +56,7 @@ Programs are not written — they are **generated from intent**. The fundamental
 
 **AI/ML** (8): llm_call, tool_router, embedding, sentiment, summarize, classify, extract, translate
 
-**AI Workflow** (2): prompt_chain, agent_loop
+**AI Workflow** (3): prompt_chain, agent_loop, decision
 
 **Auth & Security** (9): jwt, api_key, password, totp, encrypt, hash, sanitize, aes, oauth
 
@@ -100,6 +100,9 @@ Programs are not written — they are **generated from intent**. The fundamental
 - Conditional routing: multi-branch port routing with operator support (eq, neq, gt, gte, lt, lte, contains, exists)
 - Memory node: session-based conversation history (max_history limit) + key-value state
 - Tool Router: LLM-powered agentic routing — AI decides which tool/port to use
+- Decision node: typed probabilistic branch — closed set of choices, probability per choice, routes to the winning choice's port or to the `uncertain` port below `threshold`; providers: openai (token logprobs), anthropic (scored JSON), rules (keywords), input (upstream scores); malformed model output degrades to uniform → uncertain
+- Port routing: an edge only carries data when its upstream node emitted on the edge's `from_port`; nodes on untaken branches are skipped (transitively); if none of the emitted ports is wired, the output falls through to `default`
+- `anp verify` Decision Paths check: fails when a decision's reachable `uncertain` port is unhandled, warns on unhandled choices
 - Parallel stage execution: independent nodes within a stage execute concurrently via futures::join_all
 - O(1) input gathering: reverse edge index eliminates O(E) edge scanning per node
 - HTTP client connection pooling: shared reqwest::Client reuses TCP/TLS connections (5-10x faster)

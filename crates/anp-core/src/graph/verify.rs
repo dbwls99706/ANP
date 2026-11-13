@@ -73,6 +73,7 @@ const NETWORK_TYPES: &[&str] = &[
 const AI_TYPES: &[&str] = &[
     "llm_call",
     "tool_router",
+    "decision",
     "embedding",
     "sentiment",
     "summarize",
@@ -439,6 +440,96 @@ fn check_termination(graph: &AnpGraph) -> VerificationCheck {
     }
 }
 
+/// 6. Decision Paths: every outcome of a `decision` node is handled.
+///
+/// A decision routes to one port per choice, or to its uncertain port when the
+/// winning probability is below the threshold. An unhandled uncertain port
+/// silently drops low-confidence inputs, so it fails verification. The top
+/// probability over n choices is always at least 1/n, so the uncertain port is
+/// unreachable — and not required — when threshold <= 1/n.
+fn check_decision_paths(graph: &AnpGraph) -> VerificationCheck {
+    let used_outputs: HashSet<(&str, &str)> = graph
+        .edges
+        .iter()
+        .map(|e| (e.from_node.as_str(), e.from_port.as_str()))
+        .collect();
+
+    let mut decisions = 0;
+    let mut unhandled_uncertain: Vec<String> = Vec::new();
+    let mut unhandled_choices: Vec<String> = Vec::new();
+
+    for node in graph.nodes.iter().filter(|n| n.node_type == "decision") {
+        decisions += 1;
+        let id = node.id.as_str();
+
+        let choices: Vec<&str> = node
+            .config
+            .get("choices")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|c| c.as_str().or_else(|| c.get("name")?.as_str()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        for choice in &choices {
+            if !used_outputs.contains(&(id, choice)) {
+                unhandled_choices.push(format!("{}.{}", id, choice));
+            }
+        }
+
+        let threshold = node
+            .config
+            .get("threshold")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.7);
+        let uncertain_reachable = choices.is_empty() || threshold > 1.0 / choices.len() as f64;
+        let uncertain_port = node
+            .config
+            .get("uncertain_port")
+            .and_then(|v| v.as_str())
+            .unwrap_or("uncertain");
+        if uncertain_reachable && !used_outputs.contains(&(id, uncertain_port)) {
+            unhandled_uncertain.push(format!("{}.{}", id, uncertain_port));
+        }
+    }
+
+    let mut details = Vec::new();
+    let mut status = CheckStatus::Pass;
+
+    if !unhandled_uncertain.is_empty() {
+        status = CheckStatus::Fail;
+        details.push(format!(
+            "{} unhandled low-confidence path(s): {}",
+            unhandled_uncertain.len(),
+            unhandled_uncertain.join(", ")
+        ));
+    }
+    if !unhandled_choices.is_empty() {
+        if status == CheckStatus::Pass {
+            status = CheckStatus::Warn;
+        }
+        details.push(format!(
+            "{} unhandled choice(s): {}",
+            unhandled_choices.len(),
+            unhandled_choices.join(", ")
+        ));
+    }
+    if details.is_empty() {
+        details.push(if decisions == 0 {
+            "No decision nodes".to_string()
+        } else {
+            "All decision outcomes handled".to_string()
+        });
+    }
+
+    VerificationCheck {
+        name: "Decision Paths".to_string(),
+        status,
+        details,
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Metrics computation
 // ---------------------------------------------------------------------------
@@ -525,6 +616,7 @@ pub fn verify(graph: &AnpGraph) -> VerificationReport {
         check_determinism(graph),
         check_port_coverage(graph),
         check_termination(graph),
+        check_decision_paths(graph),
     ];
 
     let overall_pass = checks
@@ -1044,6 +1136,97 @@ mod tests {
     }
 
     // -- Empty graph --
+
+    fn decision(id: &str, config: serde_json::Value) -> Node {
+        let mut n = node(id, "decision", NodeKind::Processor);
+        n.config = config;
+        n
+    }
+
+    fn decision_graph(config: serde_json::Value, ports: &[&str]) -> AnpGraph {
+        let mut nodes = vec![source("src"), decision("d", config)];
+        let mut edges = vec![edge("e0", "src", "d")];
+        for (i, port) in ports.iter().enumerate() {
+            let sink_id = format!("sink_{}", port);
+            nodes.push(sink(&sink_id));
+            edges.push(edge_port(
+                &format!("e{}", i + 1),
+                "d",
+                port,
+                &sink_id,
+                "default",
+            ));
+        }
+        make_graph("decision", nodes, edges)
+    }
+
+    #[test]
+    fn test_decision_all_paths_handled() {
+        let g = decision_graph(
+            serde_json::json!({"question": "q", "choices": ["a", {"name": "b"}]}),
+            &["a", "b", "uncertain"],
+        );
+        let report = verify(&g);
+        assert_eq!(
+            find_check(&report, "Decision Paths").status,
+            CheckStatus::Pass
+        );
+        assert!(report.metrics.has_ai_nodes);
+    }
+
+    #[test]
+    fn test_decision_unhandled_uncertain_fails() {
+        let g = decision_graph(
+            serde_json::json!({"question": "q", "choices": ["a", "b"]}),
+            &["a", "b"],
+        );
+        let report = verify(&g);
+        let check = find_check(&report, "Decision Paths");
+        assert_eq!(check.status, CheckStatus::Fail);
+        assert!(check.details[0].contains("d.uncertain"));
+        assert!(!report.overall_pass);
+    }
+
+    #[test]
+    fn test_decision_custom_uncertain_port() {
+        let config = serde_json::json!({
+            "question": "q", "choices": ["a", "b"], "uncertain_port": "review"
+        });
+        let handled = verify(&decision_graph(config.clone(), &["a", "b", "review"]));
+        assert_eq!(
+            find_check(&handled, "Decision Paths").status,
+            CheckStatus::Pass
+        );
+        let missing = verify(&decision_graph(config, &["a", "b", "uncertain"]));
+        assert_eq!(
+            find_check(&missing, "Decision Paths").status,
+            CheckStatus::Fail
+        );
+    }
+
+    #[test]
+    fn test_decision_unreachable_uncertain_not_required() {
+        // With 2 choices the top probability is always >= 0.5.
+        let g = decision_graph(
+            serde_json::json!({"question": "q", "choices": ["a", "b"], "threshold": 0.5}),
+            &["a", "b"],
+        );
+        assert_eq!(
+            find_check(&verify(&g), "Decision Paths").status,
+            CheckStatus::Pass
+        );
+    }
+
+    #[test]
+    fn test_decision_unhandled_choice_warns() {
+        let g = decision_graph(
+            serde_json::json!({"question": "q", "choices": ["a", "b"]}),
+            &["a", "uncertain"],
+        );
+        let check = find_check(&verify(&g), "Decision Paths").clone();
+        assert_eq!(check.status, CheckStatus::Warn);
+        assert!(check.details[0].contains("d.b"));
+    }
 
     #[test]
     fn test_empty_graph() {

@@ -112,7 +112,7 @@ Topological sort identifies independent stages. Nodes within a stage execute con
 
 ---
 
-## 103 Built-in Nodes
+## 104 Built-in Nodes
 
 Every node is **production-tested Rust** — no npm packages, no pip dependencies, no supply chain risk.
 
@@ -123,7 +123,7 @@ Every node is **production-tested Rust** — no npm packages, no pip dependencie
 | **Data Formats** | 9 | json_parse, csv, yaml, xml, toml, markdown, base64, url_encode, gzip |
 | **Data Processing** | 8 | diff, group_by, pivot, lookup, math, array, string, regex |
 | **AI / ML** | 8 | llm_call, tool_router, embedding, sentiment, summarize, classify, extract, translate |
-| **AI Workflow** | 2 | prompt_chain, agent_loop |
+| **AI Workflow** | 3 | prompt_chain, agent_loop, decision |
 | **Auth & Security** | 9 | jwt, api_key, password, totp, encrypt, hash, sanitize, aes, oauth |
 | **State & Storage** | 10 | database, memory, cache, queue, priority_queue, session, kv_store, counter, redis, sql_query |
 | **Resilience & Flow** | 9 | rate_limit, retry, circuit_breaker, semaphore, deduplicate, throttle, batch, cron, aggregate |
@@ -132,7 +132,7 @@ Every node is **production-tested Rust** — no npm packages, no pip dependencie
 | **Integration** | 3 | email, image_resize, multipart |
 | **Advanced Workflow** | 5 | event_emitter, metrics, state_machine, message_broker, ws |
 
-From a REST API to a real-time dashboard to an autonomous AI agent — 103 nodes compose into anything.
+From a REST API to a real-time dashboard to an autonomous AI agent — 104 nodes compose into anything.
 
 ---
 
@@ -267,7 +267,7 @@ anp init <name>              # Scaffold a new project
 ANP/
 ├── crates/
 │   ├── anp-core/      # Graph spec, validator, scheduler, executor, GraphOp editor, tracing
-│   ├── anp-nodes/     # 103 built-in node implementations (pure Rust)
+│   ├── anp-nodes/     # 104 built-in node implementations (pure Rust)
 │   ├── anp-planner/   # LLM-powered graph generation from prompts
 │   └── anp-cli/       # CLI interface (run, prompt, edit, verify, optimize, compile, diff)
 ├── examples/          # Example ANP graph files
@@ -308,7 +308,7 @@ Path traversal prevention, SSRF protection (scheme-restricted URLs), XSS-safe HT
 | AI-Native Nodes | 10 nodes | Limited | Yes | Limited |
 | Prompt to Graph | Yes | No | No | No |
 | Parallel Execution | Automatic | No | No | No |
-| Built-in Nodes | 103 (Rust) | ~5000 (community JS) | ~100 | ~400 |
+| Built-in Nodes | 104 (Rust) | ~5000 (community JS) | ~100 | ~400 |
 | Zero GC Pauses | Yes | No | No | No |
 | Graph Editing via LLM | Yes | No | No | No |
 
