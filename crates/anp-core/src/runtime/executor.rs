@@ -77,7 +77,12 @@ impl PipelineTriggerImpl {
         debug!(run_id = %run_id, source = %source_node, port = %port, "pipeline trigger fired");
 
         // Store the trigger data as the source node's output
-        self.ctx.set_node_output(&run_id, source_node, data);
+        self.ctx.set_node_output(&run_id, source_node, data.clone());
+        self.ctx.set_node_ports(
+            &run_id,
+            source_node,
+            HashMap::from([(port.to_string(), data)]),
+        );
 
         // Find downstream nodes reachable from source_node via the specified port
         let downstream_nodes = find_downstream_from_port(source_node, port, &self.plan);
@@ -113,16 +118,15 @@ impl PipelineTriggerImpl {
             if stage_nodes.len() > 1 {
                 let futures: Vec<_> = stage_nodes
                     .iter()
-                    .map(|node_id| {
-                        execute_single_node(node_id, &self.plan, &self.nodes, &self.ctx, &run_id)
-                    })
+                    .map(|node_id| run_node(node_id, &self.plan, &self.nodes, &self.ctx, &run_id))
                     .collect();
                 let results = futures::future::join_all(futures).await;
                 for (i, result) in results.into_iter().enumerate() {
                     match result {
-                        Ok(val) => {
+                        Ok(Some(val)) => {
                             last_output = val;
                         }
+                        Ok(None) => {}
                         Err(e) => {
                             error!(node_id = %stage_nodes[i], error = %e, "node execution failed in trigger pipeline");
                             self.ctx.finish_run(&run_id);
@@ -132,12 +136,11 @@ impl PipelineTriggerImpl {
                 }
             } else {
                 for node_id in &stage_nodes {
-                    match execute_single_node(node_id, &self.plan, &self.nodes, &self.ctx, &run_id)
-                        .await
-                    {
-                        Ok(val) => {
+                    match run_node(node_id, &self.plan, &self.nodes, &self.ctx, &run_id).await {
+                        Ok(Some(val)) => {
                             last_output = val;
                         }
+                        Ok(None) => {}
                         Err(e) => {
                             error!(node_id = %node_id, error = %e, "node execution failed in trigger pipeline");
                             self.ctx.finish_run(&run_id);
@@ -203,16 +206,33 @@ async fn execute_single_node(
     ctx: &ExecutionContext,
     run_id: &str,
 ) -> NodeResult<serde_json::Value> {
+    run_node(node_id, plan, nodes, ctx, run_id)
+        .await
+        .map(Option::unwrap_or_default)
+}
+
+/// Like [`execute_single_node`], but returns `None` when the node produced
+/// nothing: it sits on a branch that was not taken, or it returned Skip.
+async fn run_node(
+    node_id: &str,
+    plan: &ExecutionPlan,
+    nodes: &HashMap<String, Box<dyn NodeExecutor>>,
+    ctx: &ExecutionContext,
+    run_id: &str,
+) -> NodeResult<Option<serde_json::Value>> {
     let node = nodes
         .get(node_id)
         .ok_or_else(|| NodeError::Other(format!("node '{}' not found", node_id)))?;
 
     // Service nodes are never executed directly
     if node.node_kind() == NodeKind::Service {
-        return Ok(serde_json::Value::Null);
+        return Ok(None);
     }
 
-    let input = gather_input(node_id, plan, ctx, run_id);
+    let Some(input) = gather_input(node_id, plan, ctx, run_id) else {
+        debug!(node_id = %node_id, "skipped: no upstream branch delivered data");
+        return Ok(None);
+    };
     let node_type = node.node_type().to_string();
 
     debug!(
@@ -247,7 +267,7 @@ async fn execute_single_node(
                         },
                     );
                     let stored = store_output(node_id, &output, plan, ctx, run_id);
-                    Ok(stored)
+                    Ok(Some(stored))
                 }
                 NodeStatus::Skip => {
                     ctx.record_trace(
@@ -262,7 +282,7 @@ async fn execute_single_node(
                         },
                     );
                     info!(node_id = %node_id, "node returned Skip");
-                    Ok(serde_json::Value::Null)
+                    Ok(None)
                 }
                 NodeStatus::Error => {
                     let err_msg = output.error.clone();
@@ -283,10 +303,10 @@ async fn execute_single_node(
                         "node returned Error status"
                     );
                     store_error_output(node_id, &output, plan, ctx, run_id);
-                    Ok(serde_json::json!({
+                    Ok(Some(serde_json::json!({
                         "error": err_msg,
                         "node_id": node_id
-                    }))
+                    })))
                 }
             }
         }
@@ -423,7 +443,7 @@ pub async fn execute_service(
                 let run_id = uuid::Uuid::new_v4().to_string();
                 ctx.start_run(run_id.clone(), node_id.clone());
 
-                let input = gather_input(node_id, &plan, &ctx, &run_id);
+                let input = gather_input(node_id, &plan, &ctx, &run_id).unwrap_or_default();
                 match node.execute(input, &ctx).await {
                     Ok(output) => {
                         store_output(node_id, &output, &plan, &ctx, &run_id);
@@ -514,28 +534,51 @@ pub async fn execute_service(
 
 /// Gather input data for a node from its upstream edges.
 /// Uses reverse_edge_map for O(1) lookup instead of scanning all edges.
+///
+/// An edge only carries data when its upstream node emitted on the edge's
+/// `from_port`. Returns `None` when the node has upstream edges but none of
+/// them carried data in this run — the node is on a branch that was not taken.
 fn gather_input(
     node_id: &str,
     plan: &ExecutionPlan,
     ctx: &ExecutionContext,
     run_id: &str,
-) -> serde_json::Value {
+) -> Option<serde_json::Value> {
     let sources = match plan.reverse_edge_map.get(node_id) {
         Some(s) => s,
-        None => return serde_json::Value::Null,
+        None => return Some(serde_json::Value::Null),
     };
 
     let mut inputs: Vec<serde_json::Value> = Vec::with_capacity(sources.len());
     for from_id in sources {
-        if let Some(output) = ctx.get_node_output(run_id, from_id) {
-            inputs.push(output);
+        if !ctx.has_node_ports(run_id, from_id) {
+            // No per-port record: the node's whole output feeds every edge.
+            if let Some(output) = ctx.get_node_output(run_id, from_id) {
+                inputs.push(output);
+            }
+            continue;
+        }
+
+        let mut ports: Vec<&str> = plan
+            .edge_map
+            .get(from_id)
+            .into_iter()
+            .flatten()
+            .filter(|(_, edges)| edges.iter().any(|e| e.to_node == node_id))
+            .map(|(port, _)| port.as_str())
+            .collect();
+        ports.sort_unstable();
+        for port in ports {
+            if let Some(output) = ctx.get_port_output(run_id, from_id, port) {
+                inputs.push(output);
+            }
         }
     }
 
     match inputs.len() {
-        0 => serde_json::Value::Null,
-        1 => inputs.into_iter().next().unwrap_or(serde_json::Value::Null),
-        _ => serde_json::Value::Array(inputs),
+        0 => None,
+        1 => inputs.pop(),
+        _ => Some(serde_json::Value::Array(inputs)),
     }
 }
 
@@ -543,7 +586,7 @@ fn gather_input(
 fn store_output(
     node_id: &str,
     output: &NodeOutput,
-    _plan: &ExecutionPlan,
+    plan: &ExecutionPlan,
     ctx: &ExecutionContext,
     run_id: &str,
 ) -> serde_json::Value {
@@ -568,6 +611,22 @@ fn store_output(
     };
 
     ctx.set_node_output(run_id, node_id, val.clone());
+
+    // Record per-port outputs so only edges leaving an emitted port carry data.
+    // A graph that wires none of the emitted ports treats the node as
+    // single-output, so its output falls through to the "default" port.
+    let mut ports = output.ports.clone();
+    if !ports.is_empty() && !ports.contains_key("default") {
+        let wired = plan.edge_map.get(node_id);
+        let routed = ports
+            .keys()
+            .any(|port| wired.is_some_and(|m| m.contains_key(port)));
+        if !routed {
+            ports.insert("default".to_string(), val.clone());
+        }
+    }
+    ctx.set_node_ports(run_id, node_id, ports);
+
     val
 }
 
@@ -588,7 +647,12 @@ fn store_error_output(
     // Check if there's an "error" port in the edge_map for this node
     if let Some(port_map) = plan.edge_map.get(node_id) {
         if port_map.contains_key("error") {
-            ctx.set_node_output(run_id, node_id, error_val);
+            ctx.set_node_output(run_id, node_id, error_val.clone());
+            ctx.set_node_ports(
+                run_id,
+                node_id,
+                HashMap::from([("error".to_string(), error_val)]),
+            );
             debug!(node_id = %node_id, "routed error to error port");
             return;
         }
@@ -765,7 +829,7 @@ mod tests {
         ctx.start_run(run_id.into(), "s".into());
 
         let input = gather_input("s", &plan, &ctx, run_id);
-        assert_eq!(input, serde_json::Value::Null);
+        assert_eq!(input, Some(serde_json::Value::Null));
     }
 
     #[test]
@@ -804,7 +868,7 @@ mod tests {
         ctx.set_node_output(run_id, "s", serde_json::json!({"value": 42}));
 
         let input = gather_input("p", &plan, &ctx, run_id);
-        assert_eq!(input, serde_json::json!({"value": 42}));
+        assert_eq!(input, Some(serde_json::json!({"value": 42})));
     }
 
     #[test]
@@ -860,7 +924,7 @@ mod tests {
         ctx.set_node_output(run_id, "s1", serde_json::json!("a"));
         ctx.set_node_output(run_id, "s2", serde_json::json!("b"));
 
-        let input = gather_input("p", &plan, &ctx, run_id);
+        let input = gather_input("p", &plan, &ctx, run_id).unwrap();
         // Multiple upstream → Array
         assert!(input.is_array());
         let arr = input.as_array().unwrap();
@@ -1593,5 +1657,246 @@ mod tests {
                 output: serde_json::Value::Null,
             }
         }
+    }
+
+    // -- port routing tests --
+
+    /// Mock node that passes its input through on one named port
+    struct RouteNode(&'static str);
+
+    #[async_trait::async_trait]
+    impl NodeExecutor for RouteNode {
+        fn node_type(&self) -> &str {
+            "route"
+        }
+        fn node_kind(&self) -> NodeKind {
+            NodeKind::Processor
+        }
+        async fn init(&mut self, _config: &serde_json::Value) -> NodeResult<()> {
+            Ok(())
+        }
+        async fn execute(
+            &self,
+            input: serde_json::Value,
+            _ctx: &ExecutionContext,
+        ) -> NodeResult<NodeOutput> {
+            Ok(NodeOutput::multi(HashMap::from([(
+                self.0.to_string(),
+                input,
+            )])))
+        }
+    }
+
+    fn test_node(id: &str, kind: NodeKind) -> Node {
+        Node {
+            id: id.into(),
+            node_type: "mock".into(),
+            kind,
+            config: serde_json::Value::Null,
+            inputs: vec![],
+            outputs: vec![],
+        }
+    }
+
+    fn test_edge(from: &str, port: &str, to: &str) -> Edge {
+        Edge {
+            id: format!("{}.{}->{}", from, port, to),
+            from_node: from.into(),
+            from_port: port.into(),
+            to_node: to.into(),
+            to_port: "default".into(),
+        }
+    }
+
+    fn echo(kind: NodeKind) -> Box<dyn NodeExecutor> {
+        Box::new(MockNode {
+            kind,
+            output: serde_json::Value::Null,
+        })
+    }
+
+    /// Source "s" emits "data" into router "r"; the remaining nodes echo.
+    /// Returns the ids of the nodes that ran and each node's input-derived output.
+    async fn run_routed(
+        router: RouteNode,
+        others: &[(&str, NodeKind)],
+        edges: Vec<Edge>,
+    ) -> (Vec<String>, HashMap<String, serde_json::Value>) {
+        let mut graph_nodes = vec![
+            test_node("s", NodeKind::Source),
+            test_node("r", NodeKind::Processor),
+        ];
+        let mut nodes: HashMap<String, Box<dyn NodeExecutor>> = HashMap::new();
+        nodes.insert(
+            "s".into(),
+            Box::new(MockNode {
+                kind: NodeKind::Source,
+                output: serde_json::json!("data"),
+            }),
+        );
+        nodes.insert("r".into(), Box::new(router));
+        for (id, kind) in others {
+            graph_nodes.push(test_node(id, *kind));
+            nodes.insert(id.to_string(), echo(*kind));
+        }
+        let mut all_edges = vec![test_edge("s", "default", "r")];
+        all_edges.extend(edges);
+
+        let plan = scheduler::schedule(&make_graph(graph_nodes, all_edges)).unwrap();
+        let ctx = ExecutionContext::new();
+        ctx.start_run("run".into(), "s".into());
+        for stage in &plan.stages {
+            for node_id in &stage.node_ids {
+                run_node(node_id, &plan, &nodes, &ctx, "run").await.unwrap();
+            }
+        }
+
+        let mut ran: Vec<String> = ctx
+            .get_traces("run")
+            .into_iter()
+            .map(|t| t.node_id)
+            .collect();
+        ran.sort();
+        let outputs = ctx.finish_run("run").unwrap().data;
+        (ran, outputs)
+    }
+
+    #[tokio::test]
+    async fn test_only_taken_branch_executes() {
+        let (ran, outputs) = run_routed(
+            RouteNode("yes"),
+            &[("a", NodeKind::Sink), ("b", NodeKind::Sink)],
+            vec![test_edge("r", "yes", "a"), test_edge("r", "no", "b")],
+        )
+        .await;
+        assert_eq!(ran, ["a", "r", "s"]);
+        assert_eq!(outputs["a"], "data");
+    }
+
+    #[tokio::test]
+    async fn test_untaken_branch_is_skipped_transitively() {
+        let (ran, _) = run_routed(
+            RouteNode("yes"),
+            &[
+                ("a", NodeKind::Sink),
+                ("b", NodeKind::Processor),
+                ("b2", NodeKind::Sink),
+            ],
+            vec![
+                test_edge("r", "yes", "a"),
+                test_edge("r", "no", "b"),
+                test_edge("b", "default", "b2"),
+            ],
+        )
+        .await;
+        assert_eq!(ran, ["a", "r", "s"]);
+    }
+
+    #[tokio::test]
+    async fn test_branches_rejoin_with_single_input() {
+        let (ran, outputs) = run_routed(
+            RouteNode("no"),
+            &[
+                ("a", NodeKind::Processor),
+                ("b", NodeKind::Processor),
+                ("join", NodeKind::Sink),
+            ],
+            vec![
+                test_edge("r", "yes", "a"),
+                test_edge("r", "no", "b"),
+                test_edge("a", "default", "join"),
+                test_edge("b", "default", "join"),
+            ],
+        )
+        .await;
+        assert_eq!(ran, ["b", "join", "r", "s"]);
+        assert_eq!(outputs["join"], "data");
+    }
+
+    #[tokio::test]
+    async fn test_default_edge_inactive_when_emitted_port_is_wired() {
+        let (ran, _) = run_routed(
+            RouteNode("yes"),
+            &[("a", NodeKind::Sink), ("fallback", NodeKind::Sink)],
+            vec![
+                test_edge("r", "yes", "a"),
+                test_edge("r", "default", "fallback"),
+            ],
+        )
+        .await;
+        assert_eq!(ran, ["a", "r", "s"]);
+    }
+
+    #[tokio::test]
+    async fn test_unwired_port_falls_through_to_default() {
+        let (ran, outputs) = run_routed(
+            RouteNode("yes"),
+            &[("next", NodeKind::Sink)],
+            vec![test_edge("r", "default", "next")],
+        )
+        .await;
+        assert_eq!(ran, ["next", "r", "s"]);
+        assert_eq!(outputs["next"], "data");
+    }
+
+    #[tokio::test]
+    async fn test_skip_status_skips_downstream() {
+        let graph = make_graph(
+            vec![
+                test_node("s", NodeKind::Source),
+                test_node("k", NodeKind::Sink),
+            ],
+            vec![test_edge("s", "default", "k")],
+        );
+        let plan = scheduler::schedule(&graph).unwrap();
+        let mut nodes: HashMap<String, Box<dyn NodeExecutor>> = HashMap::new();
+        nodes.insert("s".into(), Box::new(SkipNode));
+        nodes.insert("k".into(), echo(NodeKind::Sink));
+        let ctx = ExecutionContext::new();
+        ctx.start_run("run".into(), "s".into());
+
+        assert_eq!(
+            run_node("s", &plan, &nodes, &ctx, "run").await.unwrap(),
+            None
+        );
+        assert_eq!(
+            run_node("k", &plan, &nodes, &ctx, "run").await.unwrap(),
+            None
+        );
+    }
+
+    #[tokio::test]
+    async fn test_trigger_only_feeds_fired_port() {
+        // Service "srv" has two routes; "shared" hangs off the fired route and
+        // also has a direct edge from the route that did not fire.
+        let graph = make_graph(
+            vec![
+                test_node("srv", NodeKind::Service),
+                test_node("a", NodeKind::Processor),
+                test_node("shared", NodeKind::Processor),
+            ],
+            vec![
+                test_edge("srv", "one", "a"),
+                test_edge("a", "default", "shared"),
+                test_edge("srv", "two", "shared"),
+            ],
+        );
+        let plan = Arc::new(scheduler::schedule(&graph).unwrap());
+        let mut nodes: HashMap<String, Box<dyn NodeExecutor>> = HashMap::new();
+        nodes.insert("srv".into(), echo(NodeKind::Service));
+        nodes.insert("a".into(), echo(NodeKind::Processor));
+        nodes.insert("shared".into(), echo(NodeKind::Processor));
+        let trigger = PipelineTriggerImpl {
+            plan,
+            nodes: Arc::new(nodes),
+            ctx: Arc::new(ExecutionContext::new()),
+            pipeline_timeout_secs: 5,
+        };
+
+        let result = trigger
+            .execute_pipeline("srv", "one", serde_json::json!("req"))
+            .await
+            .unwrap();
+        assert_eq!(result, "req");
     }
 }

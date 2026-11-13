@@ -21,6 +21,9 @@ pub struct ExecutionContext {
 pub struct RunContext {
     /// Node outputs: NodeId → Value
     pub data: HashMap<String, serde_json::Value>,
+    /// Per-port node outputs: NodeId → PortName → Value.
+    /// A node recorded here only feeds edges leaving one of these ports.
+    pub ports: HashMap<String, HashMap<String, serde_json::Value>>,
     /// Run metadata for tracing
     pub metadata: RunMetadata,
     /// Per-node execution traces
@@ -68,6 +71,7 @@ impl ExecutionContext {
             run_id,
             RunContext {
                 data: HashMap::new(),
+                ports: HashMap::new(),
                 metadata: RunMetadata {
                     started_at: Instant::now(),
                     source_node,
@@ -89,6 +93,37 @@ impl ExecutionContext {
         self.runs
             .get(run_id)
             .and_then(|run| run.data.get(node_id).cloned())
+    }
+
+    /// Record which output ports a node emitted on in a specific run
+    pub fn set_node_ports(
+        &self,
+        run_id: &str,
+        node_id: &str,
+        ports: HashMap<String, serde_json::Value>,
+    ) {
+        if let Some(mut run) = self.runs.get_mut(run_id) {
+            run.ports.insert(node_id.to_string(), ports);
+        }
+    }
+
+    /// Whether per-port outputs were recorded for a node in a specific run
+    pub fn has_node_ports(&self, run_id: &str, node_id: &str) -> bool {
+        self.runs
+            .get(run_id)
+            .is_some_and(|run| run.ports.contains_key(node_id))
+    }
+
+    /// Get the value a node emitted on one output port, if it emitted there
+    pub fn get_port_output(
+        &self,
+        run_id: &str,
+        node_id: &str,
+        port: &str,
+    ) -> Option<serde_json::Value> {
+        self.runs
+            .get(run_id)
+            .and_then(|run| run.ports.get(node_id)?.get(port).cloned())
     }
 
     /// Finish and clean up a run (prevents memory leaks)
