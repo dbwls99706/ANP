@@ -1,0 +1,1590 @@
+{
+ "delta": 0.1,
+ "trials": 100,
+ "data": {
+  "clinc": {
+   "eps": 0.05,
+   "n0": 4000,
+   "edits": {
+    "leaf": {
+     "node": 3,
+     "traffic_share": 0.08790697674418604,
+     "error_before": 0.16906976744186047,
+     "error_after": 0.171046511627907,
+     "fd_predicted": [
+      3
+     ],
+     "fd_changed": [
+      3
+     ],
+     "tf_changed": [
+      3
+     ],
+     "min_changed": [
+      0,
+      1,
+      3
+     ],
+     "sizes": {
+      "100": {
+       "scratch: e2e-pareto": {
+        "risk_mean": 0.004179069767441861,
+        "risk_q90": 0.0,
+        "risk_max": 0.0727906976744186,
+        "violation": 0.02,
+        "review_mean": 0.9422686046511629,
+        "review_sd": 0.1880571638860345,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "scratch: min-level": {
+        "risk_mean": 0.0,
+        "risk_q90": 0.0,
+        "risk_max": 0.0,
+        "violation": 0.0,
+        "review_mean": 1.0,
+        "review_sd": 0.0,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-level": {
+        "risk_mean": 0.0217,
+        "risk_q90": 0.025348837209302325,
+        "risk_max": 0.030232558139534883,
+        "violation": 0.0,
+        "review_mean": 0.37072674418604656,
+        "review_sd": 0.03298499410941364,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-node": {
+        "risk_mean": 0.015284883720930236,
+        "risk_q90": 0.0177093023255814,
+        "risk_max": 0.021627906976744184,
+        "violation": 0.0,
+        "review_mean": 0.43817093023255815,
+        "review_sd": 0.022937907667583298,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: e2e-pareto": {
+        "risk_mean": 0.04117093023255814,
+        "risk_q90": 0.0462093023255814,
+        "risk_max": 0.05186046511627907,
+        "violation": 0.02,
+        "review_mean": 0.25113837209302325,
+        "review_sd": 0.02334489505658169,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: min-level": {
+        "risk_mean": 0.033848837209302325,
+        "risk_q90": 0.0377906976744186,
+        "risk_max": 0.04081395348837209,
+        "violation": 0.0,
+        "review_mean": 0.2795348837209302,
+        "review_sd": 0.015138838264971996,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       }
+      },
+      "250": {
+       "scratch: e2e-pareto": {
+        "risk_mean": 0.004572093023255814,
+        "risk_q90": 0.01672093023255816,
+        "risk_max": 0.07348837209302325,
+        "violation": 0.02,
+        "review_mean": 0.9271267441860465,
+        "review_sd": 0.17706495242031506,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "scratch: min-level": {
+        "risk_mean": 0.005887209302325581,
+        "risk_q90": 0.012465116279069769,
+        "risk_max": 0.020348837209302327,
+        "violation": 0.0,
+        "review_mean": 0.7064174418604651,
+        "review_sd": 0.15692259763395522,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-level": {
+        "risk_mean": 0.02695348837209302,
+        "risk_q90": 0.030232558139534883,
+        "risk_max": 0.033255813953488374,
+        "violation": 0.0,
+        "review_mean": 0.3251220930232559,
+        "review_sd": 0.023675602925327405,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-node": {
+        "risk_mean": 0.01919883720930233,
+        "risk_q90": 0.022593023255813957,
+        "risk_max": 0.024302325581395348,
+        "violation": 0.0,
+        "review_mean": 0.39580232558139533,
+        "review_sd": 0.023363491996011676,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: e2e-pareto": {
+        "risk_mean": 0.04150930232558139,
+        "risk_q90": 0.0468139534883721,
+        "risk_max": 0.05511627906976744,
+        "violation": 0.04,
+        "review_mean": 0.24876860465116277,
+        "review_sd": 0.020998139806611936,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: min-level": {
+        "risk_mean": 0.033962790697674425,
+        "risk_q90": 0.0377906976744186,
+        "risk_max": 0.0413953488372093,
+        "violation": 0.0,
+        "review_mean": 0.27864186046511624,
+        "review_sd": 0.015023578727899762,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       }
+      },
+      "500": {
+       "scratch: e2e-pareto": {
+        "risk_mean": 0.015255813953488372,
+        "risk_q90": 0.04600000000000001,
+        "risk_max": 0.07383720930232558,
+        "violation": 0.07,
+        "review_mean": 0.7489500000000001,
+        "review_sd": 0.31279541945731487,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "scratch: min-level": {
+        "risk_mean": 0.016867441860465116,
+        "risk_q90": 0.024604651162790713,
+        "risk_max": 0.03883720930232558,
+        "violation": 0.0,
+        "review_mean": 0.4373755813953488,
+        "review_sd": 0.06981530965441389,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-level": {
+        "risk_mean": 0.02894302325581395,
+        "risk_q90": 0.032674418604651166,
+        "risk_max": 0.03558139534883721,
+        "violation": 0.0,
+        "review_mean": 0.3089976744186046,
+        "review_sd": 0.018850015600942086,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-node": {
+        "risk_mean": 0.020801162790697676,
+        "risk_q90": 0.023755813953488376,
+        "risk_max": 0.02686046511627907,
+        "violation": 0.0,
+        "review_mean": 0.3788430232558139,
+        "review_sd": 0.024697501285908294,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: e2e-pareto": {
+        "risk_mean": 0.04146744186046512,
+        "risk_q90": 0.04640697674418605,
+        "risk_max": 0.05,
+        "violation": 0.0,
+        "review_mean": 0.24927209302325581,
+        "review_sd": 0.01951832506955508,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: min-level": {
+        "risk_mean": 0.03474186046511627,
+        "risk_q90": 0.03802325581395349,
+        "risk_max": 0.04174418604651163,
+        "violation": 0.0,
+        "review_mean": 0.27436279069767433,
+        "review_sd": 0.01453440445721483,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       }
+      },
+      "1000": {
+       "scratch: e2e-pareto": {
+        "risk_mean": 0.03473372093023255,
+        "risk_q90": 0.046779069767441867,
+        "risk_max": 0.07011627906976745,
+        "violation": 0.06,
+        "review_mean": 0.3658837209302327,
+        "review_sd": 0.16494277077566016,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "scratch: min-level": {
+        "risk_mean": 0.024038372093023258,
+        "risk_q90": 0.03062790697674419,
+        "risk_max": 0.041976744186046515,
+        "violation": 0.0,
+        "review_mean": 0.35638604651162786,
+        "review_sd": 0.04928721707950106,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-level": {
+        "risk_mean": 0.030459302325581403,
+        "risk_q90": 0.03356976744186047,
+        "risk_max": 0.03802325581395349,
+        "violation": 0.0,
+        "review_mean": 0.29936511627906975,
+        "review_sd": 0.018186726181315845,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-node": {
+        "risk_mean": 0.021639534883720928,
+        "risk_q90": 0.02488372093023256,
+        "risk_max": 0.02732558139534884,
+        "violation": 0.0,
+        "review_mean": 0.3699534883720931,
+        "review_sd": 0.025472060219224324,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: e2e-pareto": {
+        "risk_mean": 0.041510465116279066,
+        "risk_q90": 0.047453488372093025,
+        "risk_max": 0.05558139534883721,
+        "violation": 0.04,
+        "review_mean": 0.24878720930232556,
+        "review_sd": 0.02224206918652613,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: min-level": {
+        "risk_mean": 0.03537558139534884,
+        "risk_q90": 0.039767441860465116,
+        "risk_max": 0.04174418604651163,
+        "violation": 0.0,
+        "review_mean": 0.27125,
+        "review_sd": 0.013649254799113386,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       }
+      }
+     }
+    },
+    "middle": {
+     "node": 1,
+     "traffic_share": 0.8852325581395348,
+     "error_before": 0.16906976744186047,
+     "error_after": 0.16790697674418606,
+     "fd_predicted": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+     ],
+     "fd_changed": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      10
+     ],
+     "tf_changed": [
+      1
+     ],
+     "min_changed": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+     ],
+     "sizes": {
+      "100": {
+       "scratch: e2e-pareto": {
+        "risk_mean": 0.0032313953488372093,
+        "risk_q90": 0.0,
+        "risk_max": 0.08267441860465116,
+        "violation": 0.03,
+        "review_mean": 0.9513558139534883,
+        "review_sd": 0.1740625072043891,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "scratch: min-level": {
+        "risk_mean": 0.0,
+        "risk_q90": 0.0,
+        "risk_max": 0.0,
+        "violation": 0.0,
+        "review_mean": 1.0,
+        "review_sd": 0.0,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-level": {
+        "risk_mean": 0.0,
+        "risk_q90": 0.0,
+        "risk_max": 0.0,
+        "violation": 0.0,
+        "review_mean": 1.0,
+        "review_sd": 0.0,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-node": {
+        "risk_mean": 0.0,
+        "risk_q90": 0.0,
+        "risk_max": 0.0,
+        "violation": 0.0,
+        "review_mean": 1.0,
+        "review_sd": 0.0,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: e2e-pareto": {
+        "risk_mean": 0.041089534883720934,
+        "risk_q90": 0.046988372093023256,
+        "risk_max": 0.056627906976744184,
+        "violation": 0.03,
+        "review_mean": 0.24021627906976747,
+        "review_sd": 0.019301765332300894,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: min-level": {
+        "risk_mean": 0.03465348837209302,
+        "risk_q90": 0.03918604651162791,
+        "risk_max": 0.042093023255813954,
+        "violation": 0.0,
+        "review_mean": 0.26515581395348836,
+        "review_sd": 0.01456361086725057,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       }
+      },
+      "250": {
+       "scratch: e2e-pareto": {
+        "risk_mean": 0.004952325581395349,
+        "risk_q90": 0.019558139534883792,
+        "risk_max": 0.06895348837209302,
+        "violation": 0.03,
+        "review_mean": 0.9194093023255815,
+        "review_sd": 0.19650814478817627,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "scratch: min-level": {
+        "risk_mean": 0.0059069767441860465,
+        "risk_q90": 0.013639534883720933,
+        "risk_max": 0.020465116279069766,
+        "violation": 0.0,
+        "review_mean": 0.7065709302325581,
+        "review_sd": 0.16806770193108458,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-level": {
+        "risk_mean": 0.0011523255813953488,
+        "risk_q90": 0.0030465116279069786,
+        "risk_max": 0.009883720930232558,
+        "violation": 0.0,
+        "review_mean": 0.8989883720930233,
+        "review_sd": 0.09635459134987949,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-node": {
+        "risk_mean": 0.0,
+        "risk_q90": 0.0,
+        "risk_max": 0.0,
+        "violation": 0.0,
+        "review_mean": 1.0,
+        "review_sd": 0.0,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: e2e-pareto": {
+        "risk_mean": 0.041323255813953484,
+        "risk_q90": 0.04690697674418605,
+        "risk_max": 0.053488372093023255,
+        "violation": 0.05,
+        "review_mean": 0.23862790697674424,
+        "review_sd": 0.019141548115315703,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: min-level": {
+        "risk_mean": 0.03481627906976744,
+        "risk_q90": 0.03918604651162791,
+        "risk_max": 0.042093023255813954,
+        "violation": 0.0,
+        "review_mean": 0.2642744186046512,
+        "review_sd": 0.013960173979740325,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       }
+      },
+      "500": {
+       "scratch: e2e-pareto": {
+        "risk_mean": 0.013663953488372094,
+        "risk_q90": 0.04356976744186048,
+        "risk_max": 0.056511627906976745,
+        "violation": 0.04,
+        "review_mean": 0.7729186046511627,
+        "review_sd": 0.3068683223347906,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "scratch: min-level": {
+        "risk_mean": 0.016924418604651163,
+        "risk_q90": 0.02547674418604651,
+        "risk_max": 0.04244186046511628,
+        "violation": 0.0,
+        "review_mean": 0.4246197674418605,
+        "review_sd": 0.06806173400883853,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-level": {
+        "risk_mean": 0.013139534883720931,
+        "risk_q90": 0.018197674418604655,
+        "risk_max": 0.022093023255813953,
+        "violation": 0.0,
+        "review_mean": 0.4826883720930232,
+        "review_sd": 0.07013607896612145,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-node": {
+        "risk_mean": 0.0,
+        "risk_q90": 0.0,
+        "risk_max": 0.0,
+        "violation": 0.0,
+        "review_mean": 1.0,
+        "review_sd": 0.0,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: e2e-pareto": {
+        "risk_mean": 0.04146860465116279,
+        "risk_q90": 0.04755813953488372,
+        "risk_max": 0.051279069767441864,
+        "violation": 0.01,
+        "review_mean": 0.23828837209302325,
+        "review_sd": 0.019972331320812744,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: min-level": {
+        "risk_mean": 0.03541046511627907,
+        "risk_q90": 0.03918604651162791,
+        "risk_max": 0.042093023255813954,
+        "violation": 0.0,
+        "review_mean": 0.26167558139534886,
+        "review_sd": 0.01437904452002342,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       }
+      },
+      "1000": {
+       "scratch: e2e-pareto": {
+        "risk_mean": 0.03221046511627907,
+        "risk_q90": 0.044720930232558145,
+        "risk_max": 0.05767441860465116,
+        "violation": 0.04,
+        "review_mean": 0.3871186046511628,
+        "review_sd": 0.20552929044790016,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "scratch: min-level": {
+        "risk_mean": 0.02463255813953489,
+        "risk_q90": 0.030348837209302326,
+        "risk_max": 0.046046511627906975,
+        "violation": 0.0,
+        "review_mean": 0.3380476744186046,
+        "review_sd": 0.04535059118551983,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-level": {
+        "risk_mean": 0.020099999999999996,
+        "risk_q90": 0.024895348837209303,
+        "risk_max": 0.029069767441860465,
+        "violation": 0.0,
+        "review_mean": 0.37604302325581396,
+        "review_sd": 0.03921336931306261,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-node": {
+        "risk_mean": 0.0024988372093023253,
+        "risk_q90": 0.004302325581395349,
+        "risk_max": 0.008023255813953488,
+        "violation": 0.0,
+        "review_mean": 0.8234127906976744,
+        "review_sd": 0.087739870355038,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: e2e-pareto": {
+        "risk_mean": 0.04111627906976744,
+        "risk_q90": 0.04722093023255814,
+        "risk_max": 0.05453488372093023,
+        "violation": 0.03,
+        "review_mean": 0.23918372093023255,
+        "review_sd": 0.019643943768276974,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: min-level": {
+        "risk_mean": 0.03584418604651163,
+        "risk_q90": 0.03941860465116279,
+        "risk_max": 0.04244186046511628,
+        "violation": 0.0,
+        "review_mean": 0.25970348837209306,
+        "review_sd": 0.013275519573889873,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       }
+      }
+     }
+    },
+    "root": {
+     "node": 0,
+     "traffic_share": 1.0,
+     "error_before": 0.16906976744186047,
+     "error_after": 0.1625581395348837,
+     "fd_predicted": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+     ],
+     "fd_changed": [
+      0,
+      1,
+      3,
+      6,
+      7,
+      8,
+      9,
+      10
+     ],
+     "tf_changed": [
+      0
+     ],
+     "min_changed": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+     ],
+     "sizes": {
+      "100": {
+       "scratch: e2e-pareto": {
+        "risk_mean": 0.006224418604651163,
+        "risk_q90": 0.029441860465116283,
+        "risk_max": 0.0905813953488372,
+        "violation": 0.05,
+        "review_mean": 0.8842220930232557,
+        "review_sd": 0.2804232689358739,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "scratch: min-level": {
+        "risk_mean": 0.0,
+        "risk_q90": 0.0,
+        "risk_max": 0.0,
+        "violation": 0.0,
+        "review_mean": 1.0,
+        "review_sd": 0.0,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-level": {
+        "risk_mean": 0.0,
+        "risk_q90": 0.0,
+        "risk_max": 0.0,
+        "violation": 0.0,
+        "review_mean": 1.0,
+        "review_sd": 0.0,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-node": {
+        "risk_mean": 0.0,
+        "risk_q90": 0.0,
+        "risk_max": 0.0,
+        "violation": 0.0,
+        "review_mean": 1.0,
+        "review_sd": 0.0,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: e2e-pareto": {
+        "risk_mean": 0.04080697674418604,
+        "risk_q90": 0.04733720930232558,
+        "risk_max": 0.05104651162790698,
+        "violation": 0.02,
+        "review_mean": 0.16337325581395348,
+        "review_sd": 0.010901527063681174,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: min-level": {
+        "risk_mean": 0.03210581395348837,
+        "risk_q90": 0.03701162790697675,
+        "risk_max": 0.039883720930232555,
+        "violation": 0.0,
+        "review_mean": 0.18436046511627904,
+        "review_sd": 0.008720364322724048,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       }
+      },
+      "250": {
+       "scratch: e2e-pareto": {
+        "risk_mean": 0.0039395348837209295,
+        "risk_q90": 0.011093023255813989,
+        "risk_max": 0.07825581395348838,
+        "violation": 0.02,
+        "review_mean": 0.9238046511627906,
+        "review_sd": 0.21264976530090765,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "scratch: min-level": {
+        "risk_mean": 0.0068116279069767435,
+        "risk_q90": 0.013325581395348843,
+        "risk_max": 0.01918604651162791,
+        "violation": 0.0,
+        "review_mean": 0.5335267441860465,
+        "review_sd": 0.1889451311604441,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-level": {
+        "risk_mean": 0.0,
+        "risk_q90": 0.0,
+        "risk_max": 0.0,
+        "violation": 0.0,
+        "review_mean": 1.0,
+        "review_sd": 0.0,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-node": {
+        "risk_mean": 0.0,
+        "risk_q90": 0.0,
+        "risk_max": 0.0,
+        "violation": 0.0,
+        "review_mean": 1.0,
+        "review_sd": 0.0,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: e2e-pareto": {
+        "risk_mean": 0.04044534883720931,
+        "risk_q90": 0.04583720930232558,
+        "risk_max": 0.05186046511627907,
+        "violation": 0.03,
+        "review_mean": 0.16427093023255815,
+        "review_sd": 0.011452878687585844,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: min-level": {
+        "risk_mean": 0.03201976744186046,
+        "risk_q90": 0.03697674418604651,
+        "risk_max": 0.039883720930232555,
+        "violation": 0.0,
+        "review_mean": 0.1842918604651162,
+        "review_sd": 0.008378568151693933,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       }
+      },
+      "500": {
+       "scratch: e2e-pareto": {
+        "risk_mean": 0.01647325581395349,
+        "risk_q90": 0.042348837209302326,
+        "risk_max": 0.07767441860465116,
+        "violation": 0.02,
+        "review_mean": 0.6449348837209301,
+        "review_sd": 0.3845638793717748,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "scratch: min-level": {
+        "risk_mean": 0.01701860465116279,
+        "risk_q90": 0.025930232558139536,
+        "risk_max": 0.032674418604651166,
+        "violation": 0.0,
+        "review_mean": 0.28238837209302325,
+        "review_sd": 0.05580893247764388,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-level": {
+        "risk_mean": 0.011823255813953487,
+        "risk_q90": 0.016883720930232562,
+        "risk_max": 0.03,
+        "violation": 0.0,
+        "review_mean": 0.3513116279069768,
+        "review_sd": 0.07773908859176586,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-node": {
+        "risk_mean": 0.0,
+        "risk_q90": 0.0,
+        "risk_max": 0.0,
+        "violation": 0.0,
+        "review_mean": 1.0,
+        "review_sd": 0.0,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: e2e-pareto": {
+        "risk_mean": 0.04131976744186046,
+        "risk_q90": 0.04762790697674419,
+        "risk_max": 0.054767441860465116,
+        "violation": 0.05,
+        "review_mean": 0.16214883720930232,
+        "review_sd": 0.011571052634006585,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: min-level": {
+        "risk_mean": 0.032515116279069764,
+        "risk_q90": 0.03755813953488372,
+        "risk_max": 0.040348837209302324,
+        "violation": 0.0,
+        "review_mean": 0.18251627906976745,
+        "review_sd": 0.008083269315936736,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       }
+      },
+      "1000": {
+       "scratch: e2e-pareto": {
+        "risk_mean": 0.03322441860465116,
+        "risk_q90": 0.04879069767441861,
+        "risk_max": 0.06186046511627907,
+        "violation": 0.09,
+        "review_mean": 0.26421860465116276,
+        "review_sd": 0.22169120602196718,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "scratch: min-level": {
+        "risk_mean": 0.023236046511627903,
+        "risk_q90": 0.029186046511627907,
+        "risk_max": 0.04093023255813953,
+        "violation": 0.0,
+        "review_mean": 0.22762209302325576,
+        "review_sd": 0.02506040498581381,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-level": {
+        "risk_mean": 0.01967674418604651,
+        "risk_q90": 0.02343023255813954,
+        "risk_max": 0.0336046511627907,
+        "violation": 0.0,
+        "review_mean": 0.25192790697674416,
+        "review_sd": 0.028957542351845934,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-node": {
+        "risk_mean": 0.0,
+        "risk_q90": 0.0,
+        "risk_max": 0.0,
+        "violation": 0.0,
+        "review_mean": 1.0,
+        "review_sd": 0.0,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: e2e-pareto": {
+        "risk_mean": 0.040496511627906975,
+        "risk_q90": 0.04477906976744186,
+        "risk_max": 0.050930232558139533,
+        "violation": 0.02,
+        "review_mean": 0.16408604651162795,
+        "review_sd": 0.009494383925364943,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: min-level": {
+        "risk_mean": 0.03288139534883721,
+        "risk_q90": 0.03755813953488372,
+        "risk_max": 0.039767441860465116,
+        "violation": 0.0,
+        "review_mean": 0.18146627906976748,
+        "review_sd": 0.00766263886287799,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       }
+      }
+     }
+    }
+   }
+  },
+  "massive": {
+   "eps": 0.05,
+   "n0": 8000,
+   "edits": {
+    "leaf": {
+     "node": 7,
+     "traffic_share": 0.1457958857599361,
+     "error_before": 0.2218394248052726,
+     "error_after": 0.21869382863990414,
+     "fd_predicted": [
+      7
+     ],
+     "fd_changed": [
+      7
+     ],
+     "tf_changed": [
+      7
+     ],
+     "min_changed": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      7
+     ],
+     "sizes": {
+      "100": {
+       "scratch: e2e-pareto": {
+        "risk_mean": 0.0030642101058518073,
+        "risk_q90": 0.0,
+        "risk_max": 0.10290593169562612,
+        "violation": 0.04,
+        "review_mean": 0.9764474735370482,
+        "review_sd": 0.11330547641334272,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "scratch: min-level": {
+        "risk_mean": 0.0,
+        "risk_q90": 0.0,
+        "risk_max": 0.0,
+        "violation": 0.0,
+        "review_mean": 1.0,
+        "review_sd": 0.0,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-level": {
+        "risk_mean": 0.016942780107849012,
+        "risk_q90": 0.02201917315757939,
+        "risk_max": 0.02541441981226283,
+        "violation": 0.0,
+        "review_mean": 0.5677521469942081,
+        "review_sd": 0.041101724961915116,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-node": {
+        "risk_mean": 0.00604254044337927,
+        "risk_q90": 0.00799380866786499,
+        "risk_max": 0.010285600159776313,
+        "violation": 0.0,
+        "review_mean": 0.7304563610944677,
+        "review_sd": 0.025009587971152887,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: e2e-pareto": {
+        "risk_mean": 0.042986319153185536,
+        "risk_q90": 0.04713401238266428,
+        "risk_max": 0.051378070701018574,
+        "violation": 0.02,
+        "review_mean": 0.38396494907130013,
+        "review_sd": 0.01503486593074727,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: min-level": {
+        "risk_mean": 0.03842919912123028,
+        "risk_q90": 0.04117235869782305,
+        "risk_max": 0.04398841621729579,
+        "violation": 0.0,
+        "review_mean": 0.4009696425004994,
+        "review_sd": 0.011449231169356868,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       }
+      },
+      "250": {
+       "scratch: e2e-pareto": {
+        "risk_mean": 0.002180946674655482,
+        "risk_q90": 0.0,
+        "risk_max": 0.061563810665068906,
+        "violation": 0.02,
+        "review_mean": 0.9725169762332735,
+        "review_sd": 0.12051280349719239,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "scratch: min-level": {
+        "risk_mean": 0.00543139604553625,
+        "risk_q90": 0.01093469143199521,
+        "risk_max": 0.020870780906730578,
+        "violation": 0.0,
+        "review_mean": 0.7741242260834832,
+        "review_sd": 0.09946222243598135,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-level": {
+        "risk_mean": 0.025438885560215695,
+        "risk_q90": 0.0280607149990014,
+        "risk_max": 0.03335330537247853,
+        "violation": 0.0,
+        "review_mean": 0.4807903934491711,
+        "review_sd": 0.024609102048395615,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-node": {
+        "risk_mean": 0.014853205512282803,
+        "risk_q90": 0.01762532454563611,
+        "risk_max": 0.018823646894347915,
+        "violation": 0.0,
+        "review_mean": 0.5800629119233074,
+        "review_sd": 0.021684446057391504,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: e2e-pareto": {
+        "risk_mean": 0.042856001597763135,
+        "risk_q90": 0.047433592969842224,
+        "risk_max": 0.05097862991811464,
+        "violation": 0.01,
+        "review_mean": 0.384425304573597,
+        "review_sd": 0.015273805221707239,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: min-level": {
+        "risk_mean": 0.03833732774116237,
+        "risk_q90": 0.04109746355102856,
+        "risk_max": 0.04378869582584382,
+        "violation": 0.0,
+        "review_mean": 0.40119283003794687,
+        "review_sd": 0.01048837320157567,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       }
+      },
+      "500": {
+       "scratch: e2e-pareto": {
+        "risk_mean": 0.006104953065708008,
+        "risk_q90": 0.033632913920511306,
+        "risk_max": 0.056421010585180745,
+        "violation": 0.01,
+        "review_mean": 0.9141192330736969,
+        "review_sd": 0.19152909607822458,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "scratch: min-level": {
+        "risk_mean": 0.01414519672458558,
+        "risk_q90": 0.021080487317755144,
+        "risk_max": 0.02731176353105652,
+        "violation": 0.0,
+        "review_mean": 0.6080022967845017,
+        "review_sd": 0.0693850120203264,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-level": {
+        "risk_mean": 0.029496205312562414,
+        "risk_q90": 0.03308368284401838,
+        "risk_max": 0.03460155781905332,
+        "violation": 0.0,
+        "review_mean": 0.44978230477331743,
+        "review_sd": 0.014672414618923154,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-node": {
+        "risk_mean": 0.018666367086079487,
+        "risk_q90": 0.021125424405831834,
+        "risk_max": 0.0225684042340723,
+        "violation": 0.0,
+        "review_mean": 0.5349450768923506,
+        "review_sd": 0.01824048543796899,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: e2e-pareto": {
+        "risk_mean": 0.0426303175554224,
+        "risk_q90": 0.04687936888356301,
+        "risk_max": 0.051627721190333535,
+        "violation": 0.02,
+        "review_mean": 0.38504843219492707,
+        "review_sd": 0.015685316538060008,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: min-level": {
+        "risk_mean": 0.038619432794088276,
+        "risk_q90": 0.04117235869782305,
+        "risk_max": 0.04378869582584382,
+        "violation": 0.0,
+        "review_mean": 0.3998442180946675,
+        "review_sd": 0.010460863561474684,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       }
+      },
+      "1000": {
+       "scratch: e2e-pareto": {
+        "risk_mean": 0.03138356301178351,
+        "risk_q90": 0.04367385660075895,
+        "risk_max": 0.05542240862792091,
+        "violation": 0.01,
+        "review_mean": 0.5338531056520871,
+        "review_sd": 0.1805295802475712,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "scratch: min-level": {
+        "risk_mean": 0.02326592770121829,
+        "risk_q90": 0.029348911523866594,
+        "risk_max": 0.043039744357898944,
+        "violation": 0.0,
+        "review_mean": 0.5046070501298182,
+        "review_sd": 0.043332064831506194,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-level": {
+        "risk_mean": 0.03193678849610545,
+        "risk_q90": 0.03450169762332734,
+        "risk_max": 0.037297783103654884,
+        "violation": 0.0,
+        "review_mean": 0.4351657679249052,
+        "review_sd": 0.014989262365760108,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-node": {
+        "risk_mean": 0.021082983822648296,
+        "risk_q90": 0.02341721589774316,
+        "risk_max": 0.024815258637906932,
+        "violation": 0.0,
+        "review_mean": 0.5100584182144997,
+        "review_sd": 0.015474917601506247,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: e2e-pareto": {
+        "risk_mean": 0.04321549830237667,
+        "risk_q90": 0.04713401238266427,
+        "risk_max": 0.05397443578989415,
+        "violation": 0.04,
+        "review_mean": 0.3839105252646295,
+        "review_sd": 0.014073796817495553,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: min-level": {
+        "risk_mean": 0.038826143399241064,
+        "risk_q90": 0.04117235869782305,
+        "risk_max": 0.0444877171959257,
+        "violation": 0.0,
+        "review_mean": 0.39895845815857794,
+        "review_sd": 0.010356992918295374,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       }
+      }
+     }
+    },
+    "middle": {
+     "node": 2,
+     "traffic_share": 0.2481026562812063,
+     "error_before": 0.2218394248052726,
+     "error_after": 0.21499900139804273,
+     "fd_predicted": [
+      2,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20
+     ],
+     "fd_changed": [
+      2,
+      5,
+      6,
+      7,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20
+     ],
+     "tf_changed": [
+      2
+     ],
+     "min_changed": [
+      0,
+      2,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20
+     ],
+     "sizes": {
+      "100": {
+       "scratch: e2e-pareto": {
+        "risk_mean": 0.002577391651687637,
+        "risk_q90": 0.0,
+        "risk_max": 0.09526662672258837,
+        "violation": 0.03,
+        "review_mean": 0.9792815058917516,
+        "review_sd": 0.11742501975424523,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "scratch: min-level": {
+        "risk_mean": 0.0,
+        "risk_q90": 0.0,
+        "risk_max": 0.0,
+        "violation": 0.0,
+        "review_mean": 1.0,
+        "review_sd": 0.0,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-level": {
+        "risk_mean": 0.010276612742160976,
+        "risk_q90": 0.014559616536848416,
+        "risk_max": 0.019922109047333734,
+        "violation": 0.0,
+        "review_mean": 0.6378125624126223,
+        "review_sd": 0.06584746432813325,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-node": {
+        "risk_mean": 0.0,
+        "risk_q90": 0.0,
+        "risk_max": 0.0,
+        "violation": 0.0,
+        "review_mean": 1.0,
+        "review_sd": 0.0,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: e2e-pareto": {
+        "risk_mean": 0.04257639304973037,
+        "risk_q90": 0.04654483722788096,
+        "risk_max": 0.051128420211703614,
+        "violation": 0.02,
+        "review_mean": 0.37145646095466345,
+        "review_sd": 0.014171622751740299,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: min-level": {
+        "risk_mean": 0.03836728579988017,
+        "risk_q90": 0.0402586379069303,
+        "risk_max": 0.04473736768524066,
+        "violation": 0.0,
+        "review_mean": 0.38701667665268624,
+        "review_sd": 0.011799554538022892,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       }
+      },
+      "250": {
+       "scratch: e2e-pareto": {
+        "risk_mean": 0.0015877771120431398,
+        "risk_q90": 0.0,
+        "risk_max": 0.06570800878769723,
+        "violation": 0.02,
+        "review_mean": 0.9821365088875575,
+        "review_sd": 0.10193446154586129,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "scratch: min-level": {
+        "risk_mean": 0.005524765328540043,
+        "risk_q90": 0.01128420211703615,
+        "risk_max": 0.020071899340922707,
+        "violation": 0.0,
+        "review_mean": 0.7617830037946876,
+        "review_sd": 0.1063747458462279,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-level": {
+        "risk_mean": 0.02062612342720192,
+        "risk_q90": 0.025034951068504094,
+        "risk_max": 0.028460155781905333,
+        "violation": 0.0,
+        "review_mean": 0.5035365488316357,
+        "review_sd": 0.03438495057261061,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-node": {
+        "risk_mean": 0.0,
+        "risk_q90": 0.0,
+        "risk_max": 0.0,
+        "violation": 0.0,
+        "review_mean": 1.0,
+        "review_sd": 0.0,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: e2e-pareto": {
+        "risk_mean": 0.042609846215298564,
+        "risk_q90": 0.046734571599760334,
+        "risk_max": 0.04973037747153984,
+        "violation": 0.0,
+        "review_mean": 0.37165068903535053,
+        "review_sd": 0.013551602872751934,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: min-level": {
+        "risk_mean": 0.038254943079688436,
+        "risk_q90": 0.04019372877970841,
+        "risk_max": 0.043888556021569804,
+        "violation": 0.0,
+        "review_mean": 0.3875853804673458,
+        "review_sd": 0.011296559280399287,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       }
+      },
+      "500": {
+       "scratch: e2e-pareto": {
+        "risk_mean": 0.002847014180147793,
+        "risk_q90": 0.0,
+        "risk_max": 0.04663471140403435,
+        "violation": 0.0,
+        "review_mean": 0.9579413820651088,
+        "review_sd": 0.14354539194855065,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "scratch: min-level": {
+        "risk_mean": 0.013952466546834434,
+        "risk_q90": 0.020086878370281606,
+        "risk_max": 0.027361693628919513,
+        "violation": 0.0,
+        "review_mean": 0.5844322947872977,
+        "review_sd": 0.05910849091728951,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-level": {
+        "risk_mean": 0.02599161174355902,
+        "risk_q90": 0.028759736369083282,
+        "risk_max": 0.03260435390453365,
+        "violation": 0.0,
+        "review_mean": 0.4558463151587777,
+        "review_sd": 0.020295475842229453,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-node": {
+        "risk_mean": 0.006174355901737567,
+        "risk_q90": 0.008143598961453965,
+        "risk_max": 0.010485320551228281,
+        "violation": 0.0,
+        "review_mean": 0.7051797483523068,
+        "review_sd": 0.04020051077405515,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: e2e-pareto": {
+        "risk_mean": 0.04225234671459956,
+        "risk_q90": 0.04603555022967845,
+        "risk_max": 0.05317555422408628,
+        "violation": 0.01,
+        "review_mean": 0.37283752746155385,
+        "review_sd": 0.013958888610609324,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: min-level": {
+        "risk_mean": 0.03857799081286199,
+        "risk_q90": 0.04046834431795487,
+        "risk_max": 0.04473736768524066,
+        "violation": 0.0,
+        "review_mean": 0.38599111244258033,
+        "review_sd": 0.010855946175819293,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       }
+      },
+      "1000": {
+       "scratch: e2e-pareto": {
+        "risk_mean": 0.02885460355502297,
+        "risk_q90": 0.04319952067106051,
+        "risk_max": 0.05087876972238865,
+        "violation": 0.01,
+        "review_mean": 0.5554943079688436,
+        "review_sd": 0.2201184533971326,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "scratch: min-level": {
+        "risk_mean": 0.022921410025963644,
+        "risk_q90": 0.028759736369083282,
+        "risk_max": 0.03480127821050529,
+        "violation": 0.0,
+        "review_mean": 0.48545785899740374,
+        "review_sd": 0.04616141882336468,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-level": {
+        "risk_mean": 0.029248052726183343,
+        "risk_q90": 0.032289794287996804,
+        "risk_max": 0.035100858797683245,
+        "violation": 0.0,
+        "review_mean": 0.4320536249251048,
+        "review_sd": 0.01253743475780006,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "local: min-node": {
+        "risk_mean": 0.013202516476932291,
+        "risk_q90": 0.014984022368683843,
+        "risk_max": 0.016926303175554224,
+        "violation": 0.0,
+        "review_mean": 0.5788106650689036,
+        "review_sd": 0.01971636222150577,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: e2e-pareto": {
+        "risk_mean": 0.04289944078290394,
+        "risk_q90": 0.04749350908727781,
+        "risk_max": 0.05197723187537447,
+        "violation": 0.01,
+        "review_mean": 0.3701138406231276,
+        "review_sd": 0.01401590856940673,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       },
+       "rerun: min-level": {
+        "risk_mean": 0.03881116436988216,
+        "risk_q90": 0.040842820051927305,
+        "risk_max": 0.04493708807669263,
+        "violation": 0.0,
+        "review_mean": 0.38520071899340913,
+        "review_sd": 0.011230592123046458,
+        "bound_mean": null,
+        "fd_mass_mean": null,
+        "trials": 100
+       }
+      }
+     }
+    }
+   }
+  }
+ }
+}

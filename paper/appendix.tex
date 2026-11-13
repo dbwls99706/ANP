@@ -68,8 +68,8 @@ the old sample of $n$ runs of the unedited workflow for the routes avoiding the 
 fresh labelled runs drawn from the traffic through it. \emph{Re-run} assumes the old inputs and
 labels were retained, re-executes them through the edited workflow, and recalibrates on those
 $n$ runs plus $m$ fresh ones. The edited nodes are: CLINC150 \texttt{intent[banking]} (leaf),
-\texttt{domain} (middle), \texttt{scope} (root); MASSIVE \texttt{intent[calendar]} (leaf),
-\texttt{scenario[de]} (middle), \texttt{language} (root).
+\texttt{domain} (middle), \texttt{scope} (root); MASSIVE \texttt{intent[calendar]} (leaf)
+and \texttt{scenario[de]} (middle).
 
 \paragraph{Synthetic chains.} Each input passes $K$ decisions. A shared standard normal
 difficulty $z$ and node noise $e_j$ give the probability of a correct decision
@@ -86,9 +86,10 @@ and its optimisation take milliseconds per workflow.
 
 Table~\ref{tab:main-massive} repeats Table~\ref{tab:main} for MASSIVE.
 Table~\ref{tab:footprints} counts, on the whole population, the nodes whose count curves
-change when one node's model is replaced, for each charging rule: the counts agree with
-Proposition~\ref{prop:footprint}, and in every case the runs that avoid the edited node were
-verified to be identical before and after the edit (Proposition~\ref{prop:local}).
+change when one node's model is replaced, for each charging rule. No curve changes outside
+the sets given by Proposition~\ref{prop:footprint} (for FE the size of that set is shown in
+parentheses), and in every case the runs that avoid the edited node were verified to be
+identical before and after the edit (Proposition~\ref{prop:local}).
 
 \begin{table}[h]
 \centering\footnotesize

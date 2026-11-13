@@ -123,6 +123,7 @@ def fig_edits(res):
             info = res["data"][name]["edits"].get(kind)
             if info is None:
                 ax.axis("off")
+                ax.legend(*axes[0][0].get_legend_handles_labels(), fontsize=6.5, loc="center")
                 continue
             sizes = sorted(info["sizes"], key=int)
             for m, (label, colour, ls, marker) in lines.items():
@@ -140,7 +141,6 @@ def fig_edits(res):
                 ax.set_xlabel("fresh labelled runs $m$")
             if j == 0:
                 ax.set_ylabel("human review (%)")
-    axes[0][2].legend(fontsize=6, loc="center right")
     fig.tight_layout()
     fig.savefig(os.path.join(FIG, "edits.pdf"))
 
@@ -150,9 +150,9 @@ def fig_edits(res):
             info = res["data"][name]["edits"].get(kind)
             if info is None:
                 continue
-            k = max(max(info["min_changed"] or [0]), max(info["fd_predicted"])) + 1
             rows.append(f"{TITLE[name].split(' ')[0]} & {kind} & {pct(info['traffic_share'], 0)} & "
-                        f"{len(info['tf_changed'])} & {len(info['fd_changed'])} & {len(info['min_changed'])} \\\\")
+                        f"{len(info['tf_changed'])} & {len(info['fd_changed'])} ({len(info['fd_predicted'])}) & "
+                        f"{len(info['min_changed'])} \\\\")
     open(os.path.join(TAB, "footprints.tex"), "w").write(
         "\\begin{tabular}{llrrrr}\n\\toprule\n"
         "Workflow & Edited node & Traffic (\\%) & TF & FE & LC \\\\\n\\midrule\n" + "\n".join(rows)

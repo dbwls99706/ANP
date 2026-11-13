@@ -307,7 +307,8 @@ def certify_after_edit(old, fresh, edited, delta, grid=None, modules=None, mode=
               + hit.mean() * stack(review_counts(fresh, grid)) / len(fresh))
     cert = Certificate(grid, modules, review, parts)
     rest = old.subset(~hit)
-    review_fn = lambda tau: (1 - hit.mean()) * rest.review(tau) + hit.mean() * fresh.review(tau)
+    untouched = (lambda tau: rest.review(tau)) if len(rest) else (lambda tau: 0.0)
+    review_fn = lambda tau: (1 - hit.mean()) * untouched(tau) + hit.mean() * fresh.review(tau)
     return cert, review_fn
 
 

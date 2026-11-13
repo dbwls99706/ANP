@@ -169,21 +169,32 @@ We replace the model of one node by a model from a different family and ask how 
 labels are needed to certify the edited workflow at $\eps=5\%$ (Figure~\ref{fig:edits}). The
 old certificate was issued from $n$ runs of the unedited workflow. We first confirmed
 Proposition~\ref{prop:local} on the populations: for each edit, the runs that avoid the
-edited node have identical routes, confidences and deviation status before and after.
+edited node have identical routes, confidences and deviation status before and after
+(MASSIVE has no alternative language model, so its root is not edited).
 
 For a leaf (\EditShareCLeaf\% of the traffic on CLINC150, \EditShareMLeaf\% on MASSIVE) the
 edit-local certificate needs \EditCLeafLocalHundred\% and \EditMLeafLocalHundred\% review with
-$m=100$ fresh labels. Recalibrating from scratch with 100 labels certifies nothing
-(\EditCLeafScratchHundred\% and \EditMLeafScratchHundred\% review with Pareto testing), and
-with $m=1{,}000$ it reaches \EditCLeafScratchThousand\% and \EditMLeafScratchThousand\%, where
-the edit-local certificate is at \EditCLeafLocalThousand\% and \EditMLeafLocalThousand\%. For a
-middle node the picture depends on its traffic share: a \texttt{scenario} node of MASSIVE
-(\EditShareMMiddle\% of the traffic) is repaired locally with 100 labels at
-\EditMMiddleLocalHundred\% review, while the \texttt{domain} node of CLINC150 carries
-\EditShareCMiddle\% of the traffic, leaves little to reuse, and gains nothing from
-locality. Editing the root touches every run, and the edit-local procedure then reduces to
-recalibration from scratch with a smaller share of $\delta$. Across all edits and sample sizes
-the largest violation rate of the edit-local certificates is \EditMaxViolLocal\%.
+$m=100$ fresh labels, and \EditCLeafLocalThousand\% and \EditMLeafLocalThousand\% with
+$m=1{,}000$; recalibrating on all stored inputs gives \EditCLeafRerunThousand\% and
+\EditMLeafRerunThousand\%. From scratch, 100 labels certify next to nothing: Pareto testing
+escalates \EditCLeafScratchHundred\% and \EditMLeafScratchHundred\% of inputs and the LC
+certificate everything. With $m=1{,}000$ the from-scratch methods reach
+\EditCLeafScratchLCThousand\% and \EditMLeafScratchLCThousand\% (LC per level) and
+\EditCLeafScratchThousand\% and \EditMLeafScratchThousand\% (Pareto testing), still short of
+the edit-local certificate at the same $m$; on CLINC150 that is about what the edit-local
+certificate achieves with a tenth of the labels.
+
+For a middle node the picture depends on its traffic share. A \texttt{scenario} node of
+MASSIVE (\EditShareMMiddle\% of the traffic) is repaired locally with 100 labels at
+\EditMMiddleLocalHundred\% review, and with 1{,}000 at \EditMMiddleLocalThousand\% against
+\EditMMiddleScratchLCThousand\% from scratch. The \texttt{domain} node of CLINC150 carries
+\EditShareCMiddle\% of the traffic, which leaves little to reuse: the edit-local certificate
+is then slightly worse than recalibration from scratch (\EditCMiddleLocalThousand\% against
+\EditCMiddleScratchLCThousand\% at $m=1{,}000$), because it splits $\delta$ three ways.
+Editing the root touches every run and locality buys nothing (\EditCRootLocalThousand\% against
+\EditCRootScratchLCThousand\%). The benefit of locality is thus proportional to the traffic
+the edit leaves alone. Across all edits and sample sizes no edit-local certificate violated
+its target (largest violation rate \EditMaxViolLocal\%).
 
 If all calibration inputs and labels were retained, re-running them through the edited
 workflow and recalibrating is at least as good (dotted line); that option requires storing

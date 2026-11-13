@@ -247,10 +247,14 @@ def _edit_trial(args):
     return res
 
 
-def exp_edits(trials):
+def exp_edits(trials, only=None):
     out = {}
+    # MASSIVE has no alternative language model, so its root is not edited.
     plans = {"clinc": dict(eps=0.05, nodes={"leaf": 3, "middle": 1, "root": 0}),
-             "massive": dict(eps=0.05, nodes={"leaf": 7, "middle": 2, "root": 0})}
+             "massive": dict(eps=0.05, nodes={"leaf": 7, "middle": 2})}
+    if only:
+        name, label = only.split(":")
+        plans = {name: dict(eps=plans[name]["eps"], nodes={label: plans[name]["nodes"][label]})}
     for name, plan in plans.items():
         pop0, nxt = population(name)
         out[name] = dict(eps=plan["eps"], n0=DEFAULT_N[name], edits={})
@@ -272,6 +276,7 @@ def exp_edits(trials):
                         fd_predicted=sorted(fd_set), fd_changed=changed("fd"), tf_changed=changed("tf"),
                         min_changed=changed("min"), sizes={})
             assert set(info["fd_changed"]) <= fd_set and set(info["tf_changed"]) <= {w}
+            assert info["error_before"] != info["error_after"], "the edit changed nothing"
             for m_new in [100, 250, 500, 1000]:
                 res = collect([(name, w, DEFAULT_N[name], m_new, plan["eps"], 30_000 + s) for s in range(trials)],
                               _edit_trial)
@@ -344,12 +349,19 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("experiment", choices=["main", "nsweep", "posthoc", "edits", "synth"])
     ap.add_argument("--trials", type=int, default=200)
+    ap.add_argument("--only", help="edits: re-run a single edit, e.g. clinc:root, and merge it")
     a = ap.parse_args()
     t0 = time.time()
-    result = {"main": exp_main, "nsweep": exp_nsweep, "posthoc": exp_posthoc, "edits": exp_edits,
-              "synth": exp_synth}[a.experiment](a.trials)
-    result = {"delta": DELTA, "trials": a.trials, "data": result}
     os.makedirs(RESULTS, exist_ok=True)
-    with open(os.path.join(RESULTS, f"{a.experiment}.json"), "w") as f:
+    path = os.path.join(RESULTS, f"{a.experiment}.json")
+    if a.experiment == "edits" and a.only:
+        result = json.load(open(path))
+        name, label = a.only.split(":")
+        result["data"][name]["edits"][label] = exp_edits(a.trials, a.only)[name]["edits"][label]
+    else:
+        result = {"main": exp_main, "nsweep": exp_nsweep, "posthoc": exp_posthoc, "edits": exp_edits,
+                  "synth": exp_synth}[a.experiment](a.trials)
+        result = {"delta": DELTA, "trials": a.trials, "data": result}
+    with open(path, "w") as f:
         json.dump(result, f, indent=1)
     print(a.experiment, "finished in", round(time.time() - t0), "s")
