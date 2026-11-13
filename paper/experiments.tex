@@ -46,45 +46,61 @@ for all thresholds on the grid at once.}\label{tab:main}
 Table~\ref{tab:main} gives the results for CLINC150 and Table~\ref{tab:main-massive} in the
 appendix for MASSIVE.
 
-\paragraph{Uncertified practice fails where it matters.} Per-node selective calibration
-controls each node's own error rate and ignores that errors accumulate along a route: at
-$\eps=10\%$ it exceeds the target in \ViolCPerNodeTen\% of draws on CLINC150 and
-\ViolMPerNodeTen\% on MASSIVE. The plug-in certificate, which uses frequencies in place of
-confidence bounds, violates in \ViolCPlugFive\% and \ViolMPlugFive\% of draws at $\eps=5\%$.
-Every method with a guarantee stays within $\delta$: the largest violation rate among them, over both workflows and
-all targets, is \MaxViolCertified\%.
+\paragraph{Uncertified practice is erratic.} A fixed threshold of 0.7 yields a risk of
+\RiskCFixedFive\% on CLINC150 and \RiskMFixedFive\% on MASSIVE whatever the target. Per-node
+selective calibration controls each node's own error rate among the inputs it commits and
+ignores how errors accumulate along a route. On CLINC150 it exceeds $\eps=10\%$ in
+\ViolCPerNodeTen\% of draws (mean risk \RiskCPerNodeTen\%), while at $\eps=5\%$ it is far too
+cautious (\RevCPerNodeFive\% review, three times what a certified method needs). On MASSIVE
+it happens to stay below the targets, again at a much higher review rate at small $\eps$;
+nothing in its construction ties the per-node targets to the end-to-end one. The plug-in
+certificate, which uses frequencies in place of confidence bounds, violates in
+\ViolCPlugFive\% and \ViolMPlugFive\% of draws at $\eps=5\%$. Every method with a guarantee
+stays within $\delta$: the largest violation rate among them, over both workflows and all
+targets, is \MaxViolCertified\%.
 
-\paragraph{The rescue effect.} FE and TF certificates are valid but nearly useless on
-CLINC150: at $\eps=5\%$ they escalate \RevCFEnodeFive\% and \RevCTFnodeFive\% of inputs, against
+\paragraph{The rescue effect.} FE and TF certificates are valid but loose. On CLINC150 at
+$\eps=5\%$ they escalate \RevCFEnodeFive\% and \RevCTFnodeFive\% of inputs, against
 \RevCLCnodeFive\% for LC with the same per-node modules and the same union bound. The reason is
 visible in the population. At the thresholds chosen by the shared end-to-end method for
 $\eps=5\%$, the mass of deviating runs whose first wrong node commits is \FdMassC\%, while the
 actual risk is \RiskCSharedFive\%: \RescuedShareC\% of the first-error mass is escalated
 further along the route. The \texttt{scope} node passes out-of-scope requests with high
 confidence, and the \texttt{domain} and \texttt{intent} nodes, facing inputs unlike anything
-they were trained on, hesitate. On MASSIVE, where errors are spread over more nodes, the
-first-error mass still overstates the risk by a factor of \FdRatioM\ (\RescuedShareM\%
-rescued), and FE needs \RevMFEnodeFive\% review where LC needs \RevMLCnodeFive\%. Additive
-attribution to the causing stage, which is exact for a cascade of interchangeable solvers,
-therefore misjudges routing workflows.
+they were trained on, hesitate (Figure~\ref{fig:workflow}). On MASSIVE the effect is
+milder---the first-error mass overstates the risk by a factor of \FdRatioM\ (\RescuedShareM\%
+rescued)---and FE per node needs \RevMFEnodeFive\% review where LC needs \RevMLCnodeFive\%.
+Attributing each error to the stage that caused it is exact for a cascade of interchangeable
+solvers; under routing it ignores that much of what goes wrong upstream is caught downstream,
+and by how much depends on the workflow.
 
-\paragraph{The price of uniformity and of granularity.} Among the certified methods, Pareto
-testing escalates least at a fixed target (\RevCParetoFive\% on CLINC150 and
-\RevMParetoFive\% on MASSIVE at $\eps=5\%$), as it tests a short pre-ordered list of
-configurations and pays no union over the grid. Certificates that stay valid under retuning
-pay for it: LC per level needs \RevCLClevelFive\% and \RevMLClevelFive\%, LC per node
-\RevCLCnodeFive\% and \RevMLCnodeFive\%. The separable bound is not the bottleneck: the
-end-to-end uniform bound, which uses exact error counts and the same union, needs
-\RevCUnifFive\% and \RevMUnifFive\%, no less than LC per node, because its feasible set can
-only be searched heuristically whereas the separable problem is solved exactly. With a single
-shared module the LC certificate uses exactly the end-to-end error counts
-(Proposition~\ref{prop:exact}); its remaining distance to the shared-threshold baseline
-(\RevCLCsharedFive\% against \RevCSharedFive\%) is the union over the grid. How much there is
-to gain from per-node thresholds depends on the workflow: with thresholds optimised directly
-on the population, per-node thresholds reach $\eps=5\%$ at \OracleNodeCFive\% review against
-\OracleSharedCFive\% for the best shared threshold on CLINC150, and \OracleNodeMFive\% against
-\OracleSharedMFive\% on MASSIVE. Tying thresholds by level is a good default: it keeps most of
-the control and pays the union for three modules only.
+\paragraph{The price of uniformity.} At a fixed target the end-to-end methods escalate least:
+at $\eps=5\%$, Pareto testing needs \RevCParetoFive\% review on CLINC150 and \RevMParetoFive\%
+on MASSIVE, and a single shared threshold calibrated end to end needs \RevCSharedFive\% and
+\RevMSharedFive\%. They test a short pre-ordered list of configurations and pay no union over
+the grid. Certificates that stay valid under retuning pay for it, and how much depends on the
+number of modules: LC with a shared module needs \RevCLCsharedFive\% and \RevMLCsharedFive\%,
+LC per level \RevCLClevelFive\% and \RevMLClevelFive\%, LC per node \RevCLCnodeFive\% and
+\RevMLCnodeFive\%. The separable bound itself is not the bottleneck. The end-to-end uniform
+bound, which uses exact error counts and the same union as LC per node, needs
+\RevCUnifFive\% and \RevMUnifFive\%, slightly more, because its feasible set can only be
+searched heuristically whereas the separable problem is solved exactly. With a single shared
+module the LC certificate uses exactly the end-to-end error counts
+(Proposition~\ref{prop:exact}), and its distance to the shared-threshold baseline is the
+union over the grid alone.
+
+\paragraph{Granularity.} Fine-grained thresholds buy less than one might expect on these
+workflows. With thresholds optimised directly on the population, per-node thresholds reach
+$\eps=5\%$ at \OracleNodeCFive\% review against \OracleSharedCFive\% for the best shared
+threshold on CLINC150 (\OracleNodeCTwo\% against \OracleSharedCTwo\% at $\eps=2\%$), and
+\OracleNodeMFive\% against \OracleSharedMFive\% on MASSIVE; in line with this, Pareto testing
+over per-node thresholds barely improves on the shared threshold (by three points at
+$\eps=2\%$ on CLINC150, and by less than half a point elsewhere). Among uniform
+certificates, tying thresholds by level is the best choice at the strictest target on
+CLINC150 (\RevCLClevelTwo\% review at $\eps=2\%$, against \RevCLCsharedTwo\% shared and
+\RevCLCnodeTwo\% per node), where the levels differ most, and is within about one point of
+the shared module elsewhere. Anchoring the charging rule on a tuning split did not pay for the data it
+consumes (\RevCAnchFive\% against \RevCLClevelFive\% per level on CLINC150 at $\eps=5\%$).
 
 \subsection{Calibration size and number of decisions}
 

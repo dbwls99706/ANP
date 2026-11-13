@@ -58,7 +58,7 @@ threshold assignments on a grid with a single binomial bound, and the least-revi
 are an exactly solvable knapsack. Charging the least confident node is exact for shared
 thresholds, whereas the natural rule---charge the first wrong decision, the routing analogue
 of additive stage-wise decompositions---is loose: on two real workflows it overstates the
-risk by a factor of \FdOverstateMin--\FdOverstateMax, because downstream nodes escalate most misrouted inputs.
+risk by factors of \FdOverstateMax\ and \FdOverstateMin, because downstream nodes escalate misrouted inputs.
 Second, we prove that an edit changes only the runs that pass through the edited node, and that
 which runs do is decided by unedited nodes. Indexing the counts by route therefore lets a
 certificate be repaired with labels from the affected traffic alone. After replacing one leaf
@@ -119,8 +119,8 @@ assignment, so one Clopper--Pearson bound with a union over the grid makes it un
 thresholds is a multiple-choice knapsack with integer weights, solved exactly.
 \item \textbf{The rescue effect} (\S\ref{sec:rules}, \S\ref{sec:exp-main}). The obvious charging
 rule blames the first wrong decision. It is the routing analogue of the additive stage-wise
-decompositions used for cascades~\citep{sun2026compcrc}, and it is the rule with the smallest
-dependency footprint. We show it is badly loose in routing workflows, where a misrouted input
+decompositions used for cascades~\citep{sun2026compcrc}, and it depends only on a node and
+its ancestors. We show it can be badly loose in routing workflows, where a misrouted input
 tends to be escalated by the nodes it was misrouted to. Charging the least confident node
 accounts for this and is exact when thresholds are shared (Proposition~\ref{prop:exact}).
 \item \textbf{Edit locality and route-indexed certificates} (\S\ref{sec:edits}). An edit leaves
@@ -513,8 +513,8 @@ separates across thresholds, and an edit is confined to the traffic that passes 
 Together they give certificates that remain valid when thresholds are retuned and that can be
 repaired locally when a node changes, at a statistical price we quantified. The negative
 results are as useful as the positive ones: blaming the first error, the intuitive way to
-compose stage-wise guarantees, misjudges routing workflows, because much of what goes wrong
-upstream is caught downstream.
+compose stage-wise guarantees, can misjudge routing workflows, because what goes wrong
+upstream is often caught downstream.
 
 \paragraph{Reproducibility.} Code for the experiments, the exported traces of one workflow,
 and the runtime implementation are available in the project repository under
