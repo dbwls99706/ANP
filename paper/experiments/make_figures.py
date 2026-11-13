@@ -75,7 +75,7 @@ def table_main(res):
 
 
 def fig_nsweep(res):
-    fig, axes = plt.subplots(1, 2, figsize=(6.6, 2.4), sharey=True)
+    fig, axes = plt.subplots(1, 2, figsize=(6.6, 2.9), sharey=True)
     for ax, (name, data) in zip(axes, res["data"].items()):
         sizes = sorted(data, key=int)
         for m, (label, colour, ls, marker) in STYLE.items():
@@ -89,8 +89,8 @@ def fig_nsweep(res):
         ax.set_xlabel("calibration runs $n$")
         ax.set_title(TITLE[name], fontsize=8)
     axes[0].set_ylabel("human review (%)")
-    axes[1].legend(fontsize=6.5, loc="upper right")
-    fig.tight_layout()
+    fig.legend(*axes[0].get_legend_handles_labels(), fontsize=6.5, loc="lower center", ncol=4)
+    fig.tight_layout(rect=(0, 0.13, 1, 1))
     fig.savefig(os.path.join(FIG, "nsweep.pdf"))
 
 
@@ -101,10 +101,12 @@ def fig_posthoc(res):
         for m in ["global-e2e", "e2e-pareto", "min-node", "min-level"]:
             label, colour, ls, marker = STYLE[m]
             ax.plot(eps, [100 * r for r in data[m]["review"]], color=colour, ls=ls, marker=marker, ms=3.5,
-                    lw=1.1, label=f"{label} ({pct(data[m]['any_violation'], 0)}%)")
+                    lw=1.1, label=f"{label} ({pct(data[m]['any_violation'])}%)")
         ax.set_xlabel(r"target risk $\varepsilon$ (%)")
         ax.set_title(TITLE[name], fontsize=8)
-        ax.legend(fontsize=6.5, title="method (runs with any violation)", title_fontsize=6.5)
+        ax.set_ylim(top=ax.get_ylim()[1] * 1.3)
+        ax.legend(fontsize=6.5, title="method (draws with any violation)", title_fontsize=6.5,
+                  loc="upper right")
     axes[0].set_ylabel("human review (%)")
     fig.tight_layout()
     fig.savefig(os.path.join(FIG, "posthoc.pdf"))
@@ -163,7 +165,7 @@ def fig_synth(res):
     data = res["data"]
     ks = sorted(data, key=int)
     ns = sorted(data[ks[0]], key=int)
-    fig, axes = plt.subplots(1, len(ns), figsize=(6.8, 2.2), sharey=True)
+    fig, axes = plt.subplots(1, len(ns), figsize=(6.8, 2.8), sharey=True)
     for ax, n in zip(axes, ns):
         for m in ["global-e2e", "e2e-pareto", "fd-node", "min-node", "min-global"]:
             label, colour, ls, marker = STYLE[m]
@@ -175,8 +177,8 @@ def fig_synth(res):
         ax.set_xlabel("decisions per run $K$")
         ax.set_title(f"$n={int(n):,}$".replace(",", "{,}"), fontsize=8)
     axes[0].set_ylabel("human review (%)")
-    axes[-1].legend(fontsize=6, loc="upper left")
-    fig.tight_layout()
+    fig.legend(*axes[0].get_legend_handles_labels(), fontsize=6.5, loc="lower center", ncol=3)
+    fig.tight_layout(rect=(0, 0.14, 1, 1))
     fig.savefig(os.path.join(FIG, "synth.pdf"))
 
 
@@ -219,7 +221,7 @@ def numbers():
         for name, d in post["data"].items():
             for m, mn in [("min-level", "LClevel"), ("min-node", "LCnode"), ("global-e2e", "Shared"),
                           ("e2e-pareto", "Pareto")]:
-                out[f"AnyViol{ds[name]}{mn}"] = pct(d[m]["any_violation"], 0)
+                out[f"AnyViol{ds[name]}{mn}"] = pct(d[m]["any_violation"])
         out["PosthocTrials"] = str(post["trials"])
     edits = load("edits")
     if edits:
@@ -238,20 +240,28 @@ def numbers():
                             worst = max(worst, r["violation"])
         out["EditMaxViolLocal"] = pct(worst, 0)
         out["EditM"] = "100"
-        out["EditLocalClinc"] = out["EditCLeafLocalHundred"].split(".")[0]
-        out["EditLocalMassive"] = out["EditMLeafLocalHundred"].split(".")[0]
+        for name, key in [("clinc", "EditLocalClinc"), ("massive", "EditLocalMassive")]:
+            leaf = edits["data"][name]["edits"]["leaf"]["sizes"]["100"]["local: min-level"]
+            out[key] = pct(leaf["review_mean"], 0)
         out["EditTrials"] = str(edits["trials"])
     ns = load("nsweep")
     if ns:
         out["NsweepTrials"] = str(ns["trials"])
+        for name, d in ns["data"].items():
+            sizes = sorted(d, key=int)
+            for size, sn in [(sizes[0], "Small"), (sizes[-1], "Large")]:
+                for m, mn in [("global-e2e", "Shared"), ("e2e-pareto", "Pareto"), ("min-node", "LCnode"),
+                              ("min-level", "LClevel"), ("min-global", "LCshared")]:
+                    out[f"N{ds[name]}{sn}{mn}"] = pct(d[size][m]["review_mean"])
     sy = load("synth")
     if sy:
         out["SynthTrials"] = str(sy["trials"])
         for k, kn in [("2", "Two"), ("32", "ThirtyTwo")]:
-            for n, nn in [("1000", "Small"), ("16000", "Large")]:
+            for n, nn in [("1000", "Small"), ("4000", "Mid"), ("16000", "Large")]:
                 for m, mn in [("min-node", "LCnode"), ("e2e-pareto", "Pareto"), ("min-global", "LCshared"),
                               ("fd-node", "FEnode")]:
                     out[f"Synth{kn}{nn}{mn}"] = pct(sy["data"][k][n][m]["review_mean"])
+        out["SynthFEmin"] = pct(min(v["fd-node"]["review_mean"] for d in sy["data"].values() for v in d.values()), 0)
     with open(os.path.join(HERE, "..", "numbers.tex"), "w") as f:
         f.write("% Generated by experiments/make_figures.py from results/*.json. Do not edit.\n")
         for key in sorted(out):

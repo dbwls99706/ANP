@@ -132,7 +132,8 @@ fresh labels only on traffic through the edit (Theorem~\ref{thm:recert}).
 from public intent-classification data (12 and 21 decision nodes; 8{,}600 and 20{,}028
 held-out inputs) and on synthetic chains, we measure validity exactly, the cost of uniformity
 and of fine-grained thresholds, and the label savings of edit-local recertification. Per-node
-selective calibration, the common practice, violates the target; all certified methods hold.
+selective calibration, the common practice, exceeds the target in virtually every draw on one
+workflow; all certified methods hold.
 \item \textbf{A static check} (\S\ref{sec:impl}). The methods are implemented in \anp, an
 open-source graph workflow runtime, as a \texttt{certify} command and a verification pass that
 rejects a workflow whose thresholds exceed its certified risk or whose certificate is stale.
@@ -153,19 +154,18 @@ rejects a workflow whose thresholds exceed its certified risk or whose certifica
 \node[dec, below=3mm of intent] (i2) {intent[work]};
 \node[snk, right=of intent] (act) {action};
 \node[snk, below=of scope] (oos) {decline};
-\node[hum, below=10mm of domain] (human) {human review};
+\node[hum, below=13mm of domain] (human) {human review};
 \draw[arr] (scope) -- node[left, pos=.45]{\scriptsize out} (oos);
 \draw[run] (scope) -- node[above]{\scriptsize in} (domain);
 \draw[arr] (domain.east) -- ++(4mm,0) |- (i1.west);
 \draw[run] (domain) -- (intent);
 \draw[arr] (domain.east) -- ++(4mm,0) |- (i2.west);
-\draw[arr] (intent) -- (act);
+\draw[arr] (intent) -- node[above, red!70!black] {\scriptsize $c=0.30$} (act);
 \draw[arr, dashed] (scope.south east) -- (human.north west);
 \draw[arr, dashed] (domain) -- (human);
 \draw[run, dashed] (intent.south west) -- (human.north east);
 \node[above=0.5mm of scope, red!70!black] {\scriptsize $c=0.99$, wrong};
 \node[above=0.5mm of domain, red!70!black] {\scriptsize $c=0.62$};
-\node[below right=0.2mm and -9mm of intent, red!70!black] {\scriptsize $c=0.30$};
 \end{tikzpicture}
 \caption{A decision workflow and a rescued error. An out-of-scope request is confidently
 passed by \texttt{scope} (the first error), reaches nodes that were not built for it, and is
@@ -433,10 +433,10 @@ and an \texttt{uncertain} port; the runtime routes each input to the port of the
 or to \texttt{uncertain}. The command \texttt{anp certify} turns labelled free-run traces into
 a route-indexed certificate, solves the knapsack for a target $\eps$ and writes the thresholds
 back into the graph. Each decision node is fingerprinted by its configuration without the
-thresholds, together with the decision nodes its ports lead to. \texttt{anp verify --risk}
+thresholds, together with the decision nodes its ports lead to. \texttt{anp verify -{}-risk}
 then fails a graph (i) whose thresholds, rounded down to the grid, have a certified bound above
 $\eps$, or (ii) in which a decision node's fingerprint differs from the certificate's, naming
-the nodes whose traffic must be relabelled; \texttt{anp certify --fresh} performs the repair of
+the nodes whose traffic must be relabelled; \texttt{anp certify -{}-fresh} performs the repair of
 Theorem~\ref{thm:recert}. Thresholds can be raised freely, and edits to non-decision nodes that
 keep the routing leave the certificate valid. The implementation is independent of the Python
 code used for the experiments and is tested against it on real traces.

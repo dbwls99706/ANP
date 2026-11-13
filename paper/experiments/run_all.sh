@@ -1,5 +1,5 @@
 #!/bin/sh
-# Reproduce every experiment of the paper (about two hours on 4 cores).
+# Reproduce every experiment of the paper (under two hours on 4 cores).
 set -e
 cd "$(dirname "$0")"
 PY=${PYTHON:-python3}

@@ -1,11 +1,12 @@
 \section{Experiments}\label{sec:exp}
 
-\paragraph{Setup.} We build two workflows from public intent-classification data
-(details in Appendix~\ref{app:details}). \textbf{CLINC150}~\citep{larson2019clinc}: a
+\paragraph{Setup.} We build two workflows from public intent-classification datasets; details
+are in Appendix~\ref{app:details}. In \textbf{CLINC150}~\citep{larson2019clinc}, a
 \texttt{scope} node separates in-scope from out-of-scope requests, a \texttt{domain} node
 picks one of 10 product areas, and one \texttt{intent} node per area picks among its 15
 intents: 12 decisions on a tree of depth 3 (Figure~\ref{fig:workflow}).
-\textbf{MASSIVE}~\citep{fitzgerald2022massive} in four languages: a \texttt{language} node, a
+In \textbf{MASSIVE}~\citep{fitzgerald2022massive} with four languages there is a
+\texttt{language} node, a
 \texttt{scenario} node per language (18 scenarios), and an \texttt{intent} node per scenario
 that is shared by all languages: 21 decisions on a DAG with joins. Every node is a logistic
 regression on frozen sentence embeddings~\citep{reimers2019sbert}, trained on the training
@@ -116,19 +117,32 @@ consumes (\RevCAnchFive\% against \RevCLClevelFive\% per level on CLINC150 at $\
 \includegraphics[width=\linewidth]{figures/synth.pdf}
 \caption{Synthetic chains of $K$ decisions with 20\% erroneous runs before abstention:
 review needed to certify $\eps=5\%$ (\SynthTrials\ draws per point). The per-node certificate
-pays a union over $K$ thresholds; a shared module does not.}\label{fig:synth}
+pays a union over $K$ thresholds; a shared module does not. Review falls with $K$ because
+the nodes become more accurate at a fixed total error rate.}\label{fig:synth}
 \end{figure}
 
 Figure~\ref{fig:nsweep} varies $n$. The gap between uniform and fixed-target methods is a
-statistical margin and closes as $n$ grows; with few calibration runs, fine-grained uniform
-certificates cannot certify at all, and the shared and per-level variants degrade most
-gracefully. Figure~\ref{fig:synth} isolates the dependence on the number of decisions with
-synthetic chains in which every run visits all $K$ nodes, node errors are correlated through
-a shared difficulty, and confidences are overconfident. The per-node certificate needs
-\SynthTwoSmallLCnode\% review for $K=2$ and \SynthThirtyTwoSmallLCnode\% for $K=32$ at
-$n=1{,}000$, and \SynthTwoLargeLCnode\% and \SynthThirtyTwoLargeLCnode\% at $n=16{,}000$,
-consistent with a margin of order $K\ln G/n$; the shared module is insensitive to $K$. FE
-charging is loose throughout because the chains have rescue by construction.
+statistical margin and closes as $n$ grows: with the largest samples the per-level LC
+certificate needs \NCLargeLClevel\% review on CLINC150 against \NCLargePareto\% for Pareto
+testing, and \NMLargeLClevel\% against \NMLargePareto\% on MASSIVE. Small samples separate the
+methods sharply. With $n=500$ on CLINC150 and $n=1{,}000$ on MASSIVE the per-node uniform
+certificates cannot certify at all (\NCSmallLCnode\% review), and Pareto testing, which
+splits its data in two, needs \NCSmallPareto\% and \NMSmallPareto\%. The per-level certificate
+needs \NCSmallLClevel\% and \NMSmallLClevel\%, and the shared end-to-end threshold
+\NCSmallShared\% and \NMSmallShared\%. Coarse modules are therefore the robust choice when
+labels are scarce, whichever way they are certified.
+
+Figure~\ref{fig:synth} isolates the dependence on the number of decisions with synthetic
+chains in which every run visits all $K$ nodes, node errors are correlated through a shared
+difficulty, and confidences are overconfident. The total error rate before abstention is held
+at 20\%, so individual nodes become more accurate as $K$ grows and all methods need less
+review; what matters is the distance between the per-node certificate and the shared module.
+For $K=32$ the per-node certificate cannot certify $5\%$ from $n=1{,}000$ runs
+(\SynthThirtyTwoSmallLCnode\% review): its margin of roughly $K\ln G/n\approx10\%$ exceeds the
+target. At $n=4{,}000$ it needs \SynthThirtyTwoMidLCnode\% against \SynthThirtyTwoMidLCshared\%
+for the shared module, and at $n=16{,}000$ \SynthThirtyTwoLargeLCnode\% against
+\SynthThirtyTwoLargeLCshared\%. FE charging needs at least \SynthFEmin\% review in every
+setting, because the chains have rescue by construction.
 
 \subsection{Post hoc retuning}
 
@@ -146,11 +160,11 @@ selects thresholds for five targets from 2\% to 10\%. For the LC certificates th
 by Corollary~\ref{cor:posthoc}: in \AnyViolCLClevel\% (CLINC150) and \AnyViolMLClevel\%
 (MASSIVE) of draws at least one of the five configurations violates its target. Re-running
 an end-to-end procedure for each target on the same data is not covered by its guarantee.
-In our experiments the simultaneous violation rates of the re-run procedures are
-\AnyViolCPareto\% and \AnyViolMPareto\% for Pareto testing and \AnyViolCShared\% and
-\AnyViolMShared\% for the shared threshold; the selected configurations are strongly
-dependent across targets, so the inflation over the per-target level is modest here, but
-nothing bounds it in general.
+For Pareto testing the simultaneous violation rates are \AnyViolCPareto\% and
+\AnyViolMPareto\%, two to three times its per-target rates and, on CLINC150, already at about
+the nominal $\delta$ with only five targets. For the shared threshold, whose candidates are nested, they
+stay at \AnyViolCShared\% and \AnyViolMShared\%. The uniform certificates pay for their
+coverage with the review gap of \S\ref{sec:exp-main} at every target.
 
 \subsection{Edits}\label{sec:exp-edits}
 
