@@ -180,6 +180,39 @@ anp edit graph.anp.json "add rate limiting before the API handler"
 anp edit graph.anp.json "change the LLM to Claude"
 ```
 
+### Certify a Decision Workflow
+
+A `decision` node commits to a choice when its confidence reaches its threshold and sends
+the input to its `uncertain` port (human review) otherwise. `anp certify` turns labelled
+calibration runs into a certificate: an upper bound on the rate of wrong, unescalated runs
+that holds for every threshold setting at once, so thresholds can be retuned later without
+recalibrating.
+
+```bash
+# 1. Issue a certificate from labelled runs (one JSON object per line)
+anp certify examples/certify/workflow.anp.json \
+    --traces examples/certify/traces.jsonl --out cert.json
+
+# 2. Pick the thresholds with the least human review for a 5% error target
+anp certify examples/certify/workflow.anp.json --cert cert.json \
+    --epsilon 0.05 --apply tuned.anp.json
+
+# 3. Check a graph against the certificate (fails if thresholds are too low
+#    or a decision node changed since it was certified)
+anp verify tuned.anp.json --risk cert.json --epsilon 0.05
+
+# 4. After editing a node, relabel only the traffic that passes through it
+anp certify examples/certify/workflow_edited.anp.json --cert cert.json \
+    --fresh examples/certify/fresh_intent_banking.jsonl --edited intent_banking \
+    --out cert.json --epsilon 0.05 --apply tuned.anp.json
+```
+
+A trace line lists the decisions of one run with every node committing, in order:
+`{"steps": [{"node": "scope", "confidence": 0.93, "correct": true}, ...]}`. `correct` says
+whether the decision matches the ground truth; only the first `false` of a run matters.
+The example traces are real model outputs on CLINC150. The method and its evaluation are
+described in [`paper/`](paper/).
+
 ### CLI Commands
 
 ```bash
@@ -190,6 +223,7 @@ anp verify <graph>           # Formal verification (types, cycles, reachability)
 anp optimize <graph>         # Dead node elimination, transform fusion
 anp compile <graph>          # AOT compilation to execution plan
 anp diff <a> <b>             # Semantic graph diff
+anp certify <graph>          # Certify the error rate of decision nodes, tune thresholds
 anp validate <graph>         # Validate without executing
 anp info <graph>             # Display graph structure
 anp explain <graph>          # Human-readable explanation
