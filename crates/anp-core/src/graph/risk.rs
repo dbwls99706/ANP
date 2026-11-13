@@ -240,10 +240,9 @@ fn fnv1a(text: &str) -> String {
     format!("{:016x}", hash)
 }
 
-/// Fingerprint of every decision node: its configuration without the tunable
-/// thresholds, plus the decision nodes each of its output ports leads to. A
-/// node keeps its fingerprint exactly when the runs through it are unaffected.
-pub fn decision_fingerprints(graph: &AnpGraph) -> BTreeMap<String, String> {
+/// For every decision node and each of its output ports: the decision nodes
+/// reached before any other decision.
+fn decision_links(graph: &AnpGraph) -> BTreeMap<String, BTreeMap<String, BTreeSet<String>>> {
     let kinds: HashMap<&str, &str> = graph
         .nodes
         .iter()
@@ -257,6 +256,36 @@ pub fn decision_fingerprints(graph: &AnpGraph) -> BTreeMap<String, String> {
             .push(edge);
     }
 
+    let mut links = BTreeMap::new();
+    for node in graph.nodes.iter().filter(|n| is_decision(&n.node_type)) {
+        let mut ports: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+        for edge in out_edges.get(node.id.as_str()).into_iter().flatten() {
+            let reached = ports.entry(edge.from_port.clone()).or_default();
+            let mut queue = VecDeque::from([edge.to_node.as_str()]);
+            let mut seen = HashSet::new();
+            while let Some(id) = queue.pop_front() {
+                if !seen.insert(id) {
+                    continue;
+                }
+                if kinds.get(id).is_some_and(|t| is_decision(t)) {
+                    reached.insert(id.to_string());
+                    continue;
+                }
+                for next in out_edges.get(id).into_iter().flatten() {
+                    queue.push_back(next.to_node.as_str());
+                }
+            }
+        }
+        links.insert(node.id.clone(), ports);
+    }
+    links
+}
+
+/// Fingerprint of every decision node: its configuration without the tunable
+/// thresholds, plus the decision nodes each of its output ports leads to. A
+/// node keeps its fingerprint exactly when the runs through it are unaffected.
+pub fn decision_fingerprints(graph: &AnpGraph) -> BTreeMap<String, String> {
+    let links = decision_links(graph);
     let mut result = BTreeMap::new();
     for node in graph.nodes.iter().filter(|n| is_decision(&n.node_type)) {
         let mut config = node.config.clone();
@@ -267,30 +296,44 @@ pub fn decision_fingerprints(graph: &AnpGraph) -> BTreeMap<String, String> {
         }
         let mut text = String::new();
         canonical(&config, &mut text);
-
-        // For every output port: the decision nodes reached before any other decision.
-        let mut ports: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
-        for edge in out_edges.get(node.id.as_str()).into_iter().flatten() {
-            let reached = ports.entry(edge.from_port.as_str()).or_default();
-            let mut queue = VecDeque::from([edge.to_node.as_str()]);
-            let mut seen = HashSet::new();
-            while let Some(id) = queue.pop_front() {
-                if !seen.insert(id) {
-                    continue;
-                }
-                if kinds.get(id).is_some_and(|t| is_decision(t)) {
-                    reached.insert(id);
-                    continue;
-                }
-                for next in out_edges.get(id).into_iter().flatten() {
-                    queue.push_back(next.to_node.as_str());
-                }
-            }
-        }
-        text.push_str(&format!("|{:?}", ports));
+        text.push_str(&format!("|{:?}", links[&node.id]));
         result.insert(node.id.clone(), fnv1a(&text));
     }
     result
+}
+
+/// Decision nodes that can occur on a route through one of `edited`: the
+/// edited nodes, everything downstream of them and everything upstream.
+fn nodes_sharing_a_route(graph: &AnpGraph, edited: &HashSet<&str>) -> HashSet<String> {
+    let links = decision_links(graph);
+    let next = |id: &str| -> Vec<String> {
+        links
+            .get(id)
+            .into_iter()
+            .flat_map(|ports| ports.values().flatten().cloned())
+            .collect()
+    };
+    let mut reach: HashSet<String> = edited.iter().map(|s| s.to_string()).collect();
+    let mut stack: Vec<String> = reach.iter().cloned().collect();
+    while let Some(id) = stack.pop() {
+        for succ in next(&id) {
+            if reach.insert(succ.clone()) {
+                stack.push(succ);
+            }
+        }
+    }
+    // Upstream: nodes from which an edited node is reachable.
+    loop {
+        let before = reach.len();
+        for id in links.keys() {
+            if !reach.contains(id) && next(id).iter().any(|s| reach.contains(s)) {
+                reach.insert(id.clone());
+            }
+        }
+        if reach.len() == before {
+            return reach;
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -802,15 +845,17 @@ impl RiskCertificate {
                 }
             }
         }
-        let touched: BTreeSet<usize> = fresh
+        // The fresh evidence depends on the thresholds of the modules that can occur on a
+        // route through the edit; this is a property of the graph, not of the sample.
+        let reach = nodes_sharing_a_route(graph, &edited_set);
+        let touched = modules
             .iter()
-            .flat_map(|t| t.steps.iter())
-            .filter_map(|s| modules.iter().position(|m| m.contains(&s.node)))
-            .collect();
+            .filter(|m| m.iter().any(|n| reach.contains(n)))
+            .count();
         parts.push(Part {
             n: fresh.len() as u64,
             delta: delta / 2.0,
-            exponent: touched.len().max(1) as u32,
+            exponent: touched.max(1) as u32,
             scale: share,
             edited: edited.to_vec(),
             routes: route_stats(fresh, &modules, &self.grid, self.rule),
@@ -1130,6 +1175,8 @@ mod tests {
             .routes
             .iter()
             .all(|r| r.stale == r.route.contains(&"leaf_b".to_string())));
+        // Routes through leaf_b can meet root and leaf_b but never leaf_a.
+        assert_eq!(next.parts[1].exponent, 2);
         // The fresh part is weighted by the traffic share of leaf_b (about 53%).
         let share = next.parts[1].scale;
         assert!(share > 0.53 && share < 0.60, "share {share}");
