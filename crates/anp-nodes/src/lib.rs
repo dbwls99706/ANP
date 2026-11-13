@@ -495,6 +495,7 @@ pub fn register_all(registry: &mut NodeRegistry) {
                     },
                     "threshold": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.7, "description": "Minimum probability required to commit to a choice" },
                     "uncertain_port": { "type": "string", "default": "uncertain", "description": "Port for decisions below the threshold" },
+                    "never_commit": { "type": "boolean", "default": false, "description": "Escalate every input to the uncertain port" },
                     "field": { "type": "string", "description": "Dot-path to the text to decide on (default: whole input)" },
                     "provider": { "type": "string", "enum": ["openai", "anthropic", "rules", "input"], "description": "Where probabilities come from; auto-detected when omitted" },
                     "model": { "type": "string", "description": "Model name for openai/anthropic" },

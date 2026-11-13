@@ -27,6 +27,9 @@ use anp_core::runtime::context::ExecutionContext;
 /// }
 /// ```
 ///
+/// `"never_commit": true` escalates every input regardless of confidence; risk
+/// certification sets it for nodes that cannot be trusted at any threshold.
+///
 /// Providers:
 /// - `openai`: reads token log-probabilities of a single-letter answer
 /// - `anthropic`: asks the model for a score per choice
@@ -43,6 +46,7 @@ pub struct DecisionNode {
     question: String,
     choices: Vec<Choice>,
     threshold: f64,
+    never_commit: bool,
     uncertain_port: String,
     field: Option<String>,
     provider: Provider,
@@ -93,6 +97,7 @@ impl DecisionNode {
             question: String::new(),
             choices: Vec::new(),
             threshold: 0.7,
+            never_commit: false,
             uncertain_port: "uncertain".to_string(),
             field: None,
             provider: Provider::Rules,
@@ -467,6 +472,11 @@ impl NodeExecutor for DecisionNode {
             self.threshold = value;
         }
 
+        self.never_commit = config
+            .get("never_commit")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
         if let Some(field) = config.get("field").and_then(|v| v.as_str()) {
             self.field = Some(field.to_string()).filter(|f| !f.is_empty());
         }
@@ -561,7 +571,7 @@ impl NodeExecutor for DecisionNode {
                     |best, (i, p)| if p > best.1 { (i, p) } else { best },
                 );
         let choice = &self.choices[top_index].name;
-        let decided = confidence >= self.threshold;
+        let decided = !self.never_commit && confidence >= self.threshold;
         let port = if decided {
             choice.clone()
         } else {
@@ -758,6 +768,27 @@ mod tests {
         // Missing or malformed scores stay inside the declared output space.
         let out = node.execute(json!({"model": "oops"}), &ctx).await.unwrap();
         assert!(out.ports.contains_key("uncertain"));
+    }
+
+    #[tokio::test]
+    async fn never_commit_always_escalates() {
+        let mut node = DecisionNode::new();
+        node.init(&json!({
+            "question": "q",
+            "choices": ["a", "b"],
+            "threshold": 0.0,
+            "never_commit": true,
+            "keywords": { "a": ["x"] }
+        }))
+        .await
+        .unwrap();
+        let out = node
+            .execute(json!("x x x"), &ExecutionContext::new())
+            .await
+            .unwrap();
+        let payload = &out.ports["uncertain"];
+        assert_eq!(payload["_decision"]["choice"], "a");
+        assert_eq!(payload["_decision"]["decided"], false);
     }
 
     #[tokio::test]

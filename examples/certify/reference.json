@@ -1,0 +1,24 @@
+{
+ "n": 3000,
+ "delta": 0.1,
+ "grid_options": 26,
+ "level": {
+  "bound_at_0.7": 0.06305307899662285,
+  "errors_at_0.7": 133,
+  "optimal_review_at_0.05": 0.372,
+  "optimal_bound_at_0.05": 0.04840634804439128
+ },
+ "node": {
+  "bound_at_0.7": 0.08540461833277599,
+  "errors_at_0.7": 133,
+  "optimal_review_at_0.05": 0.47866666666666663,
+  "optimal_bound_at_0.05": 0.04978209192491972
+ },
+ "global": {
+  "bound_at_0.7": 0.05531237722416894,
+  "errors_at_0.7": 133,
+  "optimal_review_at_0.05": 0.3383333333333333,
+  "optimal_bound_at_0.05": 0.04902430770033722
+ },
+ "first_error_level_errors_at_0.7": 323
+}

@@ -4,6 +4,7 @@ pub mod diff;
 pub mod editor;
 pub mod loader;
 pub mod optimize;
+pub mod risk;
 pub mod spec;
 pub mod types;
 pub mod validate;

@@ -6,7 +6,7 @@ use tracing_subscriber::EnvFilter;
 
 use anp_core::graph::editor::GraphEditor;
 use anp_core::graph::spec::{AnpGraph, NodeKind};
-use anp_core::graph::{loader, validate};
+use anp_core::graph::{loader, risk, validate};
 use anp_core::node::registry::NodeRegistry;
 use anp_core::runtime::engine::AnpEngine;
 use anp_planner::generator::AnpPlanner;
@@ -83,6 +83,52 @@ enum Commands {
     Verify {
         /// Path to the .anp.json graph file
         graph: PathBuf,
+        /// Risk certificate to check the decision thresholds against
+        #[arg(long, requires = "epsilon")]
+        risk: Option<PathBuf>,
+        /// Largest acceptable rate of wrong, unescalated runs (with --risk)
+        #[arg(long, requires = "risk")]
+        epsilon: Option<f64>,
+    },
+    /// Certify the error rate of a decision workflow and tune its thresholds
+    ///
+    /// Issue a certificate:   anp certify g.json --traces runs.jsonl --out cert.json
+    /// Tune thresholds:       anp certify g.json --cert cert.json --epsilon 0.05 --apply g.json
+    /// After editing a node:  anp certify g.json --cert cert.json --fresh new.jsonl --edited node --out cert.json
+    #[command(verbatim_doc_comment)]
+    Certify {
+        /// Path to the .anp.json graph file
+        graph: PathBuf,
+        /// Labelled calibration runs (JSON lines) sampled from all traffic
+        #[arg(long, conflicts_with_all = ["cert", "fresh"])]
+        traces: Option<PathBuf>,
+        /// Existing certificate to tune thresholds from, or to update after an edit
+        #[arg(long)]
+        cert: Option<PathBuf>,
+        /// Labelled runs of the edited workflow, sampled from traffic through the edited nodes
+        #[arg(long, requires_all = ["cert", "edited"])]
+        fresh: Option<PathBuf>,
+        /// Decision nodes that were edited (comma separated)
+        #[arg(long, value_delimiter = ',', requires = "fresh")]
+        edited: Vec<String>,
+        /// Target error rate; picks the thresholds with the least human review
+        #[arg(long)]
+        epsilon: Option<f64>,
+        /// Probability that the certificate is wrong (spent on the evidence being added)
+        #[arg(long, default_value_t = 0.1)]
+        delta: f64,
+        /// Which node an erroneous run is charged to: min or first_error
+        #[arg(long, default_value = "min")]
+        rule: String,
+        /// Nodes sharing a threshold: level, node or global
+        #[arg(long, default_value = "level")]
+        modules: String,
+        /// Write the certificate to this file
+        #[arg(long)]
+        out: Option<PathBuf>,
+        /// Write the graph with the chosen thresholds to this file (requires --epsilon)
+        #[arg(long, requires = "epsilon")]
+        apply: Option<PathBuf>,
     },
     /// Show semantic differences between two graphs
     Diff {
@@ -190,7 +236,36 @@ async fn main() -> ExitCode {
             instruction,
             dry_run,
         } => cmd_edit(graph, instruction, dry_run).await,
-        Commands::Verify { graph: path } => cmd_verify(path),
+        Commands::Verify {
+            graph: path,
+            risk,
+            epsilon,
+        } => cmd_verify(path, risk.zip(epsilon)),
+        Commands::Certify {
+            graph,
+            traces,
+            cert,
+            fresh,
+            edited,
+            epsilon,
+            delta,
+            rule,
+            modules,
+            out,
+            apply,
+        } => cmd_certify(CertifyArgs {
+            graph,
+            traces,
+            cert,
+            fresh,
+            edited,
+            epsilon,
+            delta,
+            rule,
+            modules,
+            out,
+            apply,
+        }),
         Commands::Diff {
             old_graph,
             new_graph,
@@ -627,15 +702,166 @@ fn cmd_init(name: String) -> CliResult {
     Ok(())
 }
 
-fn cmd_verify(path: PathBuf) -> CliResult {
+fn cmd_verify(path: PathBuf, risk: Option<(PathBuf, f64)>) -> CliResult {
     let graph = load_graph(&path)?;
     let report = anp_core::graph::verify::verify(&graph);
     println!("{}", report);
-    if report.overall_pass {
+    let mut pass = report.overall_pass;
+    if let Some((cert_path, epsilon)) = risk {
+        if !(epsilon > 0.0 && epsilon < 1.0) {
+            return Err(CliError::Message(
+                "--epsilon must be between 0 and 1".into(),
+            ));
+        }
+        let check = load_certificate(&cert_path)?.check(&graph, epsilon);
+        let mark = if check.pass {
+            "\u{2713} PASS"
+        } else {
+            "\u{2717} FAIL"
+        };
+        println!("{} Risk: {}", mark, check);
+        pass &= check.pass;
+    }
+    if pass {
         Ok(())
     } else {
         Err(CliError::Message("verification failed".to_string()))
     }
+}
+
+struct CertifyArgs {
+    graph: PathBuf,
+    traces: Option<PathBuf>,
+    cert: Option<PathBuf>,
+    fresh: Option<PathBuf>,
+    edited: Vec<String>,
+    epsilon: Option<f64>,
+    delta: f64,
+    rule: String,
+    modules: String,
+    out: Option<PathBuf>,
+    apply: Option<PathBuf>,
+}
+
+fn load_certificate(path: &std::path::Path) -> Result<risk::RiskCertificate, CliError> {
+    let text = std::fs::read_to_string(path)
+        .map_err(|e| CliError::Message(format!("Error reading {}: {}", path.display(), e)))?;
+    serde_json::from_str(&text)
+        .map_err(|e| CliError::Message(format!("{} is not a certificate: {}", path.display(), e)))
+}
+
+fn load_traces(path: &std::path::Path) -> Result<Vec<risk::RunTrace>, CliError> {
+    let text = std::fs::read_to_string(path)
+        .map_err(|e| CliError::Message(format!("Error reading {}: {}", path.display(), e)))?;
+    text.lines()
+        .enumerate()
+        .filter(|(_, line)| !line.trim().is_empty())
+        .map(|(i, line)| {
+            serde_json::from_str(line)
+                .map_err(|e| CliError::Message(format!("{} line {}: {}", path.display(), i + 1, e)))
+        })
+        .collect()
+}
+
+fn write_json(path: &std::path::Path, json: Result<String, serde_json::Error>) -> CliResult {
+    let json = json.map_err(|e| CliError::Message(format!("Error serializing: {}", e)))?;
+    std::fs::write(path, json)
+        .map_err(|e| CliError::Message(format!("Error writing {}: {}", path.display(), e)))
+}
+
+fn cmd_certify(args: CertifyArgs) -> CliResult {
+    let mut graph = load_graph(&args.graph)?;
+    let fail = |e: risk::RiskError| CliError::Message(e.to_string());
+
+    let cert = if let Some(traces_path) = &args.traces {
+        let rule = match args.rule.as_str() {
+            "min" => risk::Rule::Min,
+            "first_error" => risk::Rule::FirstError,
+            other => {
+                return Err(CliError::Message(format!(
+                    "unknown --rule '{}'. Use: min, first_error",
+                    other
+                )))
+            }
+        };
+        let granularity = match args.modules.as_str() {
+            "level" => risk::Granularity::Level,
+            "node" => risk::Granularity::Node,
+            "global" => risk::Granularity::Global,
+            other => {
+                return Err(CliError::Message(format!(
+                    "unknown --modules '{}'. Use: level, node, global",
+                    other
+                )))
+            }
+        };
+        let traces = load_traces(traces_path)?;
+        let cert = risk::certify(&graph, &traces, rule, granularity, args.delta).map_err(fail)?;
+        println!(
+            "Certified {} decision node(s) in {} module(s) from {} runs.",
+            cert.fingerprints.len(),
+            cert.modules.len(),
+            traces.len()
+        );
+        cert
+    } else if let Some(cert_path) = &args.cert {
+        let old = load_certificate(cert_path)?;
+        match &args.fresh {
+            Some(fresh_path) => {
+                let fresh = load_traces(fresh_path)?;
+                let cert = old
+                    .recertify(&graph, &fresh, &args.edited, args.delta)
+                    .map_err(fail)?;
+                let kept: u64 = cert.parts[0]
+                    .routes
+                    .iter()
+                    .filter(|r| !r.stale)
+                    .map(|r| r.runs)
+                    .sum();
+                println!(
+                    "Recertified after editing {}: kept {} earlier runs, added {} fresh runs.",
+                    args.edited.join(", "),
+                    kept,
+                    fresh.len()
+                );
+                cert
+            }
+            None => old,
+        }
+    } else {
+        return Err(CliError::Message(
+            "nothing to do: pass --traces to issue a certificate or --cert to use one".into(),
+        ));
+    };
+
+    let stale = cert.stale_nodes(&graph);
+    if !stale.is_empty() {
+        return Err(CliError::Message(format!(
+            "the certificate does not match the graph for: {}\n\
+             Label fresh runs through these nodes and pass --fresh <runs> --edited {}",
+            stale.join(", "),
+            stale.join(",")
+        )));
+    }
+
+    if let Some(out) = &args.out {
+        write_json(out, serde_json::to_string(&cert))?;
+        println!("Certificate written to {}", out.display());
+    }
+
+    if let Some(epsilon) = args.epsilon {
+        let selection = cert.optimize(epsilon).map_err(fail)?;
+        println!("Thresholds for a target error rate of {}:", epsilon);
+        println!("{}", cert.describe(&selection));
+        if let Some(apply) = &args.apply {
+            cert.apply(&mut graph, &selection);
+            write_json(apply, serde_json::to_string_pretty(&graph))?;
+            println!("Graph with these thresholds written to {}", apply.display());
+        }
+    } else if args.out.is_none() {
+        println!("Pass --out to save the certificate or --epsilon to pick thresholds.");
+    }
+    Ok(())
 }
 
 fn cmd_diff(old_path: PathBuf, new_path: PathBuf) -> CliResult {
