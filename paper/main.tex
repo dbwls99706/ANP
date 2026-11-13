@@ -1,0 +1,530 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{mathptmx}
+\renewcommand{\ttdefault}{lmtt}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs,multirow}
+\usepackage{graphicx}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage[colorlinks,linkcolor=blue!50!black,citecolor=blue!50!black,urlcolor=blue!50!black]{hyperref}
+\usepackage{microtype}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+\newcommand{\Prob}{\mathbb{P}}
+\newcommand{\Comp}{\mathrm{Comp}}
+\newcommand{\CP}{\mathrm{CP}^{+}}
+\newcommand{\eps}{\varepsilon}
+\newcommand{\ind}{\mathbf{1}}
+\newcommand{\anp}{\textsc{anp}}
+
+% Replace with the author's name before submission.
+\newcommand{\authorname}{dbwls99706}
+
+\input{numbers}
+
+\title{Risk Certificates That Survive Edits:\\
+Separable, Route-Indexed Calibration for Decision Workflows}
+\author{\authorname\\ Independent Researcher}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+A decision workflow is a program whose branches are taken by learned models: each decision
+node commits to a choice when its confidence clears a threshold and escalates to a human
+otherwise. Operators want the rate of wrong, unescalated runs below a target $\eps$ with as
+little human review as possible, and they keep changing the workflow: thresholds are retuned,
+a model is swapped, a step is added. Distribution-free risk control certifies one frozen
+configuration end to end, so every change sends the whole workflow back to calibration.
+We study certificates that survive such changes.
+First, we show that any threshold-independent rule that \emph{charges} each erroneous run to
+one node on its route yields an upper bound on the end-to-end risk that is separable across
+nodes. Its sufficient statistics are one integer curve per node, it holds uniformly over all
+threshold assignments on a grid with a single binomial bound, and the least-review thresholds
+are an exactly solvable knapsack. Charging the least confident node is exact for shared
+thresholds, whereas the natural rule---charge the first wrong decision, the routing analogue
+of additive stage-wise decompositions---is loose: on two real workflows it overstates the
+risk by a factor of \FdOverstateMin--\FdOverstateMax, because downstream nodes escalate most misrouted inputs.
+Second, we prove that an edit changes only the runs that pass through the edited node, and that
+which runs do is decided by unedited nodes. Indexing the counts by route therefore lets a
+certificate be repaired with labels from the affected traffic alone. After replacing one leaf
+model in workflows with 12 and 21 decisions, \EditM\ fresh labels restore a 5\% certificate at
+\EditLocalClinc\% and \EditLocalMassive\% review, where recalibrating from scratch with the
+same labels certifies nothing. The price of validity under post hoc retuning is statistical,
+of order $M\ln G/n$ for $M$ independently tuned thresholds on a grid of size $G$; we measure
+it, and show that tying thresholds by level recovers most of it. All methods are implemented
+in an open-source workflow runtime, where the certificate is checked statically.
+\end{abstract}
+
+\section{Introduction}
+
+A growing share of deployed machine intelligence is not a conversation but a branch. A request
+is classified, routed, scored and routed again, and at each step a model answers a closed
+question---\emph{is this in scope? which product area? which intent?}---whose answer selects
+the next step of an ordinary program. Such \emph{decision workflows} are how compound AI
+systems are assembled in practice~\citep{khattab2023dspy}, and recent ``System One'' models
+are built specifically to serve them, returning typed choices with probabilities instead of
+text~\citep{typesafe2026jev}. The probabilities matter because the workflow has an exit: when a
+node is not confident enough, the run is handed to a human.
+
+This raises a calibration problem with a clear shape. Let every decision node $v$ commit when
+its confidence is at least a threshold $\tau_v$ and escalate otherwise. A run is an
+\emph{error} if it completes without escalation on a wrong route. The operator wants
+thresholds with error rate at most $\eps$ and minimal human review. Distribution-free risk
+control answers this for a \emph{fixed} system: Learn-then-Test~\citep{angelopoulos2021ltt} and
+its relatives~\citep{bates2021rcps,angelopoulos2022crc,laufer2022pareto} certify a
+configuration chosen from held-out labelled runs, with a finite-sample guarantee and no
+assumption on the models.
+
+Workflows, however, are not fixed. They are software, and they are edited the way software is
+edited: a threshold is nudged after an incident, the target $\eps$ is renegotiated, a
+classifier is replaced by a better one, a new decision is inserted below an existing branch.
+An end-to-end certificate says nothing about the edited system, and its guarantee does not
+cover thresholds picked after looking at the certificate either. The practical consequence is
+that the statistical guarantee is the first thing dropped when a workflow starts to evolve.
+
+We ask what a certificate should look like if it is to survive this. We identify three
+properties and show how far each can be had:
+
+\begin{description}[leftmargin=1.5em,itemsep=2pt,topsep=3pt]
+\item[Validity.] A finite-sample, distribution-free bound on the end-to-end error rate.
+\item[Post hoc tunability.] The bound holds simultaneously for all threshold assignments, so
+thresholds and $\eps$ can be changed after the certificate is issued.
+\item[Edit locality.] Editing a node invalidates only the evidence that the edit can affect,
+and repairing the certificate needs labels only for that part.
+\end{description}
+
+\paragraph{Contributions.}
+\begin{enumerate}[leftmargin=1.5em,itemsep=2pt,topsep=3pt]
+\item \textbf{Charging rules and separable certificates} (\S\ref{sec:sep}). Any rule that
+assigns each erroneous run to one node on its route, independently of the thresholds, bounds
+the risk by a sum of per-node terms, each depending on that node's threshold only
+(Lemma~\ref{lem:charging}). The bound is a single binomial proportion for every threshold
+assignment, so one Clopper--Pearson bound with a union over the grid makes it uniform
+(Theorem~\ref{thm:cert}); its sufficient statistics are $M$ integer curves; and choosing
+thresholds is a multiple-choice knapsack with integer weights, solved exactly.
+\item \textbf{The rescue effect} (\S\ref{sec:rules}, \S\ref{sec:exp-main}). The obvious charging
+rule blames the first wrong decision. It is the routing analogue of the additive stage-wise
+decompositions used for cascades~\citep{sun2026compcrc}, and it is the rule with the smallest
+dependency footprint. We show it is badly loose in routing workflows, where a misrouted input
+tends to be escalated by the nodes it was misrouted to. Charging the least confident node
+accounts for this and is exact when thresholds are shared (Proposition~\ref{prop:exact}).
+\item \textbf{Edit locality and route-indexed certificates} (\S\ref{sec:edits}). An edit leaves
+every run that avoids the edited node untouched, and whether a run reaches the node is decided
+upstream of it (Proposition~\ref{prop:local}). Storing the counts per route turns this into a
+recertification procedure that reuses the old sample for the untouched traffic and spends
+fresh labels only on traffic through the edit (Theorem~\ref{thm:recert}).
+\item \textbf{An empirical account of the trade-offs} (\S\ref{sec:exp}). On two workflows built
+from public intent-classification data (12 and 21 decision nodes; 8{,}600 and 20{,}028
+held-out inputs) and on synthetic chains, we measure validity exactly, the cost of uniformity
+and of fine-grained thresholds, and the label savings of edit-local recertification. Per-node
+selective calibration, the common practice, violates the target; all certified methods hold.
+\item \textbf{A static check} (\S\ref{sec:impl}). The methods are implemented in \anp, an
+open-source graph workflow runtime, as a \texttt{certify} command and a verification pass that
+rejects a workflow whose thresholds exceed its certified risk or whose certificate is stale.
+\end{enumerate}
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[font=\footnotesize, node distance=6mm and 13mm,
+  dec/.style={draw, rounded corners=2pt, minimum height=6.5mm, minimum width=15mm, fill=blue!6},
+  snk/.style={draw, minimum height=5.5mm, minimum width=13mm, fill=black!5},
+  hum/.style={draw, dashed, minimum height=5.5mm, minimum width=20mm, fill=orange!12},
+  arr/.style={-{Stealth[length=1.8mm]}, semithick},
+  run/.style={-{Stealth[length=1.8mm]}, very thick, red!70!black}]
+\node[dec] (scope) {scope};
+\node[dec, right=of scope] (domain) {domain};
+\node[dec, right=of domain] (intent) {intent[banking]};
+\node[dec, above=3mm of intent] (i1) {intent[travel]};
+\node[dec, below=3mm of intent] (i2) {intent[work]};
+\node[snk, right=of intent] (act) {action};
+\node[snk, below=of scope] (oos) {decline};
+\node[hum, below=10mm of domain] (human) {human review};
+\draw[arr] (scope) -- node[left, pos=.45]{\scriptsize out} (oos);
+\draw[run] (scope) -- node[above]{\scriptsize in} (domain);
+\draw[arr] (domain.east) -- ++(4mm,0) |- (i1.west);
+\draw[run] (domain) -- (intent);
+\draw[arr] (domain.east) -- ++(4mm,0) |- (i2.west);
+\draw[arr] (intent) -- (act);
+\draw[arr, dashed] (scope.south east) -- (human.north west);
+\draw[arr, dashed] (domain) -- (human);
+\draw[run, dashed] (intent.south west) -- (human.north east);
+\node[above=0.5mm of scope, red!70!black] {\scriptsize $c=0.99$, wrong};
+\node[above=0.5mm of domain, red!70!black] {\scriptsize $c=0.62$};
+\node[below right=0.2mm and -9mm of intent, red!70!black] {\scriptsize $c=0.30$};
+\end{tikzpicture}
+\caption{A decision workflow and a rescued error. An out-of-scope request is confidently
+passed by \texttt{scope} (the first error), reaches nodes that were not built for it, and is
+escalated by an unsure \texttt{intent} node. Charging the run to its first error counts it as
+an error at every threshold below $0.99$; charging it to the least confident node counts it
+only when $\tau_{\text{intent}}\le0.30$, which is when it actually completes.}
+\label{fig:workflow}
+\end{figure}
+
+We also state plainly what the results do not show. Uniform certificates are not free: at a
+fixed target, end-to-end Pareto testing~\citep{laufer2022pareto} escalates less than any
+certificate that remains valid under retuning. Our experiments use embedding-based
+classifiers, not hosted language models. And the guarantees are for exchangeable traffic
+(\S\ref{sec:limits}).
+
+\section{Setting}\label{sec:setting}
+
+\paragraph{Workflows.} A workflow has a finite set $V$ of decision nodes. Node $v$ receives a
+state $s$ and returns a choice $\hat y_v(s)$ from a finite set $C_v$ together with a confidence
+$c_v(s)\in[0,1]$. Each choice leads either to another decision node or to a sink; the successor
+relation is acyclic. Everything between two decisions (formatting, retrieval, deterministic
+transforms) is folded into the state passed along the edge, which is a function of the
+previous state and the choice taken.
+
+\paragraph{Runs.} An input $x\sim P$ enters at the root. Its \emph{free run} $\pi(x) =
+(v_1,\dots,v_m)$ is the sequence of nodes visited when every node commits to its top choice,
+with confidences $c_1(x),\dots,c_m(x)$. The free run does not involve the thresholds. Given
+thresholds $\tau\in([0,1]\cup\{\infty\})^V$, the workflow follows the free run and escalates at
+the first node whose confidence is below its threshold; $\tau_v=\infty$ means $v$ never commits.
+The run \emph{completes} when no node escalates:
+\[
+\Comp(\tau)=\bigl\{x:\ c_j(x)\ge\tau_{v_j}\ \text{for all } j\le m\bigr\}.
+\]
+
+\paragraph{Errors.} Ground truth assigns to each input its \emph{oracle route} $\pi^*(x)$, the
+route obtained when every decision is correct. Let $D=\{x:\pi(x)\ne\pi^*(x)\}$ be the inputs
+whose free run deviates. An escalated run is resolved by a human and is not an error. The
+\emph{risk} and the \emph{review rate} are
+\[
+R(\tau)=\Prob\bigl(D\cap\Comp(\tau)\bigr),\qquad H(\tau)=1-\Prob\bigl(\Comp(\tau)\bigr).
+\]
+The goal is to choose $\tau$ from $n$ labelled calibration inputs so that $R(\tau)\le\eps$ with
+probability at least $1-\delta$ over the calibration sample, and $H(\tau)$ is small.
+
+\paragraph{Assumptions.} (A1) Calibration and deployment inputs are i.i.d.\ from $P$. (A2) The
+state a node receives depends only on the input and the choices taken before it, so the free
+run is well defined and deterministic given $x$. (A3) Labels identify the oracle route. We
+present the case where each run is a path. If a choice feeds several decision nodes, $\pi(x)$
+is the set of visited nodes and every statement below holds with ``on the route'' read as ``in
+the visited set''.
+
+\section{Separable certificates}\label{sec:sep}
+
+\subsection{The charging lemma}
+
+\begin{definition}
+A \emph{charging rule} is a map $u:D\to V$ with $u(x)\in\pi(x)$: it assigns every deviating
+free run to one node on its route. It may depend on the models and the labels but not on
+$\tau$. We write $c_u(x)$ for the confidence of $u(x)$ on the free run of $x$.
+\end{definition}
+
+\begin{lemma}[Charging]\label{lem:charging}
+For every charging rule $u$ and every $\tau$,
+\[
+R(\tau)\ \le\ B_u(\tau):=\sum_{v\in V}\rho^u_v(\tau_v),\qquad
+\rho^u_v(t)=\Prob\bigl(x\in D,\ u(x)=v,\ c_u(x)\ge t\bigr).
+\]
+Each $\rho^u_v$ is non-increasing and depends on $\tau$ only through $\tau_v$. The gap is
+$B_u(\tau)-R(\tau)=\Prob\bigl(x\in D,\ c_u(x)\ge\tau_{u(x)},\ x\notin\Comp(\tau)\bigr)$.
+\end{lemma}
+\begin{proof}
+If $x\in D\cap\Comp(\tau)$ then every node on $\pi(x)$ has confidence at least its threshold,
+in particular $u(x)$. Hence $D\cap\Comp(\tau)\subseteq\{x\in D: c_u(x)\ge\tau_{u(x)}\}$, and the
+right-hand side is the disjoint union over $v$ of the events defining $\rho^u_v(\tau_v)$. The
+gap is the probability of the set difference.
+\end{proof}
+
+The lemma is elementary, and that is its value: the dependence between nodes, which is what
+makes multi-stage calibration hard, is absorbed into the choice of $u$, after which each node
+contributes a curve of its own threshold. The gap consists of deviating runs whose charged
+node commits while another node on the route escalates. We call these runs \emph{rescued}.
+
+\subsection{Three rules}\label{sec:rules}
+
+\paragraph{First error (FE).} $u(x)$ is the first node of the free run whose choice is wrong.
+This is the rule one arrives at by extending additive stage-wise decompositions for
+cascades~\citep{sun2026compcrc} to routing: every error is attributed to the stage that caused
+it. It needs only free-run logs. Its weakness is that it ignores everything after the first
+error. In a routing workflow the first error sends the input to nodes that were never meant to
+see it, and those nodes are often unsure; FE charges the run as if they had all committed.
+
+\paragraph{Teacher forced (TF).} Charge \emph{every} node that is wrong on the state it
+receives along the oracle route, whether or not the free run reaches it:
+$\rho^{\mathrm{TF}}_v(t)=\Prob(v\in\pi^*(x),\ \hat y_v\ne y_v,\ c_v\ge t)$ evaluated on
+oracle-route states. Since the first wrong node of a deviating run is wrong on its oracle-route
+state, $\rho^{\mathrm{FE}}_v\le\rho^{\mathrm{TF}}_v$ and the bound of Lemma~\ref{lem:charging}
+still holds, now as a union bound. TF is the most modular rule: $\rho^{\mathrm{TF}}_v$ depends
+on no other node's model, and factors as $\Prob(v\in\pi^*)$ times a selective error of $v$ on
+its own domain, which a component owner could certify in isolation. It is also the loosest.
+
+\paragraph{Least confident (LC).} $u(x)$ is the node of the free run with the smallest
+confidence, or more generally the smallest margin $c_j(x)-a_{v_j}$ for a fixed anchor
+$a\in\mathbb{R}^V$ (ties broken by position). The rule looks at the whole route, so it sees
+rescue.
+
+\begin{proposition}[Exactness]\label{prop:exact}
+For the LC rule with anchor $a$, $B_u(a+s\mathbf{1})=R(a+s\mathbf{1})$ for every $s$. In
+particular the unanchored rule is exact whenever all thresholds are equal.
+\end{proposition}
+\begin{proof}
+With $\tau=a+s\mathbf 1$, a run completes iff $\min_j\,(c_j-a_{v_j})\ge s$, i.e.\ iff the node
+attaining the minimum has $c_u\ge a_{u}+s=\tau_{u}$. So $\{x\in D:c_u\ge\tau_u\}=D\cap\Comp(\tau)$.
+\end{proof}
+
+An anchor can be learned on a tuning split (for instance, thresholds proposed by an
+end-to-end heuristic), which makes the bound exact along a ray through a good configuration
+while it remains valid everywhere.
+
+\subsection{A uniform finite-sample certificate}
+
+Partition $V$ into $M$ \emph{modules}; nodes of a module share one threshold. Modules control
+granularity: one per node, one per level of the workflow, or a single one. Fix a finite grid
+$\mathcal G\subset[0,1]\cup\{\infty\}$ of $G$ thresholds containing $\infty$. An assignment
+$g\in\mathcal G^M$ induces thresholds $\tau_g$. Given calibration inputs $x_1,\dots,x_n$, let
+\[
+k_m(t)=\#\{i:\ x_i\in D,\ u(x_i)\in m,\ c_u(x_i)\ge t\},\qquad k(g)=\sum_{m=1}^M k_m(g_m).
+\]
+Let $\CP(k,n,\alpha)$ denote the one-sided Clopper--Pearson upper confidence bound at level
+$1-\alpha$ for a binomial proportion with $k$ successes in $n$ trials~\citep{clopper1934}.
+
+\begin{theorem}[Certificate]\label{thm:cert}
+Let $u$ be a charging rule fixed independently of the calibration sample, and set
+$U(g)=\CP\bigl(k(g),n,\delta/G^M\bigr)$ for $g\ne(\infty,\dots,\infty)$ and $U(\infty,\dots,\infty)=0$.
+Under \textup{(A1)--(A3)}, with probability at least $1-\delta$,
+\[
+R(\tau_g)\le U(g)\qquad\text{simultaneously for all } g\in\mathcal G^M.
+\]
+\end{theorem}
+\begin{proof}
+Fix $g$. Each calibration input contributes to $k(g)$ at most once, because it is charged to
+one node, and does so with probability $B_u(\tau_g)$. So $k(g)\sim\mathrm{Bin}(n,B_u(\tau_g))$
+and $\Prob(B_u(\tau_g)>U(g))\le\delta/G^M$. A union bound over the fewer than $G^M$ assignments
+other than all-$\infty$ and Lemma~\ref{lem:charging} give the claim; a workflow that never
+commits has risk exactly zero.
+\end{proof}
+
+\begin{corollary}[Post hoc selection]\label{cor:posthoc}
+On the event of Theorem~\ref{thm:cert}, every assignment $\hat g$ with $U(\hat g)\le\eps$
+satisfies $R(\tau_{\hat g})\le\eps$, however $\hat g$ and $\eps$ were chosen---including after
+inspecting the calibration data and the certificate, and for several targets at once.
+\end{corollary}
+
+Three remarks. \emph{(i) Sufficient statistics.} The certificate is the $M\times G$ integer
+table $k_m(t)$ and $n$; no raw inputs or labels need to be retained. \emph{(ii) One bound, not
+$M$.} Because each run is charged once, the per-node terms pool into a single binomial count.
+Bounding the $M$ curves separately and adding the bounds is also valid, and is what TF
+requires, but pays $M$ confidence margins instead of one. \emph{(iii) The price of
+uniformity.} With no observed errors the bound is about $(M\ln G+\ln\frac1\delta)/n$. Tying
+thresholds lowers $M$. Some dependence on $M$ is inherent in bounds that hold for all
+thresholds at once, as the family of completion events has VC dimension $M$; we do not claim
+the constant is optimal.
+
+\subsection{Choosing thresholds}
+
+Let $k_{\max}(\eps)$ be the largest count with $\CP(k,n,\delta/G^M)\le\eps$. Selecting thresholds
+means choosing one grid value per module with total charged count at most $k_{\max}$. As
+objective we use the separable surrogate $\sum_m h_m(g_m)$, where $h_m(t)$ is the fraction of
+calibration runs that visit a node of module $m$ with confidence below $t$; it upper-bounds the
+review rate by a union bound. The result is a multiple-choice knapsack problem with integer
+weights~\citep{kellerer2004}, solved exactly by dynamic programming in $O(MG\,k_{\max})$ time.
+Since the certificate is uniform, the solution may then be refined by any local search on the
+empirical review rate without affecting validity; we use coordinate descent.
+
+\section{Edits}\label{sec:edits}
+
+\subsection{Locality}
+
+Let $W'$ be obtained from a workflow $W$ by an \emph{edit} of a set $E\subseteq V$: the models
+of the nodes in $E$, their choice sets, and anything reachable only through them may change
+(including new nodes); every other node and the labels of the unedited decisions are unchanged.
+Let $T_E=\{x:\pi_W(x)\cap E\ne\emptyset\}$ be the inputs whose free run meets the edit.
+
+\begin{proposition}[Locality]\label{prop:local}
+\textup{(i)} The free run of $x$ in $W'$ meets $E$ if and only if $x\in T_E$.
+\textup{(ii)} For $x\notin T_E$ the free run, its confidences, and whether it deviates are the
+same in $W$ and $W'$. Consequently, for every $\tau$,
+\[
+R_{W'}(\tau)=\Prob\bigl(D_W\cap\Comp_W(\tau)\cap T_E^{\,c}\bigr)
++\Prob(T_E)\,\Prob\bigl(D_{W'}\cap\Comp_{W'}(\tau)\mid T_E\bigr).
+\]
+\end{proposition}
+\begin{proof}
+The part of a free run before its first node in $E$ consists of unedited nodes receiving the
+same states, so it is identical in $W$ and $W'$; this gives (i), and for $x\notin T_E$ the
+whole run is identical. Such a run deviates iff it differs from the oracle route. If the
+oracle route avoids $E$ it is unchanged by the edit. If it meets $E$ in either workflow it
+meets $E$ in both, because its prefix up to $E$ is determined by unedited labels, and then the
+run, which avoids $E$, deviates in both. The displayed identity is the law of total
+probability.
+\end{proof}
+
+\subsection{Route-indexed certificates}
+
+Proposition~\ref{prop:local} says that the old calibration sample remains evidence about the
+first term, exactly, for any charging rule. To use it, the certificate must be able to separate
+the runs that meet $E$ from those that do not, for an $E$ unknown when it is issued. Storing
+the count curves \emph{per free route} achieves this: the table becomes
+$k_{r,m}(t)$ for each distinct route $r$, and the curves for the traffic avoiding $E$ are
+obtained by summing over the routes that do not contain a node of $E$.
+
+\begin{theorem}[Edit-local recertification]\label{thm:recert}
+Let $u$ be a charging rule for $W$ and $u'$ one for $W'$, and let $E$ be chosen independently
+of the samples. Let $k^{\circ}(g)$ be the charged count of the old sample ($n$ runs of $W$)
+restricted to runs outside $T_E$, let $r$ be the number of old runs in $T_E$, and let $k'(g)$
+be the charged count of $m$ fresh runs of $W'$ drawn i.i.d.\ from $P(\cdot\mid T_E)$. Then with
+probability at least $1-\delta_0-\delta_1-\delta_2$, simultaneously for all $g\in\mathcal G^M$,
+\[
+R_{W'}(\tau_g)\ \le\ \CP\bigl(k^{\circ}(g),n,\delta_0/G^{M}\bigr)
++\CP(r,n,\delta_1)\cdot\CP\bigl(k'(g),m,\delta_2/G^{M_E}\bigr),
+\]
+where $M_E$ is the number of modules with a node on some route through $E$.
+\end{theorem}
+\begin{proof}
+Apply Lemma~\ref{lem:charging} to each term of Proposition~\ref{prop:local}. For fixed $g$,
+$k^\circ(g)$ is binomial with $n$ trials and success probability at least the first term;
+$r$ is binomial with success probability $\Prob(T_E)$ and needs no labels; and $k'(g)$ is
+binomial with $m$ trials and success probability at least the conditional risk. The fresh
+term depends on $g$ only through the $M_E$ modules that occur on routes through $E$. A union
+bound over the grid and over the three events concludes.
+\end{proof}
+
+The fresh sample is drawn from the traffic that reaches the edited node, which is what an
+operator can collect cheaply after a change: log the runs through the new node and label
+those. Its bound is multiplied by the traffic share, so a node that handles 9\% of the traffic
+needs roughly one eleventh of the labels for the same contribution to the bound. The theorem
+iterates: after a second edit the remaining routes of every earlier part are kept, and the
+share of the new edit is bounded from the original sample.
+
+\subsection{Node-level footprints}\label{sec:footprint}
+
+Without route indexing, one can still ask which per-node curves an edit of a single node $w$
+invalidates. The answer depends on the charging rule and is the reverse of its tightness.
+
+\begin{proposition}[Footprints]\label{prop:footprint}
+After editing the model of $w$: under \textup{TF} only the curve of $w$ can change; under
+\textup{FE} only the curves of $w$ and its descendants; under \textup{LC} the curve of any node
+that shares a route with $w$.
+\end{proposition}
+\begin{proof}
+The TF event of $v$ involves only $v$'s output on oracle-route states. The FE event of $v$ is
+``$v$ is on the oracle route, all nodes before it on that route are correct, $v$ is wrong and
+commits'', which involves $v$ and its ancestors, so it can change only if $w$ is $v$ or an
+ancestor of $v$. The LC event of $v$ depends on the confidences along the run.
+\end{proof}
+
+So the rules trade tightness for stability at node granularity. Route indexing sidesteps the
+trade: locality is a property of the traffic, not of the rule, and holds for the tight LC rule
+(Table~\ref{tab:footprints} verifies both statements on data).
+
+\subsection{A static check}\label{sec:impl}
+
+We implemented the certificate in \anp, a runtime that executes workflows given as JSON graphs
+of typed nodes. A \texttt{decision} node carries a question, a closed choice set, a threshold
+and an \texttt{uncertain} port; the runtime routes each input to the port of the winning choice
+or to \texttt{uncertain}. The command \texttt{anp certify} turns labelled free-run traces into
+a route-indexed certificate, solves the knapsack for a target $\eps$ and writes the thresholds
+back into the graph. Each decision node is fingerprinted by its configuration without the
+thresholds, together with the decision nodes its ports lead to. \texttt{anp verify --risk}
+then fails a graph (i) whose thresholds, rounded down to the grid, have a certified bound above
+$\eps$, or (ii) in which a decision node's fingerprint differs from the certificate's, naming
+the nodes whose traffic must be relabelled; \texttt{anp certify --fresh} performs the repair of
+Theorem~\ref{thm:recert}. Thresholds can be raised freely, and edits to non-decision nodes that
+keep the routing leave the certificate valid. The implementation is independent of the Python
+code used for the experiments and is tested against it on real traces.
+
+\input{experiments}
+
+\section{Related work}\label{sec:related}
+
+\paragraph{Risk control and selective prediction.} Abstaining to bound error goes back to
+\citet{chow1970}; \citet{geifman2017selective} gave finite-sample guarantees for a single
+selective classifier. Conformal prediction~\citep{vovk2005} and its risk-controlling
+extensions~\citep{bates2021rcps,angelopoulos2021ltt,angelopoulos2022crc} certify
+hyperparameters of arbitrary predictors; Pareto testing~\citep{laufer2022pareto} makes
+multi-dimensional configurations tractable by ordering candidates on a split and testing them
+in sequence. We use these tools as baselines and building blocks. They certify a
+pre-specified system and a pre-ordered set of candidates; our certificate is uniform over a
+product grid and is designed to be repaired.
+
+\paragraph{Guarantees for multi-stage LLM systems.} For language models, abstention with
+guarantees has been studied for single calls~\citep{yadkori2024abstention} and for judges that
+escalate to humans~\citep{jung2024trust}. Multi-stage guarantees have mostly been obtained in
+two ways. One calibrates a single scalar over whole trajectories: KnowNo~\citep{ren2023knowno}
+for multi-step robot planning and PASC~\citep{kotte2026pasc} for NLP pipelines; this is tight
+for one shared threshold, which corresponds to our LC rule with a single module, and must be
+redone when the pipeline changes. The other splits an error budget across components by a
+union bound, as in TRAQ for retrieval and generation~\citep{li2023traq} and in model
+cascades~\citep{chen2023frugalgpt,dou2026cascade,xu2025selective}. Closest to ours, the
+concurrent CompCRC~\citep{sun2026compcrc} decomposes the accepted-error risk of a linear
+cascade into additive stage contributions and certifies each stage against a local budget. Its
+stage losses include a reach indicator that depends on upstream thresholds, its guarantee is in
+expectation for thresholds fixed before certification, and it explicitly excludes post hoc
+budget selection. Our charged terms depend on one threshold each, hold uniformly, and apply to
+routing DAGs in which stages solve different sub-problems; we also show that the first-error
+attribution underlying additive decompositions is loose under routing. Hierarchical selective
+classification~\citep{goren2024hierarchical} retreats to coarser labels of a single model
+rather than escalating a multi-model program. \citet{chatrath2026ready} argue for qualifying
+whole workflows on held-out data; we give that qualification a form that persists across
+edits.
+
+\paragraph{Languages for model-driven programs.} Declarative
+frameworks~\citep{khattab2023dspy} and typed calculi and languages for agent
+composition~\citep{liu2026lambda,kizito2026turn} treat model calls as program constructs, the
+latter exposing a confidence value to the program. None attaches a statistical guarantee to
+the program or tracks its validity under edits; our static check is a step in that direction.
+
+\section{Limitations}\label{sec:limits}
+
+\emph{Exchangeability.} All guarantees assume calibration and deployment traffic are i.i.d.
+Under drift the certificate is evidence about the past. Edit locality does not help here; it
+concerns changes to the program, not to the world.
+\emph{Labels.} Calibration needs the oracle route of each input. In our datasets one label
+determines the route; in general each decision may need its own annotator.
+\emph{Model class.} The method is agnostic to how confidences are produced, but our
+experiments use classifiers on frozen sentence embeddings, plus bag-of-words variants for the
+edits. We attempted zero-shot routing with small local language models and found it too
+inaccurate to form a sensible workflow; experiments with hosted language models are left to
+future work.
+\emph{Structure.} We assume acyclic routing, deterministic states and an escalation that fully
+resolves the run. Loops, stochastic nodes and partial human corrections are out of scope.
+\emph{Adaptive edits.} Theorem~\ref{thm:recert} requires the edited set to be chosen
+independently of the calibration sample; choosing which node to replace by inspecting the
+certificate calls for a union over the candidate edits. Each repair also spends additional
+failure probability, so a long edit history eventually warrants a fresh certificate.
+\emph{Efficiency.} Uniform validity costs review at a fixed target relative to end-to-end
+testing (\S\ref{sec:exp-main}), and the grid and the union bound are simple rather than
+optimal.
+
+\section{Conclusion}
+
+Calibration guarantees for multi-step systems are usually stated for a frozen system, while
+the systems themselves are edited continuously. We showed that two structural facts make
+guarantees more durable: errors can be charged to single nodes so that the risk bound
+separates across thresholds, and an edit is confined to the traffic that passes through it.
+Together they give certificates that remain valid when thresholds are retuned and that can be
+repaired locally when a node changes, at a statistical price we quantified. The negative
+results are as useful as the positive ones: blaming the first error, the intuitive way to
+compose stage-wise guarantees, misjudges routing workflows, because much of what goes wrong
+upstream is caught downstream.
+
+\paragraph{Reproducibility.} Code for the experiments, the exported traces of one workflow,
+and the runtime implementation are available in the project repository under
+\texttt{paper/} and \texttt{examples/certify/}. A single script regenerates every number, table
+and figure from the public datasets.
+
+\bibliographystyle{plainnat}
+\bibliography{refs}
+
+\appendix
+\input{appendix}
+
+\end{document}

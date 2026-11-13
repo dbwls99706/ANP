@@ -1,0 +1,119 @@
+\section{Experimental details}\label{app:details}
+
+\paragraph{Workflows.}
+\emph{CLINC150}~\citep{larson2019clinc} (the ``plus'' configuration) has 150 intents in 10
+domains and an out-of-scope class. The workflow asks three questions: \texttt{scope}
+(in scope or not), \texttt{domain} (10 choices), and one \texttt{intent} node per domain (15
+choices each): 12 decision nodes, routes of length 1 to 3. Out-of-scope inputs have the oracle
+route \texttt{scope}\,$\to$\,sink. The models are fitted on the official training split
+(15{,}250 utterances); the pooled validation and test splits (8{,}600 utterances, 12.8\%
+out of scope) form the population.
+
+\emph{MASSIVE}~\citep{fitzgerald2022massive} annotates utterances with one of 18 scenarios and
+60 intents in 51 languages. We use English, German, Spanish and Korean. The workflow asks for
+the \texttt{language} (4 choices), then the \texttt{scenario} with a model specific to that
+language (4 nodes, 18 choices), then the \texttt{intent} within the scenario with a model
+shared by all languages (16 nodes; two scenarios have a single intent and lead directly to a
+sink). The intent nodes are reached from all four scenario nodes, so the workflow is a DAG
+with joins: 21 decision nodes, routes of length 2 or 3. Training uses the training split of
+the four languages (46{,}056 utterances); the pooled validation and test splits (20{,}028
+utterances) form the population.
+
+\paragraph{Models.} Every node is a multinomial logistic regression ($C=10$) on frozen
+sentence embeddings~\citep{reimers2019sbert}: \texttt{all-MiniLM-L6-v2} for CLINC150 and
+\texttt{paraphrase-multilingual-MiniLM-L12-v2} for MASSIVE. The \texttt{scope} node uses
+balanced class weights; the \texttt{language} node is a logistic regression on character
+$n$-gram TF--IDF features. The confidence is the top class probability. For the edit
+experiments each node has an alternative model from a different family: logistic regression
+with weak regularisation on word uni- and bigram TF--IDF features (CLINC150) or on character
+$n$-grams (MASSIVE). Without abstention the workflows are wrong on \FreeErrClinc\% and
+\FreeErrMassive\% of inputs.
+
+\paragraph{Protocol.} The population is the empirical distribution of the pooled held-out
+data. A trial draws $n$ calibration inputs i.i.d.\ with replacement, runs every method, and
+scores each selected threshold vector by its exact risk and review rate on the population.
+The reported violation rate is the fraction of trials with population risk above $\eps$; it
+involves no test-set noise. We use $\delta=0.1$, $n=4{,}000$ (CLINC150) and $n=8{,}000$
+(MASSIVE) unless stated otherwise, and the grid
+$\mathcal G=\{0,0.05,\dots,0.95\}\cup\{0.97,0.98,0.99,0.995,0.999,\infty\}$ ($G=26$).
+
+\paragraph{Methods.}
+\emph{Fixed 0.7}: every threshold is 0.7, the default of the runtime.
+\emph{Per-node selective risk}: each node independently takes the smallest grid threshold at
+which a Clopper--Pearson bound (level $\delta/G$) on its error rate among committed
+oracle-route inputs is at most $\eps$.
+\emph{Plug-in}: our LC certificate per node with the confidence bound replaced by the
+empirical frequency.
+\emph{Shared threshold, end-to-end LTT}: one threshold for all nodes, chosen by fixed-sequence
+testing~\citep{angelopoulos2021ltt} of the exact end-to-end risk, from the most conservative
+grid value downwards, with binomial tail p-values.
+\emph{End-to-end Pareto testing}~\citep{laufer2022pareto}: half of the calibration data
+proposes 24 threshold vectors (a coordinate-descent heuristic minimising empirical review
+subject to empirical risk at most $e$, for $e$ geometrically spaced in $[\eps/10,1.5\eps]$),
+ordered by empirical risk; the other half tests them in sequence.
+\emph{End-to-end, uniform}: the exact end-to-end error count with a Clopper--Pearson bound at
+level $\delta/G^{K}$, optimised with the same heuristic.
+\emph{TF per node}: teacher-forced curves, one confidence band per node at level
+$\delta/(KG)$, bounds added.
+\emph{FE / LC}: Theorem~\ref{thm:cert} with first-error or least-confident charging and
+modules per node, per level, or a single shared module, followed by coordinate descent on the
+empirical review rate.
+\emph{Anchored}: 30\% of the calibration data proposes an anchor with the end-to-end
+heuristic; the rest certifies with LC charging anchored at it.
+
+\paragraph{Edits.} The model of one node is replaced by its alternative. \emph{From scratch}
+draws $m$ fresh labelled runs from all traffic and recalibrates with them alone.
+\emph{Edit-local} applies Theorem~\ref{thm:recert} with $\delta_0=\delta_1=\delta_2=\delta/3$:
+the old sample of $n$ runs of the unedited workflow for the routes avoiding the node, and $m$
+fresh labelled runs drawn from the traffic through it. \emph{Re-run} assumes the old inputs and
+labels were retained, re-executes them through the edited workflow, and recalibrates on those
+$n$ runs plus $m$ fresh ones. The edited nodes are: CLINC150 \texttt{intent[banking]} (leaf),
+\texttt{domain} (middle), \texttt{scope} (root); MASSIVE \texttt{intent[calendar]} (leaf),
+\texttt{scenario[de]} (middle), \texttt{language} (root).
+
+\paragraph{Synthetic chains.} Each input passes $K$ decisions. A shared standard normal
+difficulty $z$ and node noise $e_j$ give the probability of a correct decision
+$q_j=\max(p_j,1-p_j)$ with $\operatorname{logit}p_j=b+1.5(0.6z+0.8e_j)$; the confidence is
+$\sigma(1.5\operatorname{logit}q_j)$, which is overconfident. After the first wrong decision
+the confidences of later nodes are shrunk towards $0.5$ by a uniform random factor with mean
+one half, modelling rescue. The offset $b$ is set by bisection so that 20\% of runs deviate
+for every $K$. The population has 400{,}000 runs.
+
+\paragraph{Compute.} All experiments run on 4 CPU cores in about 90 minutes; the certificate
+and its optimisation take milliseconds per workflow.
+
+\section{Additional results}\label{app:more}
+
+Table~\ref{tab:main-massive} repeats Table~\ref{tab:main} for MASSIVE.
+Table~\ref{tab:footprints} counts, on the whole population, the nodes whose count curves
+change when one node's model is replaced, for each charging rule: the counts agree with
+Proposition~\ref{prop:footprint}, and in every case the runs that avoid the edited node were
+verified to be identical before and after the edit (Proposition~\ref{prop:local}).
+
+\begin{table}[h]
+\centering\footnotesize
+\setlength{\tabcolsep}{3.5pt}
+\input{tables/main_massive}
+\caption{MASSIVE, $n=8{,}000$, $\delta=0.1$, \Trials\ trials. Columns as in
+Table~\ref{tab:main}.}\label{tab:main-massive}
+\end{table}
+
+\begin{table}[h]
+\centering\small
+\input{tables/footprints}
+\caption{Number of nodes whose count curve changes after replacing one node's model, by
+charging rule (TF: teacher forced, FE: first error, LC: least confident), and the share of
+traffic through the edited node.}\label{tab:footprints}
+\end{table}
+
+\section{Certificate format}\label{app:format}
+
+A certificate is a JSON document with the charging rule, the grid, the modules, the
+fingerprint of every decision node, and a list of parts. A part records its sample size $n$,
+the failure probability spent on it, the exponent of its union bound, the traffic share it is
+weighted by, and for each distinct free route the number of runs and two integer tables
+indexed by module and grid value: the charged errors that commit at that threshold, and the
+visits that would be escalated at it. A certificate issued from all traffic has one part;
+each repair marks the routes through the edited nodes as stale in the existing parts and adds
+one part for the fresh sample. For the CLINC150 workflow (12 decisions, 3 modules, 11
+distinct routes in 3{,}000 runs) the certificate is 6\,kB and contains no inputs or labels.

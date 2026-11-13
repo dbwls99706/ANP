@@ -1,0 +1,355 @@
+"""Experiments for the workflow risk-certification paper.
+
+Design: the pooled held-out data of a workflow is treated as the population.
+A calibration set is n i.i.d. draws (with replacement) from it, and every
+selected threshold vector is scored by its exact risk and review rate on the
+population. Validity is therefore measured without test-set noise.
+
+Usage: python run_experiments.py {main,nsweep,posthoc,edits,synth} [--trials T]
+"""
+import argparse
+import json
+import os
+import time
+from multiprocessing import Pool
+
+import numpy as np
+
+import riskcert as rc
+
+HERE = os.path.dirname(__file__)
+CACHE = os.environ.get("ANP_CACHE", os.path.join(HERE, "cache"))
+RESULTS = os.path.join(HERE, "..", "results")
+DELTA = 0.1
+DEFAULT_N = {"clinc": 4000, "massive": 8000}
+
+
+def load(name, swap=None):
+    """Load a workflow; swap = list of nodes whose model is replaced by the alternative one."""
+    d = np.load(os.path.join(CACHE, f"{name}.npz"))
+    pred, conf = d["pred"].astype(int).copy(), d["conf"].astype(float).copy()
+    for v in swap or []:
+        pred[:, v], conf[:, v] = d["pred_alt"][:, v], d["conf_alt"][:, v]
+    return rc.traces_from_tables(pred, conf, d["truth"].astype(int), d["nxt"].astype(int)), d["nxt"].astype(int)
+
+
+def levels(tr):
+    """Group nodes by the position at which they appear on a route."""
+    depth = np.full(tr.n_nodes, -1)
+    for j in range(tr.path_node.shape[1]):
+        for v in np.unique(tr.path_node[:, j]):
+            if v >= 0 and depth[v] < 0:
+                depth[v] = j
+    return [list(np.where(depth == j)[0]) for j in range(depth.max() + 1)]
+
+
+def descendants(nxt, w):
+    seen, stack = set(), [w]
+    while stack:
+        for u in nxt[stack.pop()]:
+            if u >= 0 and u not in seen:
+                seen.add(int(u))
+                stack.append(int(u))
+    return seen
+
+
+def run_methods(cal, eps, rng, lv, which):
+    """Return {method: (tau, certified bound or None)}."""
+    k = cal.n_nodes
+    out = {}
+    for m in which:
+        if m == "fixed-0.7":
+            out[m] = (np.full(k, 0.7), None)
+        elif m == "per-node-selective":
+            out[m] = (rc.per_node_selective(cal, eps, DELTA), None)
+        elif m == "plug-in":
+            tau, b, _ = rc.select(cal, eps, DELTA, mode="min", plug_in=True)
+            out[m] = (tau, None)
+        elif m == "global-e2e":
+            out[m] = (rc.global_threshold(cal, eps, DELTA), None)
+        elif m == "e2e-pareto":
+            out[m] = (rc.e2e_pareto(cal, eps, DELTA, rng), None)
+        elif m == "e2e-uniform":
+            out[m] = (rc.e2e_uniform(cal, eps, DELTA), None)
+        elif m == "tf-node":
+            out[m] = rc.select(cal, eps, DELTA, mode="tf")[:2]
+        elif m in ("fd-node", "min-node"):
+            out[m] = rc.select(cal, eps, DELTA, mode=m[:-5])[:2]
+        elif m in ("fd-level", "min-level"):
+            out[m] = rc.select(cal, eps, DELTA, mode=m[:-6], modules=lv)[:2]
+        elif m == "min-global":
+            out[m] = rc.select(cal, eps, DELTA, mode="min", modules=[list(range(k))])[:2]
+        elif m == "anchored-node":
+            out[m] = rc.anchored(cal, eps, DELTA, rng)[:2]
+        elif m == "anchored-level":
+            out[m] = rc.anchored(cal, eps, DELTA, rng, modules=lv)[:2]
+        else:
+            raise ValueError(m)
+    return out
+
+
+MAIN_METHODS = ["fixed-0.7", "per-node-selective", "plug-in", "global-e2e", "e2e-pareto", "e2e-uniform",
+                "tf-node", "fd-node", "fd-level", "min-node", "min-level", "min-global",
+                "anchored-node", "anchored-level"]
+
+_POP = {}
+
+
+def population(name, swap=()):
+    key = (name, tuple(swap))
+    if key not in _POP:
+        _POP[key] = load(name, list(swap))
+    return _POP[key]
+
+
+def summarise(rows, eps):
+    risk = np.array([r[0] for r in rows])
+    review = np.array([r[1] for r in rows])
+    bounds = [r[2] for r in rows if r[2] is not None]
+    return dict(risk_mean=float(risk.mean()), risk_q90=float(np.quantile(risk, 0.9)), risk_max=float(risk.max()),
+                violation=float((risk > eps + 1e-12).mean()), review_mean=float(review.mean()),
+                review_sd=float(review.std()), bound_mean=float(np.mean(bounds)) if bounds else None,
+                fd_mass_mean=float(np.mean([r[3] for r in rows])) if len(rows[0]) > 3 else None,
+                trials=len(rows))
+
+
+# -- main comparison and calibration-size sweep ---------------------------
+
+
+def _main_trial(args):
+    name, n, eps_list, methods, seed = args
+    pop, _ = population(name)
+    rng = np.random.default_rng(seed)
+    cal = pop.subset(rng.integers(0, len(pop), n))
+    lv = levels(pop)
+    res = {}
+    for eps in eps_list:
+        for m, (tau, b) in run_methods(cal, eps, rng, lv, methods).items():
+            res[(eps, m)] = (pop.risk(tau), pop.review(tau), b, pop.charged_mass(tau, "fd"))
+    return res
+
+
+def collect(jobs, func, workers=4):
+    with Pool(workers) as pool:
+        return pool.map(func, jobs, chunksize=1)
+
+
+def exp_main(trials):
+    out = {}
+    eps_list = [0.02, 0.05, 0.10]
+    for name in ["clinc", "massive"]:
+        pop, _ = population(name)
+        k = pop.n_nodes
+        n = DEFAULT_N[name]
+        t0 = time.time()
+        res = collect([(name, n, eps_list, MAIN_METHODS, s) for s in range(trials)], _main_trial)
+        out[name] = dict(n=n, K=k, N=len(pop), free_run_error=pop.risk(np.zeros(k)),
+                         oracle={str(e): dict(node=pop.review(rc.e2e_optimize(pop, e)),
+                                              shared=pop.review(next(
+                                                  (np.full(k, g) for g in rc.default_grid()
+                                                   if pop.risk(np.full(k, g)) <= e), np.full(k, rc.INF))))
+                                 for e in eps_list},
+                         results={f"{e}|{m}": summarise([r[(e, m)] for r in res], e)
+                                  for e in eps_list for m in MAIN_METHODS})
+        print(name, "main done", round(time.time() - t0), "s", flush=True)
+    return out
+
+
+def exp_nsweep(trials):
+    out = {}
+    methods = ["global-e2e", "e2e-pareto", "e2e-uniform", "fd-node", "min-node", "min-level", "min-global"]
+    for name, sizes in [("clinc", [500, 1000, 2000, 4000, 8000]), ("massive", [1000, 2000, 4000, 8000, 16000])]:
+        out[name] = {}
+        for n in sizes:
+            res = collect([(name, n, [0.05], methods, 10_000 + s) for s in range(trials)], _main_trial)
+            out[name][str(n)] = {m: summarise([r[(0.05, m)] for r in res], 0.05) for m in methods}
+            print(name, "n", n, "done", flush=True)
+    return out
+
+
+# -- post hoc retuning ----------------------------------------------------
+
+SWEEP = [0.02, 0.04, 0.06, 0.08, 0.10]
+
+
+def _posthoc_trial(args):
+    name, n, seed = args
+    pop, _ = population(name)
+    rng = np.random.default_rng(seed)
+    cal = pop.subset(rng.integers(0, len(pop), n))
+    lv = levels(pop)
+    res = {}
+    certs = {"min-level": rc.certify(cal, DELTA, modules=lv, mode="min"),
+             "min-node": rc.certify(cal, DELTA, mode="min")}
+    split_seed = int(rng.integers(1 << 30))
+    for eps in SWEEP:
+        for m, cert in certs.items():
+            tau, _ = rc.pick(cert, eps, cal.review, cal.n_nodes)
+            res[(eps, m)] = (pop.risk(tau), pop.review(tau))
+        # The end-to-end procedures are simply re-run for every target on the same data.
+        tau = rc.global_threshold(cal, eps, DELTA)
+        res[(eps, "global-e2e")] = (pop.risk(tau), pop.review(tau))
+        tau = rc.e2e_pareto(cal, eps, DELTA, np.random.default_rng(split_seed))
+        res[(eps, "e2e-pareto")] = (pop.risk(tau), pop.review(tau))
+    return res
+
+
+def exp_posthoc(trials):
+    out = {}
+    for name in ["clinc", "massive"]:
+        res = collect([(name, DEFAULT_N[name], 20_000 + s) for s in range(trials)], _posthoc_trial)
+        out[name] = {}
+        for m in ["min-level", "min-node", "global-e2e", "e2e-pareto"]:
+            viol = np.array([[r[(e, m)][0] > e + 1e-12 for e in SWEEP] for r in res])
+            out[name][m] = dict(any_violation=float(viol.any(axis=1).mean()),
+                                per_eps_violation=[float(v) for v in viol.mean(axis=0)],
+                                review=[float(np.mean([r[(e, m)][1] for r in res])) for e in SWEEP],
+                                risk=[float(np.mean([r[(e, m)][0] for r in res])) for e in SWEEP])
+        out[name]["eps"] = SWEEP
+        print(name, "posthoc done", flush=True)
+    return out
+
+
+# -- edits ----------------------------------------------------------------
+
+
+def _edit_trial(args):
+    name, w, n0, m_new, eps, seed = args
+    pop0, nxt = population(name)
+    pop1, _ = population(name, (w,))
+    k = pop1.n_nodes
+    rng = np.random.default_rng(seed)
+    lv = levels(pop1)
+    hit = np.where(pop1.through([w]))[0]
+    reach = np.unique(pop1.path_node[hit])          # nodes on some route through the edit
+    reach = reach[reach >= 0]
+    i_old = rng.integers(0, len(pop1), n0)
+    i_any = rng.integers(0, len(pop1), m_new)          # fresh labels on random traffic
+    i_hit = hit[rng.integers(0, len(hit), m_new)]      # fresh labels on traffic through the edit
+    res = {}
+
+    def score(tau):
+        return pop1.risk(tau), pop1.review(tau), None
+
+    # (a) Recalibrate from scratch with the fresh labels only.
+    fresh_any = pop1.subset(i_any)
+    res["scratch: e2e-pareto"] = score(rc.e2e_pareto(fresh_any, eps, DELTA, rng))
+    res["scratch: min-level"] = score(rc.select(fresh_any, eps, DELTA, mode="min", modules=lv)[0])
+    # (b) Keep the old certificate for the untouched traffic, spend the labels on the rest.
+    for label, modules in [("local: min-level", lv), ("local: min-node", None)]:
+        cert, review_fn = rc.certify_after_edit(pop0.subset(i_old), pop1.subset(i_hit), [w], DELTA,
+                                                modules=modules, reach=reach)
+        res[label] = score(rc.pick(cert, eps, review_fn, k)[0])
+    # (c) Reference: the old inputs were kept and are re-run through the edited workflow.
+    both = pop1.subset(np.r_[i_old, i_any])
+    res["rerun: e2e-pareto"] = score(rc.e2e_pareto(both, eps, DELTA, rng))
+    res["rerun: min-level"] = score(rc.select(both, eps, DELTA, mode="min", modules=lv)[0])
+    return res
+
+
+def exp_edits(trials):
+    out = {}
+    plans = {"clinc": dict(eps=0.05, nodes={"leaf": 3, "middle": 1, "root": 0}),
+             "massive": dict(eps=0.05, nodes={"leaf": 7, "middle": 2, "root": 0})}
+    for name, plan in plans.items():
+        pop0, nxt = population(name)
+        out[name] = dict(eps=plan["eps"], n0=DEFAULT_N[name], edits={})
+        for label, w in plan["nodes"].items():
+            pop1, _ = population(name, (w,))
+            grid = rc.default_grid()
+            hit = pop1.through([w])
+            # Deterministic checks of the locality claims on the whole population.
+            assert np.array_equal(hit, pop0.through([w]))
+            same = lambda a, b: np.array_equal(a[~hit], b[~hit])
+            assert same(pop0.path_node, pop1.path_node) and same(pop0.path_conf, pop1.path_conf)
+            assert same(pop0.dev_pos, pop1.dev_pos)
+            changed = lambda mode: [int(v) for v in range(pop0.n_nodes) if not np.array_equal(
+                rc.error_counts(pop0, grid, mode)[v], rc.error_counts(pop1, grid, mode)[v])]
+            fd_set = {w} | descendants(nxt, w)
+            info = dict(node=int(w), traffic_share=float(hit.mean()),
+                        error_before=pop0.risk(np.zeros(pop0.n_nodes)),
+                        error_after=pop1.risk(np.zeros(pop0.n_nodes)),
+                        fd_predicted=sorted(fd_set), fd_changed=changed("fd"), tf_changed=changed("tf"),
+                        min_changed=changed("min"), sizes={})
+            assert set(info["fd_changed"]) <= fd_set and set(info["tf_changed"]) <= {w}
+            for m_new in [100, 250, 500, 1000]:
+                res = collect([(name, w, DEFAULT_N[name], m_new, plan["eps"], 30_000 + s) for s in range(trials)],
+                              _edit_trial)
+                info["sizes"][str(m_new)] = {m: summarise([r[m] for r in res], plan["eps"]) for m in res[0]}
+            out[name]["edits"][label] = info
+            print(name, label, "edit done", flush=True)
+    return out
+
+
+# -- synthetic scaling ----------------------------------------------------
+
+
+def synth_population(k, n, rng, base, temp=1.5, rho=0.6, rescue=0.5):
+    """Chain of k decisions. A shared latent difficulty correlates the nodes, temp > 1 makes
+    them overconfident, and after a wrong turn later nodes see an off-route input and become
+    less confident (rescue). `base` is the logit of the typical per-node accuracy."""
+    z = rng.standard_normal((n, 1))
+    e = rng.standard_normal((n, k))
+    logit = base + 1.5 * (rho * z + np.sqrt(1 - rho ** 2) * e)
+    q = 1 / (1 + np.exp(-logit))
+    q = np.maximum(q, 1 - q) * 0.999
+    correct = rng.random((n, k)) < q
+    conf = 1 / (1 + np.exp(-temp * np.log(q / (1 - q))))
+    wrong_any = ~correct
+    dev_pos = np.where(wrong_any.any(1), wrong_any.argmax(1), -1)
+    after = (np.arange(k)[None, :] > dev_pos[:, None]) & (dev_pos[:, None] >= 0)
+    conf = np.where(after, 0.5 + (conf - 0.5) * rescue * rng.random((n, k)) * 2, conf).clip(0.5, 1.0)
+    node = np.tile(np.arange(k), (n, 1))
+    return rc.Traces(node, conf, dev_pos.astype(np.int32), k)
+
+
+def synth_base(k, target=0.2):
+    """Per-node accuracy logit for which the chain's error rate without abstention is `target`."""
+    lo, hi = 0.0, 12.0
+    for _ in range(30):
+        mid = (lo + hi) / 2
+        err = synth_population(k, 100_000, np.random.default_rng(7), mid).deviated.mean()
+        lo, hi = (mid, hi) if err > target else (lo, mid)
+    return (lo + hi) / 2
+
+
+_SYNTH = {}
+
+
+def _synth_trial(args):
+    k, n, eps, seed = args
+    if k not in _SYNTH:
+        _SYNTH[k] = synth_population(k, 400_000, np.random.default_rng(1234 + k), synth_base(k))
+    pop = _SYNTH[k]
+    rng = np.random.default_rng(seed)
+    cal = pop.subset(rng.integers(0, len(pop), n))
+    methods = ["global-e2e", "e2e-pareto", "fd-node", "min-node", "min-global"]
+    return {m: (pop.risk(tau), pop.review(tau), b, pop.charged_mass(tau, "fd"))
+            for m, (tau, b) in run_methods(cal, eps, rng, [list(range(k))], methods).items()}
+
+
+def exp_synth(trials):
+    out = {}
+    eps = 0.05
+    for k in [2, 4, 8, 16, 32]:
+        out[str(k)] = {}
+        for n in [1000, 4000, 16000]:
+            res = collect([(k, n, eps, 40_000 + s) for s in range(trials)], _synth_trial)
+            out[str(k)][str(n)] = {m: summarise([r[m] for r in res], eps) for m in res[0]}
+        print("synth K", k, "done", flush=True)
+    return out
+
+
+if __name__ == "__main__":
+    ap = argparse.ArgumentParser()
+    ap.add_argument("experiment", choices=["main", "nsweep", "posthoc", "edits", "synth"])
+    ap.add_argument("--trials", type=int, default=200)
+    a = ap.parse_args()
+    t0 = time.time()
+    result = {"main": exp_main, "nsweep": exp_nsweep, "posthoc": exp_posthoc, "edits": exp_edits,
+              "synth": exp_synth}[a.experiment](a.trials)
+    result = {"delta": DELTA, "trials": a.trials, "data": result}
+    os.makedirs(RESULTS, exist_ok=True)
+    with open(os.path.join(RESULTS, f"{a.experiment}.json"), "w") as f:
+        json.dump(result, f, indent=1)
+    print(a.experiment, "finished in", round(time.time() - t0), "s")

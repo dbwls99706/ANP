@@ -1,0 +1,272 @@
+"""Turn results/*.json into the figures and LaTeX tables of the paper."""
+import json
+import os
+
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+
+HERE = os.path.dirname(__file__)
+RES = os.path.join(HERE, "..", "results")
+FIG = os.path.join(HERE, "..", "figures")
+TAB = os.path.join(HERE, "..", "tables")
+os.makedirs(FIG, exist_ok=True)
+os.makedirs(TAB, exist_ok=True)
+
+plt.rcParams.update({"font.size": 8, "axes.spines.top": False, "axes.spines.right": False,
+                     "legend.frameon": False, "figure.dpi": 150, "pdf.fonttype": 42})
+TITLE = {"clinc": "CLINC150 (12 decisions)", "massive": "MASSIVE (21 decisions)"}
+STYLE = {  # label, colour, linestyle, marker
+    "global-e2e": ("Shared threshold, end-to-end", "#7f7f7f", "--", "s"),
+    "e2e-pareto": ("End-to-end Pareto testing", "#000000", "-", "o"),
+    "e2e-uniform": ("End-to-end, uniform", "#bcbd22", ":", "v"),
+    "fd-node": ("First-error, per node", "#d62728", "-.", "x"),
+    "min-node": ("Least-confident, per node", "#1f77b4", "-", "^"),
+    "min-level": ("Least-confident, per level", "#2ca02c", "-", "D"),
+    "min-global": ("Least-confident, shared", "#9467bd", ":", "P"),
+}
+
+
+def load(name):
+    path = os.path.join(RES, f"{name}.json")
+    return json.load(open(path)) if os.path.exists(path) else None
+
+
+def pct(x, digits=1):
+    return f"{100 * x:.{digits}f}"
+
+
+def table_main(res):
+    rows = [("fixed-0.7", "Fixed threshold 0.7", "none"),
+            ("per-node-selective", "Per-node selective risk", "none"),
+            ("plug-in", "Plug-in (no confidence bound)", "none"),
+            ("global-e2e", "Shared threshold, end-to-end LTT", "fixed"),
+            ("e2e-pareto", "End-to-end Pareto testing", "fixed"),
+            ("e2e-uniform", "End-to-end, uniform over grid", "uniform"),
+            ("tf-node", "Teacher-forced, per node", "uniform"),
+            ("fd-node", "First-error, per node", "uniform"),
+            ("fd-level", "First-error, per level", "uniform"),
+            ("min-node", "Least-confident, per node", "uniform"),
+            ("min-level", "Least-confident, per level", "uniform"),
+            ("min-global", "Least-confident, shared", "uniform"),
+            ("anchored-level", "Anchored, per level", "uniform")]
+    eps_list = ["0.02", "0.05", "0.1"]
+    for name, data in res["data"].items():
+        lines = [r"\begin{tabular}{llrrrrrrrrr}", r"\toprule",
+                 r" & & \multicolumn{3}{c}{$\varepsilon=2\%$} & \multicolumn{3}{c}{$\varepsilon=5\%$} & "
+                 r"\multicolumn{3}{c}{$\varepsilon=10\%$} \\",
+                 r"\cmidrule(lr){3-5}\cmidrule(lr){6-8}\cmidrule(lr){9-11}",
+                 r"Method & Guarantee & viol. & risk & review & viol. & risk & review & viol. & risk & review \\",
+                 r"\midrule"]
+        for key, label, kind in rows:
+            cells = []
+            for e in eps_list:
+                r = data["results"][f"{e}|{key}"]
+                viol = pct(r["violation"], 0)
+                if kind != "none" and r["violation"] > res["delta"]:
+                    viol = r"\textbf{" + viol + "}"
+                cells += [viol, pct(r["risk_mean"]), pct(r["review_mean"])]
+            lines.append(f"{label} & {kind} & " + " & ".join(cells) + r" \\")
+            if key in ("plug-in", "e2e-uniform", "fd-level"):
+                lines.append(r"\midrule")
+        lines += [r"\bottomrule", r"\end{tabular}"]
+        open(os.path.join(TAB, f"main_{name}.tex"), "w").write("\n".join(lines) + "\n")
+
+
+def fig_nsweep(res):
+    fig, axes = plt.subplots(1, 2, figsize=(6.6, 2.4), sharey=True)
+    for ax, (name, data) in zip(axes, res["data"].items()):
+        sizes = sorted(data, key=int)
+        for m, (label, colour, ls, marker) in STYLE.items():
+            if m in data[sizes[0]]:
+                ax.plot([int(s) for s in sizes], [100 * data[s][m]["review_mean"] for s in sizes],
+                        color=colour, ls=ls, marker=marker, ms=3.5, lw=1.1, label=label)
+        ax.set_xscale("log")
+        ax.set_xticks([int(s) for s in sizes])
+        ax.set_xticklabels(sizes)
+        ax.minorticks_off()
+        ax.set_xlabel("calibration runs $n$")
+        ax.set_title(TITLE[name], fontsize=8)
+    axes[0].set_ylabel("human review (%)")
+    axes[1].legend(fontsize=6.5, loc="upper right")
+    fig.tight_layout()
+    fig.savefig(os.path.join(FIG, "nsweep.pdf"))
+
+
+def fig_posthoc(res):
+    fig, axes = plt.subplots(1, 2, figsize=(6.6, 2.3), sharey=True)
+    for ax, (name, data) in zip(axes, res["data"].items()):
+        eps = [100 * e for e in data["eps"]]
+        for m in ["global-e2e", "e2e-pareto", "min-node", "min-level"]:
+            label, colour, ls, marker = STYLE[m]
+            ax.plot(eps, [100 * r for r in data[m]["review"]], color=colour, ls=ls, marker=marker, ms=3.5,
+                    lw=1.1, label=f"{label} ({pct(data[m]['any_violation'], 0)}%)")
+        ax.set_xlabel(r"target risk $\varepsilon$ (%)")
+        ax.set_title(TITLE[name], fontsize=8)
+        ax.legend(fontsize=6.5, title="method (runs with any violation)", title_fontsize=6.5)
+    axes[0].set_ylabel("human review (%)")
+    fig.tight_layout()
+    fig.savefig(os.path.join(FIG, "posthoc.pdf"))
+
+
+def fig_edits(res):
+    names = list(res["data"])
+    kinds = ["leaf", "middle", "root"]
+    fig, axes = plt.subplots(len(names), 3, figsize=(6.8, 3.9), sharey=True, squeeze=False)
+    lines = {"scratch: e2e-pareto": ("From scratch: Pareto testing", "#000000", "-", "o"),
+             "scratch: min-level": ("From scratch: least-confident, level", "#2ca02c", "--", "D"),
+             "local: min-level": ("Edit-local (ours)", "#d62728", "-", "^")}
+    for i, name in enumerate(names):
+        for j, kind in enumerate(kinds):
+            ax = axes[i][j]
+            info = res["data"][name]["edits"].get(kind)
+            if info is None:
+                ax.axis("off")
+                continue
+            sizes = sorted(info["sizes"], key=int)
+            for m, (label, colour, ls, marker) in lines.items():
+                ax.plot([int(s) for s in sizes], [100 * info["sizes"][s][m]["review_mean"] for s in sizes],
+                        color=colour, ls=ls, marker=marker, ms=3.5, lw=1.1, label=label)
+            ref = info["sizes"][sizes[-1]]["rerun: min-level"]["review_mean"]
+            ax.axhline(100 * ref, color="#7f7f7f", lw=0.8, ls=":", label="Re-run all stored inputs")
+            ax.set_xscale("log")
+            ax.set_xticks([int(s) for s in sizes])
+            ax.set_xticklabels(sizes, fontsize=6.5)
+            ax.minorticks_off()
+            ax.set_title(f"{TITLE[name].split(' ')[0]}: {kind} edit ({pct(info['traffic_share'], 0)}% of traffic)",
+                         fontsize=7.5)
+            if i == len(names) - 1:
+                ax.set_xlabel("fresh labelled runs $m$")
+            if j == 0:
+                ax.set_ylabel("human review (%)")
+    axes[0][2].legend(fontsize=6, loc="center right")
+    fig.tight_layout()
+    fig.savefig(os.path.join(FIG, "edits.pdf"))
+
+    rows = []
+    for name in names:
+        for kind in kinds:
+            info = res["data"][name]["edits"].get(kind)
+            if info is None:
+                continue
+            k = max(max(info["min_changed"] or [0]), max(info["fd_predicted"])) + 1
+            rows.append(f"{TITLE[name].split(' ')[0]} & {kind} & {pct(info['traffic_share'], 0)} & "
+                        f"{len(info['tf_changed'])} & {len(info['fd_changed'])} & {len(info['min_changed'])} \\\\")
+    open(os.path.join(TAB, "footprints.tex"), "w").write(
+        "\\begin{tabular}{llrrrr}\n\\toprule\n"
+        "Workflow & Edited node & Traffic (\\%) & TF & FE & LC \\\\\n\\midrule\n" + "\n".join(rows)
+        + "\n\\bottomrule\n\\end{tabular}\n")
+
+
+def fig_synth(res):
+    data = res["data"]
+    ks = sorted(data, key=int)
+    ns = sorted(data[ks[0]], key=int)
+    fig, axes = plt.subplots(1, len(ns), figsize=(6.8, 2.2), sharey=True)
+    for ax, n in zip(axes, ns):
+        for m in ["global-e2e", "e2e-pareto", "fd-node", "min-node", "min-global"]:
+            label, colour, ls, marker = STYLE[m]
+            ax.plot([int(k) for k in ks], [100 * data[k][n][m]["review_mean"] for k in ks], color=colour, ls=ls,
+                    marker=marker, ms=3.5, lw=1.1, label=label)
+        ax.set_xscale("log", base=2)
+        ax.set_xticks([int(k) for k in ks])
+        ax.set_xticklabels(ks)
+        ax.set_xlabel("decisions per run $K$")
+        ax.set_title(f"$n={int(n):,}$".replace(",", "{,}"), fontsize=8)
+    axes[0].set_ylabel("human review (%)")
+    axes[-1].legend(fontsize=6, loc="upper left")
+    fig.tight_layout()
+    fig.savefig(os.path.join(FIG, "synth.pdf"))
+
+
+def numbers():
+    """numbers.tex: every figure quoted in the prose, as a LaTeX macro."""
+    out = {}
+    ds = {"clinc": "C", "massive": "M"}
+    meth = {"fixed-0.7": "Fixed", "per-node-selective": "PerNode", "plug-in": "Plug", "global-e2e": "Shared",
+            "e2e-pareto": "Pareto", "e2e-uniform": "Unif", "tf-node": "TFnode", "fd-node": "FEnode",
+            "fd-level": "FElevel", "min-node": "LCnode", "min-level": "LClevel", "min-global": "LCshared",
+            "anchored-node": "AnchNode", "anchored-level": "Anch"}
+    eps_name = {"0.02": "Two", "0.05": "Five", "0.1": "Ten"}
+    main = load("main")
+    if main:
+        out["Trials"] = str(main["trials"])
+        ratios = []
+        for name, d in main["data"].items():
+            tag = ds[name]
+            out["FreeErr" + {"C": "Clinc", "M": "Massive"}[tag]] = pct(d["free_run_error"])
+            for e, en in eps_name.items():
+                out[f"OracleNode{tag}{en}"] = pct(d["oracle"][e if e != "0.1" else "0.1"]["node"])
+                out[f"OracleShared{tag}{en}"] = pct(d["oracle"][e if e != "0.1" else "0.1"]["shared"])
+                for m, mn in meth.items():
+                    r = d["results"][f"{e}|{m}"]
+                    out[f"Rev{tag}{mn}{en}"] = pct(r["review_mean"])
+                    out[f"Risk{tag}{mn}{en}"] = pct(r["risk_mean"])
+                    out[f"Viol{tag}{mn}{en}"] = pct(r["violation"], 0)
+            r = d["results"]["0.05|global-e2e"]
+            ratio = r["fd_mass_mean"] / r["risk_mean"]
+            ratios.append(ratio)
+            out[f"FdRatio{tag}"] = f"{ratio:.1f}"
+            out[f"FdMass{tag}"] = pct(r["fd_mass_mean"])
+            out[f"RescuedShare{tag}"] = pct(1 - r["risk_mean"] / r["fd_mass_mean"], 0)
+        out["FdOverstateMin"], out["FdOverstateMax"] = f"{min(ratios):.1f}", f"{max(ratios):.1f}"
+        certified = [m for m in meth if m not in ("fixed-0.7", "per-node-selective", "plug-in")]
+        out["MaxViolCertified"] = pct(max(d["results"][f"{e}|{m}"]["violation"] for d in main["data"].values()
+                                          for e in eps_name for m in certified), 0)
+    post = load("posthoc")
+    if post:
+        for name, d in post["data"].items():
+            for m, mn in [("min-level", "LClevel"), ("min-node", "LCnode"), ("global-e2e", "Shared"),
+                          ("e2e-pareto", "Pareto")]:
+                out[f"AnyViol{ds[name]}{mn}"] = pct(d[m]["any_violation"], 0)
+        out["PosthocTrials"] = str(post["trials"])
+    edits = load("edits")
+    if edits:
+        size_name = {"100": "Hundred", "250": "TwoFifty", "500": "FiveHundred", "1000": "Thousand"}
+        mm = {"scratch: e2e-pareto": "Scratch", "scratch: min-level": "ScratchLC", "local: min-level": "Local",
+              "local: min-node": "LocalNode", "rerun: e2e-pareto": "RerunPareto", "rerun: min-level": "Rerun"}
+        worst = 0.0
+        for name, d in edits["data"].items():
+            for kind, info in d["edits"].items():
+                out[f"EditShare{ds[name]}{kind.capitalize()}"] = pct(info["traffic_share"], 0)
+                for size, sn in size_name.items():
+                    for m, mn in mm.items():
+                        r = info["sizes"][size][m]
+                        out[f"Edit{ds[name]}{kind.capitalize()}{mn}{sn}"] = pct(r["review_mean"])
+                        if mn.startswith("Local"):
+                            worst = max(worst, r["violation"])
+        out["EditMaxViolLocal"] = pct(worst, 0)
+        out["EditM"] = "100"
+        out["EditLocalClinc"] = out["EditCLeafLocalHundred"].split(".")[0]
+        out["EditLocalMassive"] = out["EditMLeafLocalHundred"].split(".")[0]
+        out["EditTrials"] = str(edits["trials"])
+    ns = load("nsweep")
+    if ns:
+        out["NsweepTrials"] = str(ns["trials"])
+    sy = load("synth")
+    if sy:
+        out["SynthTrials"] = str(sy["trials"])
+        for k, kn in [("2", "Two"), ("32", "ThirtyTwo")]:
+            for n, nn in [("1000", "Small"), ("16000", "Large")]:
+                for m, mn in [("min-node", "LCnode"), ("e2e-pareto", "Pareto"), ("min-global", "LCshared"),
+                              ("fd-node", "FEnode")]:
+                    out[f"Synth{kn}{nn}{mn}"] = pct(sy["data"][k][n][m]["review_mean"])
+    with open(os.path.join(HERE, "..", "numbers.tex"), "w") as f:
+        f.write("% Generated by experiments/make_figures.py from results/*.json. Do not edit.\n")
+        for key in sorted(out):
+            f.write(f"\\newcommand{{\\{key}}}{{{out[key]}}}\n")
+    print("numbers:", len(out), "macros")
+
+
+if __name__ == "__main__":
+    numbers()
+
+    for name, fn in [("main", table_main), ("nsweep", fig_nsweep), ("posthoc", fig_posthoc),
+                     ("edits", fig_edits), ("synth", fig_synth)]:
+        res = load(name)
+        if res is None:
+            print("missing", name)
+            continue
+        fn(res)
+        print("done", name)
