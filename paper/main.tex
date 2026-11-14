@@ -67,7 +67,8 @@ model in workflows with 12 and 21 decisions, \EditM\ fresh labels restore a 5\% 
 same number of labels escalates more than nine inputs in ten. With a hosted language model
 at every node the findings carry over where certification is possible; where a zero-shot
 node is confidently wrong too often, no threshold is safe, the certificates decline to
-commit, and the default threshold lets an error rate of \LlmDefaultRiskT\% through.
+commit, and the default threshold lets an error rate of \LlmDefaultRiskT\% through; with
+in-context examples the same workflow becomes certifiable.
 The price of validity under post hoc retuning is statistical,
 of order $M\ln G/n$ for $M$ independently tuned thresholds on a grid of size $G$; we measure
 it, and show that tying thresholds by level recovers most of it. All methods are implemented
@@ -497,10 +498,10 @@ concerns changes to the program, not to the world.
 \emph{Labels.} Calibration needs the oracle route of each input. In our datasets one label
 determines the route; in general each decision may need its own annotator.
 \emph{Model class.} The method is agnostic to how confidences are produced. Most of our
-experiments use classifiers on frozen sentence embeddings. The language-model experiment uses
-one provider, two models, zero-shot prompts and a single task; its token probabilities
-saturate, which leaves thresholds little to work with, and we did not study verbalised or
-sampled confidences, few-shot prompting at scale, or fine-tuned models.
+experiments use classifiers on frozen sentence embeddings. The language-model experiments use
+one provider, two models and a single task, zero-shot and with in-context examples; the token
+probabilities saturate, which leaves thresholds little to work with, and we did not study
+verbalised or sampled confidences, other providers, or fine-tuned models.
 \emph{Structure.} We assume acyclic routing, deterministic states and an escalation that fully
 resolves the run. Loops, stochastic nodes and partial human corrections are out of scope.
 \emph{Adaptive edits.} Theorem~\ref{thm:recert} requires the edited set to be chosen
@@ -527,7 +528,8 @@ upstream is often caught downstream.
 and the runtime implementation are available in the project repository under
 \texttt{paper/} and \texttt{examples/certify/}. A single script regenerates every number, table
 and figure from the public datasets; the language-model experiment additionally needs an API
-key, and its answers can be regenerated at a cost of about \LlmRequests\ short requests.
+key to regenerate the model's answers; the answers we obtained are stored with the code, so
+the experiment itself runs without one.
 
 \bibliographystyle{plainnat}
 \bibliography{refs}

@@ -17,7 +17,9 @@ os.makedirs(TAB, exist_ok=True)
 plt.rcParams.update({"font.size": 8, "axes.spines.top": False, "axes.spines.right": False,
                      "legend.frameon": False, "figure.dpi": 150, "pdf.fonttype": 42})
 TITLE = {"clinc": "CLINC150 (12 decisions)", "massive": "MASSIVE (21 decisions)",
-         "clinc_llm": "LLM-3 (12 decisions)", "clinc_llm_inscope": "LLM-2 (11 decisions)"}
+         "clinc_llm": "LLM-3 (12 decisions)", "clinc_llm_inscope": "LLM-2 (11 decisions)",
+         "clinc_llm_fs": "LLM-3-FS (12 decisions)", "clinc_llm_fs_inscope": "LLM-2-FS (11 decisions)",
+         "clinc_llm_claude": "LLM-3-C (12 decisions)", "clinc_llm_claude_inscope": "LLM-2-C (11 decisions)"}
 KIND = {"leaf": "leaf edit", "middle": "middle edit", "root": "root edit", "upgrade": "leaf, newer LLM",
         "classifier": "leaf, trained classifier"}
 STYLE = {  # label, colour, linestyle, marker
@@ -196,7 +198,8 @@ def fig_synth(res):
 def numbers():
     """numbers.tex: every figure quoted in the prose, as a LaTeX macro."""
     out = {}
-    ds = {"clinc": "C", "massive": "M", "clinc_llm": "T", "clinc_llm_inscope": "L"}
+    ds = {"clinc": "C", "massive": "M", "clinc_llm": "T", "clinc_llm_inscope": "L", "clinc_llm_fs": "G",
+          "clinc_llm_fs_inscope": "F", "clinc_llm_claude": "H", "clinc_llm_claude_inscope": "K"}
     meth = {"fixed-0.7": "Fixed", "per-node-selective": "PerNode", "plug-in": "Plug", "global-e2e": "Shared",
             "e2e-pareto": "Pareto", "e2e-uniform": "Unif", "tf-node": "TFnode", "fd-node": "FEnode",
             "fd-level": "FElevel", "min-node": "LCnode", "min-level": "LClevel", "min-global": "LCshared",
@@ -208,7 +211,8 @@ def numbers():
         ratios = []
         for name, d in main["data"].items():
             tag = ds[name]
-            out["FreeErr" + {"C": "Clinc", "M": "Massive", "L": "Llm", "T": "LlmThree"}[tag]] = pct(
+            out["FreeErr" + {"C": "Clinc", "M": "Massive", "L": "Llm", "T": "LlmThree", "F": "LlmFs",
+                             "G": "LlmThreeFs", "H": "LlmThreeClaude", "K": "LlmClaude"}[tag]] = pct(
                 d["free_run_error"])
             for e, en in eps_name.items():
                 out[f"OracleNode{tag}{en}"] = pct(d["oracle"][e if e != "0.1" else "0.1"]["node"])
@@ -269,8 +273,8 @@ def numbers():
     stats = load("llmstats")
     if stats:
         thousands = lambda x: f"{x:,}".replace(",", "{,}")
-        for name, tag in [("clinc_llm", "T"), ("clinc_llm_inscope", "L")]:
-            d = stats["data"][name]
+        for name, d in stats["data"].items():
+            tag = ds[name]
             out[f"LlmSaturated{tag}"] = pct(d["saturated_share"], 0)
             out[f"LlmRootAcc{tag}"] = pct(d["root_accuracy"])
             out[f"LlmRootWrongSat{tag}"] = pct(d["root_wrong_saturated"])
@@ -283,6 +287,9 @@ def numbers():
         out["LlmModel"], out["LlmUpgrade"] = d["model"], d["upgrade"]
         out["LlmRequests"], out["LlmUpgradeRequests"] = thousands(d["model_requests"]), thousands(d["upgrade_requests"])
         out["LlmUnparsed"] = str(d["model_unparsed"])
+        if "clinc_llm_fs" in stats["data"]:
+            out["LlmFsRequests"] = thousands(stats["data"]["clinc_llm_fs"]["model_requests"])
+            out["LlmFsUnparsed"] = str(stats["data"]["clinc_llm_fs"]["model_unparsed"])
     ns = load("nsweep")
     if ns:
         out["NsweepTrials"] = str(ns["trials"])

@@ -103,10 +103,21 @@ calibration draw; the guarantee holds for any grid fixed in this way.
 
 The \texttt{scope} prompt was not tuned on the evaluation data. On 350 requests of the
 training split (260 in scope, 90 out of scope) the prompt above was right on 80.3\% of them;
-a more lenient wording reached 83.7\% and adding 24 in-context examples 83.4\%, in all cases
-with confidences near 1 on the errors. Folding the decision into the first question, as a
-``none of these topics'' option, sent 40\% of the out-of-scope requests to a topic. We
-therefore kept the first prompt and report LLM-3 as it is.
+a more lenient wording reached 83.7\%, and the lenient wording with 24 in-context examples
+83.4\%, in all cases with confidences near 1 on the errors. Folding the decision into the
+first question, as a ``none of these topics'' option, sent 40\% of the out-of-scope requests
+to a topic. We therefore kept the first prompt and report LLM-3 as it is.
+
+For the few-shot workflows (LLM-3-FS, LLM-2-FS) the system message of every node, with the
+original wording, is followed by labelled examples drawn once, with a fixed seed, from the
+training split: 26 in-scope and 14 out-of-scope requests for \texttt{scope}, four requests
+per topic for \texttt{domain}, and five per intent for each \texttt{intent} node, in random
+order and in the format ``Request: \dots\ Answer: \emph{letter}''. No example occurs in the
+evaluation pool. This took \LlmFsRequests\ requests and about 30 million prompt tokens, four
+fifths of them served from the provider's prompt cache because the examples are a fixed
+prefix. Unlike the 24-example pilot, the larger example sets raise the accuracy of
+\texttt{scope} on the evaluation pool from \LlmRootAccT\% to \LlmRootAccG\%. The edit
+experiments were not repeated for the few-shot workflows.
 
 \paragraph{Compute.} All experiments run on 4 CPU cores in under two hours; the certificate
 and its optimisation take milliseconds per workflow. The language-model answers took about
@@ -114,8 +125,9 @@ six minutes of wall-clock time with 32 parallel requests.
 
 \section{Additional results}\label{app:more}
 
-Table~\ref{tab:main-massive} repeats Table~\ref{tab:main} for MASSIVE and
-Table~\ref{tab:main-llm} for the language-model workflow LLM-2.
+Table~\ref{tab:main-massive} repeats Table~\ref{tab:main} for MASSIVE,
+Table~\ref{tab:main-llm} for the zero-shot language-model workflow LLM-2 and
+Table~\ref{tab:main-llm-fs} for the few-shot workflow LLM-3-FS.
 Table~\ref{tab:footprints} counts, on the whole population, the nodes whose count curves
 change when one node's model is replaced, for each charging rule. No curve changes outside
 the sets given by Proposition~\ref{prop:footprint} (for FE the size of that set is shown in
@@ -137,6 +149,15 @@ Table~\ref{tab:main}.}\label{tab:main-massive}
 \caption{LLM-2 (\texttt{\LlmModel} at every node, in-scope traffic), $n=4{,}000$, $\delta=0.1$,
 \Trials\ trials, grid with the extended tail. Columns as in Table~\ref{tab:main}. No threshold
 assignment reaches $\eps=2\%$.}\label{tab:main-llm}
+\end{table}
+
+\begin{table}[h]
+\centering\footnotesize
+\setlength{\tabcolsep}{3.5pt}
+\input{tables/main_clinc_llm_fs}
+\caption{LLM-3-FS (\texttt{\LlmModel} with in-context examples at every node, all traffic),
+$n=4{,}000$, $\delta=0.1$, \Trials\ trials, grid with the extended tail. Columns as in
+Table~\ref{tab:main}.}\label{tab:main-llm-fs}
 \end{table}
 
 \begin{table}[h]

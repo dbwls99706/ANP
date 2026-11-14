@@ -235,8 +235,8 @@ node; the trained workflows have no ties.
 
 \paragraph{When no threshold is safe.} In LLM-3 the zero-shot \texttt{scope} decision is
 right on \LlmRootAccT\% of inputs and, on \LlmRootWrongSatT\% of all inputs, wrong with a
-confidence of at least $1-10^{-6}$. Rewording the question and adding in-context examples,
-tried on training-split requests only, did not change this (Appendix~\ref{app:llm}). The
+confidence of at least $1-10^{-6}$. Rewording the question, tried on training-split requests
+only, did not change this (Appendix~\ref{app:llm}); in-context examples do, as shown below. The
 runtime's default threshold of 0.7 escalates \LlmDefaultReviewT\% of runs and lets an error
 rate of \LlmDefaultRiskT\% through. Even the strictest finite threshold leaves
 \LlmTopRiskT\% errors at \LlmTopReviewT\% review, so targets of 2\% and 5\% are out of reach
@@ -259,9 +259,26 @@ factor of \FdRatioL. Per-node selective calibration needs \RevLPerNodeFive\% rev
 plug-in certificate violates in \ViolLPlugFive\% of draws. The end-to-end uniform bound
 needs \RevLUnifFive\% review against \RevLLCnodeFive\% for LC per node under the same
 union; we attribute the gap to its coordinate-descent search stalling on the plateaus that
-saturated confidences create, whereas the separable knapsack is still solved exactly. Over
-both language-model workflows and all targets the largest violation rate of a certified
-method is \MaxViolCertifiedLlm\%, and \MaxViolUniformLlm\% for the uniform certificates.
+saturated confidences create, whereas the separable knapsack is still solved exactly.
+
+\paragraph{In-context examples.} Giving every node labelled examples from the training split
+(40 for \texttt{scope} and for \texttt{domain}, 75 for each \texttt{intent} node;
+Appendix~\ref{app:llm}) changes the workflow, not the method. The \texttt{scope} decision is
+now right on \LlmRootAccG\% of inputs, and the error rate without abstention falls from
+\FreeErrLlmThree\% to \FreeErrLlmThreeFs\% on all traffic (\textbf{LLM-3-FS}) and from
+\FreeErrLlm\% to \FreeErrLlmFs\% on the in-scope traffic (\textbf{LLM-2-FS}). The confidences
+are even more saturated (\LlmSaturatedG\% and \LlmSaturatedF\% at least $1-10^{-6}$). The
+three-level workflow, which could not be certified at 5\% zero-shot, now can
+(Table~\ref{tab:main-llm-fs}): it needs \RevGSharedFive\% review with the shared end-to-end
+threshold, \RevGParetoFive\% with Pareto testing, \RevGLClevelFive\% with LC per level and
+\RevGLCnodeFive\% per node; FE per node needs \RevGFEnodeFive\%. On LLM-2-FS a 5\%
+certificate costs \RevFLClevelFive\% review per level, and a 2\% certificate, out of reach
+zero-shot, \RevFLCsharedTwo\% with a shared module and \RevFLClevelTwo\% per level, against
+\RevFSharedTwo\% for the end-to-end shared threshold. Per-node selective calibration fails
+here as it did on CLINC150: on LLM-3-FS it exceeds $\eps=5\%$ in \ViolGPerNodeFive\% of
+draws and $\eps=10\%$ in \ViolGPerNodeTen\%. Over the four language-model workflows and all
+targets the largest violation rate of a certified method is \MaxViolCertifiedLlm\%, and
+\MaxViolUniformLlm\% for the uniform certificates.
 
 \paragraph{Edits.} We edit LLM-2 in two ways that are routine in practice
 (Figure~\ref{fig:edits}, bottom row). The model of one leaf is upgraded to a newer language

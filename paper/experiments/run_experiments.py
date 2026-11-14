@@ -20,17 +20,30 @@ import riskcert as rc
 
 HERE = os.path.dirname(__file__)
 CACHE = os.environ.get("ANP_CACHE", os.path.join(HERE, "cache"))
+DATA = os.path.join(HERE, "data")  # tracked tables of the language-model workflows
 RESULTS = os.path.join(HERE, "..", "results")
 DELTA = 0.1
-DEFAULT_N = {"clinc": 4000, "massive": 8000, "clinc_llm": 4000, "clinc_llm_inscope": 4000}
+DEFAULT_N = {"clinc": 4000, "massive": 8000}
+# Language-model workflows: zero-shot, with in-context examples (_fs), and a second provider
+# with stated confidences (_claude); each on all traffic and on the in-scope traffic.
+LLM_WORKFLOWS = [f"clinc_llm{tag}{part}" for tag in ("", "_fs", "_claude") for part in ("", "_inscope")]
+DEFAULT_N.update({name: 4000 for name in LLM_WORKFLOWS})
+
+
+def llm_workflows():
+    return [n for n in LLM_WORKFLOWS if os.path.exists(table_path(n))]
 # Token probabilities of the language model saturate, so its workflows get a longer grid tail.
 LLM_TAIL = (0.9999, 0.99999, 0.999999)
+
+
+def table_path(name):
+    return os.path.join(DATA if name.startswith("clinc_llm") else CACHE, f"{name}.npz")
 
 
 def load(name, swap=None):
     """Load a workflow; swap = nodes whose model is replaced by an alternative one, given
     as node indices (alternative "alt") or (node, alternative) pairs."""
-    d = np.load(os.path.join(CACHE, f"{name}.npz"))
+    d = np.load(table_path(name))
     pred, conf = d["pred"].astype(int).copy(), d["conf"].astype(float).copy()
     for item in swap or []:
         v, alt = item if isinstance(item, tuple) else (item, "alt")
@@ -307,8 +320,8 @@ def exp_llmstats(_trials=None):
     """Population facts about the language-model workflows (no sampling involved)."""
     out = {}
     top = LLM_TAIL[-1]
-    for name in ["clinc_llm", "clinc_llm_inscope"]:
-        d = np.load(os.path.join(CACHE, f"{name}.npz"))
+    for name in llm_workflows():
+        d = np.load(table_path(name))
         pop, _ = population(name)
         k = pop.n_nodes
         conf = pop.path_conf[pop.path_node >= 0]
@@ -322,12 +335,18 @@ def exp_llmstats(_trials=None):
                          root_wrong_saturated=float((root_first & (pop.dev_conf >= top)).mean()),
                          at_default=shared(0.7), at_top=shared(top),
                          conf_when_wrong=float(pop.dev_conf[pop.deviated].mean()))
-    for key in ("model", "upgrade"):  # number of requests answered by each model
-        raw = os.path.join(CACHE, f"llm_raw_{out['clinc_llm'][key]}.jsonl")
+    # Number of requests answered by each model.
+    files = {("clinc_llm", "model"): "{model}", ("clinc_llm", "upgrade"): "{upgrade}",
+             ("clinc_llm_fs", "model"): "{model}_fs", ("clinc_llm_claude", "model"): "{model}"}
+    for (name, key), pattern in files.items():
+        if name not in out:
+            continue
+        slug = pattern.format(**out[name]).replace("/", "_")
+        raw = os.path.join(CACHE, f"llm_raw_{slug}.jsonl")
         if os.path.exists(raw):
             rows = [json.loads(line) for line in open(raw)]
-            out["clinc_llm"][f"{key}_requests"] = len(rows)
-            out["clinc_llm"][f"{key}_unparsed"] = sum(1 for r in rows if max(r["probs"]) == 0)
+            out[name][f"{key}_requests"] = len(rows)
+            out[name][f"{key}_unparsed"] = sum(1 for r in rows if max(r["probs"]) == 0)
     return out
 
 
@@ -405,7 +424,7 @@ if __name__ == "__main__":
     elif a.llm:
         rc.set_grid_tail(LLM_TAIL)
         if a.experiment == "main":
-            data = exp_main(a.trials, names=("clinc_llm", "clinc_llm_inscope"))
+            data = exp_main(a.trials, names=llm_workflows())
         else:
             data = exp_edits(a.trials, names=("clinc_llm_inscope",))
         result = {"delta": DELTA, "trials": a.trials, "data": data, "grid_tail": list(LLM_TAIL)}

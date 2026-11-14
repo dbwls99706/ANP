@@ -41,6 +41,46 @@
     "review": 0.25226666666666664
    },
    "conf_when_wrong": 0.9336656710816778
+  },
+  "clinc_llm_fs": {
+   "N": 8600,
+   "K": 12,
+   "model": "gpt-4.1-mini",
+   "upgrade": "gpt-5.4-mini",
+   "free_run_error": 0.11046511627906977,
+   "root_accuracy": 0.9266279069767441,
+   "saturated_share": 0.8956995866678392,
+   "root_wrong_saturated": 0.01744186046511628,
+   "at_default": {
+    "risk": 0.09720930232558139,
+    "review": 0.02197674418604656
+   },
+   "at_top": {
+    "risk": 0.022906976744186045,
+    "review": 0.23686046511627912
+   },
+   "conf_when_wrong": 0.9426676115789475,
+   "model_requests": 24058,
+   "model_unparsed": 0
+  },
+  "clinc_llm_fs_inscope": {
+   "N": 7500,
+   "K": 11,
+   "model": "gpt-4.1-mini",
+   "upgrade": "gpt-5.4-mini",
+   "free_run_error": 0.05386666666666667,
+   "root_accuracy": 0.9658666666666667,
+   "saturated_share": 0.9252666666666667,
+   "root_wrong_saturated": 0.010133333333333333,
+   "at_default": {
+    "risk": 0.0436,
+    "review": 0.01426666666666665
+   },
+   "at_top": {
+    "risk": 0.0116,
+    "review": 0.12946666666666662
+   },
+   "conf_when_wrong": 0.9454081757425742
   }
  },
  "grid_tail": [
