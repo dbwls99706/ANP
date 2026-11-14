@@ -87,16 +87,15 @@ impl NodeExecutor for EventEmitterNode {
         }
 
         // Validate that emit/subscribe/unsubscribe have event_name
-        match self.operation.as_str() {
-            "emit" | "subscribe" | "unsubscribe" => {
-                if self.event_name.is_none() {
-                    return Err(NodeError::InvalidConfig(format!(
-                        "operation '{}' requires 'event_name'",
-                        self.operation
-                    )));
-                }
-            }
-            _ => {}
+        let needs_name = matches!(
+            self.operation.as_str(),
+            "emit" | "subscribe" | "unsubscribe"
+        );
+        if needs_name && self.event_name.is_none() {
+            return Err(NodeError::InvalidConfig(format!(
+                "operation '{}' requires 'event_name'",
+                self.operation
+            )));
         }
 
         Ok(())
