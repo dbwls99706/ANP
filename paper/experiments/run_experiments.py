@@ -5,7 +5,8 @@ A calibration set is n i.i.d. draws (with replacement) from it, and every
 selected threshold vector is scored by its exact risk and review rate on the
 population. Validity is therefore measured without test-set noise.
 
-Usage: python run_experiments.py {main,nsweep,posthoc,edits,synth} [--trials T]
+Usage: python run_experiments.py {main,nsweep,posthoc,edits,synth} [--trials T] [--llm]
+(--llm runs main or edits on the hosted-language-model workflow built by llm_nodes.py)
 """
 import argparse
 import json
@@ -21,15 +22,17 @@ HERE = os.path.dirname(__file__)
 CACHE = os.environ.get("ANP_CACHE", os.path.join(HERE, "cache"))
 RESULTS = os.path.join(HERE, "..", "results")
 DELTA = 0.1
-DEFAULT_N = {"clinc": 4000, "massive": 8000}
+DEFAULT_N = {"clinc": 4000, "massive": 8000, "clinc_llm": 4000}
 
 
 def load(name, swap=None):
-    """Load a workflow; swap = list of nodes whose model is replaced by the alternative one."""
+    """Load a workflow; swap = nodes whose model is replaced by an alternative one, given
+    as node indices (alternative "alt") or (node, alternative) pairs."""
     d = np.load(os.path.join(CACHE, f"{name}.npz"))
     pred, conf = d["pred"].astype(int).copy(), d["conf"].astype(float).copy()
-    for v in swap or []:
-        pred[:, v], conf[:, v] = d["pred_alt"][:, v], d["conf_alt"][:, v]
+    for item in swap or []:
+        v, alt = item if isinstance(item, tuple) else (item, "alt")
+        pred[:, v], conf[:, v] = d[f"pred_{alt}"][:, v], d[f"conf_{alt}"][:, v]
     return rc.traces_from_tables(pred, conf, d["truth"].astype(int), d["nxt"].astype(int)), d["nxt"].astype(int)
 
 
@@ -134,10 +137,10 @@ def collect(jobs, func, workers=4):
         return pool.map(func, jobs, chunksize=1)
 
 
-def exp_main(trials):
+def exp_main(trials, names=("clinc", "massive")):
     out = {}
     eps_list = [0.02, 0.05, 0.10]
-    for name in ["clinc", "massive"]:
+    for name in names:
         pop, _ = population(name)
         k = pop.n_nodes
         n = DEFAULT_N[name]
@@ -214,9 +217,10 @@ def exp_posthoc(trials):
 
 
 def _edit_trial(args):
-    name, w, n0, m_new, eps, seed = args
+    name, edit, n0, m_new, eps, seed = args
+    w = edit[0] if isinstance(edit, tuple) else edit
     pop0, nxt = population(name)
-    pop1, _ = population(name, (w,))
+    pop1, _ = population(name, (edit,))
     k = pop1.n_nodes
     rng = np.random.default_rng(seed)
     lv = levels(pop1)
@@ -247,19 +251,27 @@ def _edit_trial(args):
     return res
 
 
-def exp_edits(trials, only=None):
+LLM_EDITS = dict(eps=0.05, nodes={"leaf": (3, "alt2"), "middle": (1, "alt")})
+
+
+def exp_edits(trials, only=None, names=("clinc", "massive")):
     out = {}
-    # MASSIVE has no alternative language model, so its root is not edited.
+    # MASSIVE has no alternative language model, so its root is not edited. In the language-
+    # model workflow the leaf is upgraded to a newer language model and the middle node is
+    # replaced by the trained classifier.
     plans = {"clinc": dict(eps=0.05, nodes={"leaf": 3, "middle": 1, "root": 0}),
-             "massive": dict(eps=0.05, nodes={"leaf": 7, "middle": 2})}
+             "massive": dict(eps=0.05, nodes={"leaf": 7, "middle": 2}),
+             "clinc_llm": LLM_EDITS}
+    plans = {k: v for k, v in plans.items() if k in names}
     if only:
         name, label = only.split(":")
         plans = {name: dict(eps=plans[name]["eps"], nodes={label: plans[name]["nodes"][label]})}
     for name, plan in plans.items():
         pop0, nxt = population(name)
         out[name] = dict(eps=plan["eps"], n0=DEFAULT_N[name], edits={})
-        for label, w in plan["nodes"].items():
-            pop1, _ = population(name, (w,))
+        for label, edit in plan["nodes"].items():
+            w = edit[0] if isinstance(edit, tuple) else edit
+            pop1, _ = population(name, (edit,))
             grid = rc.default_grid()
             hit = pop1.through([w])
             # Deterministic checks of the locality claims on the whole population.
@@ -278,8 +290,8 @@ def exp_edits(trials, only=None):
             assert set(info["fd_changed"]) <= fd_set and set(info["tf_changed"]) <= {w}
             assert info["error_before"] != info["error_after"], "the edit changed nothing"
             for m_new in [100, 250, 500, 1000]:
-                res = collect([(name, w, DEFAULT_N[name], m_new, plan["eps"], 30_000 + s) for s in range(trials)],
-                              _edit_trial)
+                res = collect([(name, edit, DEFAULT_N[name], m_new, plan["eps"], 30_000 + s)
+                               for s in range(trials)], _edit_trial)
                 info["sizes"][str(m_new)] = {m: summarise([r[m] for r in res], plan["eps"]) for m in res[0]}
             out[name]["edits"][label] = info
             print(name, label, "edit done", flush=True)
@@ -350,11 +362,15 @@ if __name__ == "__main__":
     ap.add_argument("experiment", choices=["main", "nsweep", "posthoc", "edits", "synth"])
     ap.add_argument("--trials", type=int, default=200)
     ap.add_argument("--only", help="edits: re-run a single edit, e.g. clinc:root, and merge it")
+    ap.add_argument("--llm", action="store_true", help="main / edits on the language-model workflow")
     a = ap.parse_args()
     t0 = time.time()
     os.makedirs(RESULTS, exist_ok=True)
-    path = os.path.join(RESULTS, f"{a.experiment}.json")
-    if a.experiment == "edits" and a.only:
+    path = os.path.join(RESULTS, f"{a.experiment}{'_llm' if a.llm else ''}.json")
+    if a.llm:
+        fn = {"main": exp_main, "edits": exp_edits}[a.experiment]
+        result = {"delta": DELTA, "trials": a.trials, "data": fn(a.trials, names=("clinc_llm",))}
+    elif a.experiment == "edits" and a.only:
         result = json.load(open(path))
         name, label = a.only.split(":")
         result["data"][name]["edits"][label] = exp_edits(a.trials, a.only)[name]["edits"][label]

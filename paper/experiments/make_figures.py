@@ -16,7 +16,8 @@ os.makedirs(TAB, exist_ok=True)
 
 plt.rcParams.update({"font.size": 8, "axes.spines.top": False, "axes.spines.right": False,
                      "legend.frameon": False, "figure.dpi": 150, "pdf.fonttype": 42})
-TITLE = {"clinc": "CLINC150 (12 decisions)", "massive": "MASSIVE (21 decisions)"}
+TITLE = {"clinc": "CLINC150 (12 decisions)", "massive": "MASSIVE (21 decisions)",
+         "clinc_llm": "CLINC150-LLM (12 decisions)"}
 STYLE = {  # label, colour, linestyle, marker
     "global-e2e": ("Shared threshold, end-to-end", "#7f7f7f", "--", "s"),
     "e2e-pareto": ("End-to-end Pareto testing", "#000000", "-", "o"),
@@ -29,8 +30,15 @@ STYLE = {  # label, colour, linestyle, marker
 
 
 def load(name):
+    """Results of an experiment, merged with its language-model counterpart if present."""
     path = os.path.join(RES, f"{name}.json")
-    return json.load(open(path)) if os.path.exists(path) else None
+    if not os.path.exists(path):
+        return None
+    res = json.load(open(path))
+    extra = os.path.join(RES, f"{name}_llm.json")
+    if os.path.exists(extra):
+        res["data"].update(json.load(open(extra))["data"])
+    return res
 
 
 def pct(x, digits=1):
@@ -115,7 +123,8 @@ def fig_posthoc(res):
 def fig_edits(res):
     names = list(res["data"])
     kinds = ["leaf", "middle", "root"]
-    fig, axes = plt.subplots(len(names), 3, figsize=(6.8, 3.9), sharey=True, squeeze=False)
+    fig, axes = plt.subplots(len(names), 3, figsize=(6.8, 1.95 * len(names)), sharey=True, squeeze=False)
+    legend_done = False
     lines = {"scratch: e2e-pareto": ("From scratch: Pareto testing", "#000000", "-", "o"),
              "scratch: min-level": ("From scratch: least-confident, level", "#2ca02c", "--", "D"),
              "local: min-level": ("Edit-local (ours)", "#d62728", "-", "^")}
@@ -125,7 +134,9 @@ def fig_edits(res):
             info = res["data"][name]["edits"].get(kind)
             if info is None:
                 ax.axis("off")
-                ax.legend(*axes[0][0].get_legend_handles_labels(), fontsize=6.5, loc="center")
+                if not legend_done:
+                    ax.legend(*axes[0][0].get_legend_handles_labels(), fontsize=6.5, loc="center")
+                    legend_done = True
                 continue
             sizes = sorted(info["sizes"], key=int)
             for m, (label, colour, ls, marker) in lines.items():
@@ -137,7 +148,7 @@ def fig_edits(res):
             ax.set_xticks([int(s) for s in sizes])
             ax.set_xticklabels(sizes, fontsize=6.5)
             ax.minorticks_off()
-            ax.set_title(f"{TITLE[name].split(' ')[0]}: {kind} edit ({pct(info['traffic_share'], 0)}% of traffic)",
+            ax.set_title(f"{TITLE[name].split(' ')[0]}: {kind} ({pct(info['traffic_share'], 0)}% of traffic)",
                          fontsize=7.5)
             if i == len(names) - 1:
                 ax.set_xlabel("fresh labelled runs $m$")
@@ -185,7 +196,7 @@ def fig_synth(res):
 def numbers():
     """numbers.tex: every figure quoted in the prose, as a LaTeX macro."""
     out = {}
-    ds = {"clinc": "C", "massive": "M"}
+    ds = {"clinc": "C", "massive": "M", "clinc_llm": "L"}
     meth = {"fixed-0.7": "Fixed", "per-node-selective": "PerNode", "plug-in": "Plug", "global-e2e": "Shared",
             "e2e-pareto": "Pareto", "e2e-uniform": "Unif", "tf-node": "TFnode", "fd-node": "FEnode",
             "fd-level": "FElevel", "min-node": "LCnode", "min-level": "LClevel", "min-global": "LCshared",
@@ -197,7 +208,7 @@ def numbers():
         ratios = []
         for name, d in main["data"].items():
             tag = ds[name]
-            out["FreeErr" + {"C": "Clinc", "M": "Massive"}[tag]] = pct(d["free_run_error"])
+            out["FreeErr" + {"C": "Clinc", "M": "Massive", "L": "Llm"}[tag]] = pct(d["free_run_error"])
             for e, en in eps_name.items():
                 out[f"OracleNode{tag}{en}"] = pct(d["oracle"][e if e != "0.1" else "0.1"]["node"])
                 out[f"OracleShared{tag}{en}"] = pct(d["oracle"][e if e != "0.1" else "0.1"]["shared"])
@@ -208,7 +219,8 @@ def numbers():
                     out[f"Viol{tag}{mn}{en}"] = pct(r["violation"], 0)
             r = d["results"]["0.05|global-e2e"]
             ratio = r["fd_mass_mean"] / r["risk_mean"]
-            ratios.append(ratio)
+            if tag != "L":
+                ratios.append(ratio)
             out[f"FdRatio{tag}"] = f"{ratio:.1f}"
             out[f"FdMass{tag}"] = pct(r["fd_mass_mean"])
             out[f"RescuedShare{tag}"] = pct(1 - r["risk_mean"] / r["fd_mass_mean"], 0)
