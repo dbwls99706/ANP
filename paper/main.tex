@@ -49,12 +49,13 @@ A decision workflow is a program whose branches are taken by learned models: eac
 node commits to a choice when its confidence clears a threshold and escalates to a human
 otherwise. Operators want the rate of wrong, unescalated runs below a target with as little
 human review as possible, and they keep editing the workflow. Distribution-free risk control
-certifies one frozen configuration end to end, so every retuned threshold or swapped model
-sends the whole workflow back to calibration. We study certificates that survive such
+is usually run for one target on one frozen workflow, so a renegotiated target or a swapped
+model sends the whole workflow back to calibration. We study certificates that survive such
 changes. First, any threshold-independent rule that \emph{charges} each erroneous run to one
 node on its route bounds the end-to-end risk by a sum of per-node terms. The bound holds
 uniformly over a grid of threshold assignments with a single binomial confidence bound, and
-the least-review thresholds solve a knapsack exactly. Charging the least confident node is
+thresholds are chosen by minimising a separable surrogate of the review rate, which is a
+knapsack solved exactly. Charging the least confident node is
 exact for shared thresholds; charging the first wrong decision, the natural analogue of
 stage-wise decompositions, overstates the risk by factors of \FdOverstateMax\ and
 \FdOverstateMin\ on two real workflows, because downstream nodes escalate misrouted inputs.
@@ -79,7 +80,7 @@ is classified, routed, scored and routed again, and at each step a model answers
 question---\emph{is this in scope? which product area? which intent?}---whose answer selects
 the next step of an ordinary program. Such \emph{decision workflows} are how compound AI
 systems are assembled in practice~\citep{khattab2023dspy}, and recent ``System One'' models
-are built specifically to serve them, returning typed choices with probabilities instead of
+are built specifically to serve them, returning typed probabilistic decisions instead of
 text~\citep{typesafe2026jev}. The probabilities matter because the workflow has an exit: when a
 node is not confident enough, the run is handed to a human.
 
@@ -95,8 +96,9 @@ assumption on the models.
 Workflows, however, are not fixed. They are software, and they are edited the way software is
 edited: a threshold is nudged after an incident, the target $\eps$ is renegotiated, a
 classifier is replaced by a better one, a new decision is inserted below an existing branch.
-An end-to-end certificate says nothing about the edited system, and its guarantee does not
-cover thresholds picked after looking at the certificate either. The practical consequence is
+An end-to-end certificate says nothing about the edited system, and in the sequential-testing
+form in which it is usually run its guarantee does not cover a target or thresholds picked
+after looking at the data either. The practical consequence is
 that the statistical guarantee is the first thing dropped when a workflow starts to evolve.
 
 We ask what a certificate should look like if it is to survive this. We identify three
@@ -118,7 +120,8 @@ the risk by a sum of per-node terms, each depending on that node's threshold onl
 (Lemma~\ref{lem:charging}). The bound is a single binomial proportion for every threshold
 assignment, so one Clopper--Pearson bound with a union over the grid makes it uniform
 (Theorem~\ref{thm:cert}); its sufficient statistics are $M$ integer curves; and choosing
-thresholds is a multiple-choice knapsack with integer weights, solved exactly.
+thresholds to minimise a separable surrogate of the review rate is a multiple-choice knapsack
+with integer weights, solved exactly.
 \item \textbf{The rescue effect} (\S\ref{sec:rules}, \S\ref{sec:exp-main}). The obvious charging
 rule blames the first wrong decision. It is the routing analogue of the additive stage-wise
 decompositions used for cascades~\citep{sun2026compcrc}, and it depends only on a node and
@@ -150,9 +153,9 @@ rejects a workflow whose thresholds exceed its certified risk or whose certifica
 Method & Valid & Any thresholds & Edit-local & Calibration runs \\
 \midrule
 Per-node selective calibration & no & -- & -- & per node \\
-Shared threshold, end to end~\citep{angelopoulos2021ltt} & yes & no & no & whole workflow \\
+Shared threshold, fixed-sequence test~\citep{angelopoulos2021ltt} & yes & no & no & whole workflow \\
 Pareto testing~\citep{laufer2022pareto} & yes & no & no & whole workflow \\
-End-to-end bound, uniform over the grid & yes & yes & no & whole workflow \\
+End-to-end bound, uniform over the grid~\citep{angelopoulos2021ltt} & yes & yes & no & whole workflow \\
 Charged certificate (\S\ref{sec:sep}) & yes & yes & no & whole workflow \\
 Route-indexed charged certificate (\S\ref{sec:edits}) & yes & yes & yes & affected traffic \\
 \bottomrule
@@ -160,7 +163,9 @@ Route-indexed charged certificate (\S\ref{sec:edits}) & yes & yes & yes & affect
 \caption{What each calibration method provides. \emph{Valid}: a finite-sample bound on the
 end-to-end error rate. \emph{Any thresholds}: the bound holds simultaneously for all threshold
 assignments on a grid, so thresholds and targets may be chosen after calibration.
-\emph{Edit-local}: after a node is edited, only the traffic through it is labelled again.}
+\emph{Edit-local}: after a node is edited, only the traffic through it is labelled again.
+The fourth row is the uniform-bound route of \citet[\S2.5]{angelopoulos2021ltt} on the product
+grid of per-node thresholds; the last two rows are ours.}
 \label{tab:properties}
 \end{table}
 
@@ -376,8 +381,11 @@ objective we use the separable surrogate $\sum_m h_m(g_m)$, where $h_m(t)$ is th
 calibration runs that visit a node of module $m$ with confidence below $t$; it upper-bounds the
 review rate by a union bound. The result is a multiple-choice knapsack problem with integer
 weights~\citep{kellerer2004}, solved exactly by dynamic programming in $O(MG\,k_{\max})$ time.
-Since the certificate is uniform, the solution may then be refined by any local search on the
-empirical review rate without affecting validity; we use coordinate descent.
+The optimum is that of the surrogate on the calibration sample, not of the review rate
+$H(\tau)$ itself: a run that is below threshold at two modules is counted twice, and no
+optimality is claimed for $H$. Since the certificate is uniform, the solution may then be
+refined by any local search on the empirical review rate without affecting validity; we use
+coordinate descent.
 Algorithm~\ref{alg:certify} summarises the procedure.
 
 \begin{algorithm}[t]
@@ -393,7 +401,7 @@ $\mathcal G$; confidence $1-\delta$
 \Require target $\eps$ \Comment{any time later, for any target}
 \State $k_{\max}\gets\max\{k:\CP(k,n,\delta/G^M)\le\eps\}$
 \State $\hat g\gets\arg\min_{g\in\mathcal G^M}\sum_m h_m(g_m)$ subject to $\sum_m k_m(g_m)\le k_{\max}$
-\Comment{knapsack, exact}
+\Comment{knapsack: exact for the surrogate}
 \State refine $\hat g$ by local search on the empirical review rate, keeping the constraint
 \State \Return thresholds $\tau_{\hat g}$ and the certified bound $\CP(k(\hat g),n,\delta/G^M)$
 \end{algorithmic}
@@ -515,31 +523,50 @@ instead of calibrating it afterwards. Conformal prediction~\citep{vovk2005} and 
 extensions~\citep{bates2021rcps,angelopoulos2021ltt,angelopoulos2022crc} certify
 hyperparameters of arbitrary predictors; Pareto testing~\citep{laufer2022pareto} makes
 multi-dimensional configurations tractable by ordering candidates on a split and testing them
-in sequence. We use these tools as baselines and building blocks. They certify a
-pre-specified system and a pre-ordered set of candidates; our certificate is uniform over a
-product grid and is designed to be repaired.
+in sequence. We use these tools as baselines and building blocks. In their usual form the
+target is fixed in advance and candidates are tested in a pre-specified order. Uniformity
+over a finite grid is not new either: \citet[\S2.5]{angelopoulos2021ltt} note that a uniform
+upper confidence bound controls the risk of every configuration below it, and a Bonferroni
+correction with exact binomial p-values amounts to the simultaneous Clopper--Pearson band of
+Theorem~\ref{thm:cert}; our end-to-end uniform baseline is this construction on the product
+grid. What we add is the separable form of the bounded quantity. It reduces the certificate
+to $M$ count curves, turns the choice of thresholds into a knapsack, and, indexed by route,
+lets the certificate be repaired after an edit.
 
 \paragraph{Guarantees for multi-stage LLM systems.} For language models, conformal methods
 have been used to calibrate sampling and stopping rules~\citep{quach2024clm}, to abstain on
-single calls~\citep{yadkori2024abstention} and for judges that escalate to
-humans~\citep{jung2024trust}. Multi-stage guarantees have mostly been obtained in
-two ways. One calibrates a single scalar over whole trajectories: KnowNo~\citep{ren2023knowno}
-for multi-step robot planning and PASC~\citep{kotte2026pasc} for NLP pipelines; this is tight
-for one shared threshold, which corresponds to our LC rule with a single module, and must be
-redone when the pipeline changes. The other splits an error budget across components by a
-union bound, as in TRAQ for retrieval and generation~\citep{li2023traq} and in model
-cascades~\citep{chen2023frugalgpt,dou2026cascade,xu2025selective}. Closest to ours, the
+single calls~\citep{yadkori2024abstention}, and for cascades of judges that pass a case to a
+stronger judge or abstain, with a guarantee on agreement with human
+raters~\citep{jung2024trust}; selective variants of conformal risk control treat a single
+model~\citep{xu2025selective}. Multi-stage guarantees have mostly been obtained in two ways.
+One calibrates a single scalar over whole trajectories: KnowNo~\citep{ren2023knowno} scores a
+multi-step plan by its least confident step, and PASC~\citep{kotte2026pasc} an NLP pipeline
+by its largest stage score. This is our LC rule with a single module; it is tight for one
+shared threshold and must be redone when the pipeline changes. The other splits an error
+budget across components by a union bound, as in TRAQ for retrieval and
+generation~\citep{li2023traq} and in Conformal Cascade for tiers of
+models~\citep{dou2026cascade}; cascades are otherwise tuned for cost without a
+guarantee~\citep{chen2023frugalgpt}. Closest to ours, the
 concurrent CompCRC~\citep{sun2026compcrc} decomposes the accepted-error risk of a linear
 cascade into additive stage contributions and certifies each stage against a local budget. Its
-stage losses include a reach indicator that depends on upstream thresholds, its guarantee is in
-expectation for thresholds fixed before certification, and it explicitly excludes post hoc
-budget selection. Our charged terms depend on one threshold each, hold uniformly, and apply to
-routing DAGs in which stages solve different sub-problems; we also show that the first-error
-attribution underlying additive decompositions is loose under routing. Hierarchical selective
-classification~\citep{goren2024hierarchical} retreats to coarser labels of a single model
-rather than escalating a multi-model program. \citet{chatrath2026ready} argue for qualifying
-whole workflows on held-out data; we give that qualification a form that persists across
-edits.
+stage losses include a reach indicator, which by construction depends on upstream thresholds,
+its guarantee is in expectation for thresholds fixed before certification, and it explicitly
+excludes post hoc budget selection. Our charged terms depend on one threshold each and apply
+to routing DAGs in which stages solve different sub-problems; we also show that the
+first-error attribution underlying additive decompositions is loose under routing.
+Per-stage thresholds calibrated from the correctness of the final answer are thus
+established for linear cascades~\citep{jung2024trust,dou2026cascade,sun2026compcrc,badshah2026judge};
+outcome labelling (\S\ref{sec:setting}) carries this to branching workflows under one bound.
+Hierarchical selective classification~\citep{goren2024hierarchical} retreats to coarser labels
+of a single model rather than escalating a multi-model program.
+
+\paragraph{Changes to a certified system.} \citet{chatrath2026ready} argue for qualifying
+whole agent workflows on held-out data, and requalify the workflow after any material change
+to it. For a single model, \citet{balachandran2026disagreement} certify that an update does
+not regress while labelling only inputs on which the old and the new model disagree. We know
+of no guarantee for a multi-step workflow that keeps the evidence an edit leaves intact; the
+route-indexed certificate of \S\ref{sec:edits} does so and spends labels on the traffic through
+the edit.
 
 \paragraph{Confidence of language models.} Neural classifiers are
 overconfident~\citep{guo2017calibration}, and so are language models, whether the confidence
@@ -550,9 +577,9 @@ certified, not hidden.
 
 \paragraph{Languages for model-driven programs.} Compound systems are increasingly written
 as programs~\citep{zaharia2024compound}. Declarative
-frameworks~\citep{khattab2023dspy} and typed calculi and languages for agent
-composition~\citep{liu2026lambda,kizito2026turn} treat model calls as program constructs, the
-latter exposing a confidence value to the program. None attaches a statistical guarantee to
+frameworks~\citep{khattab2023dspy}, typed calculi~\citep{liu2026lambda} and languages for
+agent composition~\citep{kizito2026turn} treat model calls as program constructs, and
+Turn~\citep{kizito2026turn} makes the confidence of a call a construct of the language. None attaches a statistical guarantee to
 the program or tracks its validity under edits; our static check is a step in that direction.
 
 \section{Limitations}\label{sec:limits}
@@ -573,7 +600,11 @@ fine-tuned models.
 \emph{Structure.} We assume acyclic routing, deterministic states and an escalation that fully
 resolves the run. A loop is handled only by unrolling it to a fixed number of steps, as for
 the agent of \S\ref{sec:exp-agent}; stochastic nodes and partial human corrections are out of
-scope.
+scope. That agent meets the assumptions by construction: every decision is a closed choice
+with a token probability, its tools are deterministic, and its loop is bounded. Agents that
+act through free text, call tools with side effects or random results, or loop without a
+bound are not covered, and for them the results of \S\ref{sec:exp-agent} are evidence about
+the method, not a guarantee.
 \emph{Adaptive edits.} Theorem~\ref{thm:recert} requires the edited set to be chosen
 independently of the calibration sample; choosing which node to replace by inspecting the
 certificate calls for a union over the candidate edits. Each repair also spends additional

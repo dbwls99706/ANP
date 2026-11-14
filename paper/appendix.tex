@@ -163,12 +163,14 @@ hour per benchmark with 24 runs in parallel.
 
 A certificate is a JSON document with the charging rule, the grid, the modules, the
 fingerprint of every decision node, and a list of parts. A part records its sample size $n$,
-the failure probability spent on it, the exponent of its union bound, the traffic share it is
+the failure probability of its bound, the failure probability spent on the traffic shares
+that later edits estimate from it, the exponent of its union bound, the traffic share it is
 weighted by, and for each distinct free route the number of runs and two integer tables
 indexed by module and grid value: the charged errors that commit at that threshold, and the
 visits that would be escalated at it. A certificate issued from all traffic has one part;
 each repair marks the routes through the edited nodes as stale in the existing parts and adds
-one part for the fresh sample. For the CLINC150 workflow (12 decisions, 3 modules, 11
+one part for the fresh sample. The confidence the certificate reports is one minus the sum
+of all these failure probabilities, so it falls with every repair. For the CLINC150 workflow (12 decisions, 3 modules, 11
 distinct routes in 3{,}000 runs) the certificate is 6\,kB and contains no inputs or labels.
 
 \section{Additional results}\label{app:more}
@@ -182,6 +184,25 @@ change when one node's model is replaced, for each charging rule. No curve chang
 the sets given by Proposition~\ref{prop:footprint} (for FE the size of that set is shown in
 parentheses), and in every case the runs that avoid the edited node were verified to be
 identical before and after the edit (Proposition~\ref{prop:local}).
+
+\paragraph{Direct check of the guarantees.} The experiments of \S\ref{sec:exp} score the
+thresholds that a method selects. Theorems~\ref{thm:cert} and~\ref{thm:recert} claim more, a
+bound for every assignment on the grid at once, and we checked that claim as it is
+implemented. For CLINC150 and MASSIVE with one module per level and for the two agents with
+one module per role, the exact population risk of all $G^M$ assignments
+(\CoverageAssignMin\ and \CoverageAssignMax) is compared with the certified bound in each of
+\CoverageDraws\ calibration draws, for LC and for FE charging. A draw fails when the bound is
+below the risk at any assignment. This happened in \CoverageCertViolations\ of
+\CoverageCertDraws\ draws for the certificate (at most \CoverageCertWorst\% of the draws of
+one workflow) and in \CoverageRecertViolations\ of \CoverageRecertDraws\ draws for the bound
+issued after an edit, over all edits of \S\ref{sec:exp-edits} and \S\ref{sec:exp-agent} with
+100 and with 1{,}000 fresh labels; the theorems allow $\delta=10\%$. The union over the grid
+is what makes these rates small. For a single shared threshold fixed in advance and bounded
+at level $\delta$ without a union, the Clopper--Pearson bound falls below the risk in
+\CoverageSingleMeanLow--\CoverageSingleMeanHigh\% of \CoverageSingleDraws\ draws on average
+over the grid, and in at most \CoverageSingleLargest\% for one grid value, which is $\delta$
+up to the sampling error of the check: the binomial model behind the bound is exact, and the
+conservatism of the certificate is that of the union.
 
 \begin{table}[!htb]
 \centering\footnotesize
