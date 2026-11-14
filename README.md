@@ -207,6 +207,9 @@ anp certify examples/certify/workflow_edited.anp.json --cert cert.json \
     --out cert.json --epsilon 0.05 --apply tuned.anp.json
 ```
 
+Token probabilities of language models sit very close to 1; pass `--fine-tail` when issuing
+the certificate to add the thresholds 0.9999, 0.99999 and 0.999999.
+
 A trace line lists the decisions of one run with every node committing, in order:
 `{"steps": [{"node": "scope", "confidence": 0.93, "correct": true}, ...]}`. `correct` says
 whether the decision matches the ground truth; only the first `false` of a run matters.

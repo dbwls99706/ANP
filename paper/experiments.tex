@@ -168,15 +168,17 @@ coverage with the review gap of \S\ref{sec:exp-main} at every target.
 
 \subsection{Edits}\label{sec:exp-edits}
 
-\begin{figure}[t]
+\begin{figure}[tp]
 \centering
 \includegraphics[width=\linewidth]{figures/edits.pdf}
-\caption{Review needed to certify $\eps=5\%$ after replacing the model of one node, as a
+\caption{Review needed to certify $\eps=5\%$ after replacing the model of one node (in
+parentheses: its share of the traffic), as a
 function of the number $m$ of fresh labelled runs (\EditTrials\ draws per point). \emph{From
 scratch} labels $m$ runs of all traffic and recalibrates with them alone. \emph{Edit-local}
 (Theorem~\ref{thm:recert}) keeps the old certificate for the routes that avoid the node and
 labels $m$ runs of the traffic through it. The dotted line recalibrates on all stored inputs
-re-run through the edited workflow, which assumes they were kept.}\label{fig:edits}
+re-run through the edited workflow, which assumes they were kept. Bottom row: the
+language-model workflow of \S\ref{sec:exp-llm}.}\label{fig:edits}
 \end{figure}
 
 We replace the model of one node by a model from a different family and ask how many fresh
@@ -214,3 +216,64 @@ If all calibration inputs and labels were retained, re-running them through the 
 workflow and recalibrating is at least as good (dotted line); that option requires storing
 raw inputs, and each such recalibration is a new certificate for a single configuration. The
 edit-local certificate needs only the stored counts.
+
+\subsection{A hosted language model}\label{sec:exp-llm}
+
+The workflows so far use trained classifiers. To see what changes when the decisions are
+taken by a hosted language model, we rebuild the CLINC150 workflow with
+\texttt{\LlmModel} at every node. Each node's question is asked zero-shot as a
+multiple-choice question over the node's choices, and the confidence is the probability the
+model assigns to the letter it answers with, read from its token log-probabilities
+(Appendix~\ref{app:llm}). We consider the full three-level workflow (\textbf{LLM-3}) and the
+two-level workflow \texttt{domain}\,$\to$\,\texttt{intent} on the in-scope traffic
+(\textbf{LLM-2}; \LlmSizeL\ inputs, 11 decisions). Token probabilities saturate:
+\LlmSaturatedT\% (LLM-3) and \LlmSaturatedL\% (LLM-2) of the confidences along free runs are
+at least $1-10^{-6}$. For these workflows the grid therefore gets three more values,
+$1-10^{-4}$, $1-10^{-5}$ and $1-10^{-6}$ ($G=29$). Saturation also makes ties between the
+confidences of a run common, which is why LC charging breaks ties towards the first wrong
+node; the trained workflows have no ties.
+
+\paragraph{When no threshold is safe.} In LLM-3 the zero-shot \texttt{scope} decision is
+right on \LlmRootAccT\% of inputs and, on \LlmRootWrongSatT\% of all inputs, wrong with a
+confidence of at least $1-10^{-6}$. Rewording the question and adding in-context examples,
+tried on training-split requests only, did not change this (Appendix~\ref{app:llm}). The
+runtime's default threshold of 0.7 escalates \LlmDefaultReviewT\% of runs and lets an error
+rate of \LlmDefaultRiskT\% through. Even the strictest finite threshold leaves
+\LlmTopRiskT\% errors at \LlmTopReviewT\% review, so targets of 2\% and 5\% are out of reach
+for any threshold rule, and every certified method declines to commit. At $\eps=10\%$ a
+shared threshold calibrated end to end certifies with \RevTSharedTen\% review and Pareto
+testing with \RevTParetoTen\%; the uniform certificates, whose margins exceed the little
+room that is left, escalate \RevTLCsharedTen\% with a shared module and practically
+everything otherwise. The value of a certificate in this workflow is that it says no.
+
+\paragraph{Where certification is possible.} Without abstention LLM-2 errs on
+\FreeErrLlm\% of inputs, and on \LlmDefaultRiskL\% at the default threshold
+(Table~\ref{tab:main-llm} in the appendix). A 2\% target is again out of reach---the
+strictest threshold leaves \LlmTopRiskL\%---and the certified methods escalate at least
+99\% of inputs. At
+$\eps=5\%$ the picture matches the trained workflows. The end-to-end methods need
+\RevLSharedFive\% (shared threshold) and \RevLParetoFive\% (Pareto testing) review. LC
+certificates need \RevLLClevelFive\% per level and \RevLLCnodeFive\% per node, FE per node
+\RevLFEnodeFive\% and TF \RevLTFnodeFive\%; the first-error mass overstates the risk by a
+factor of \FdRatioL. Per-node selective calibration needs \RevLPerNodeFive\% review, and the
+plug-in certificate violates in \ViolLPlugFive\% of draws. The end-to-end uniform bound
+needs \RevLUnifFive\% review against \RevLLCnodeFive\% for LC per node under the same
+union; we attribute the gap to its coordinate-descent search stalling on the plateaus that
+saturated confidences create, whereas the separable knapsack is still solved exactly. Over
+both language-model workflows and all targets the largest violation rate of a certified
+method is \MaxViolCertifiedLlm\%, and \MaxViolUniformLlm\% for the uniform certificates.
+
+\paragraph{Edits.} We edit LLM-2 in two ways that are routine in practice
+(Figure~\ref{fig:edits}, bottom row). The model of one leaf is upgraded to a newer language
+model (\texttt{\LlmUpgrade}; \EditShareLUpgrade\% of the traffic), and the least accurate leaf
+is replaced by the trained classifier of \S\ref{sec:exp-main} (\EditShareLClassifier\% of the
+traffic). With $m=100$ fresh labels the edit-local certificate restores the 5\% certificate
+at \EditLUpgradeLocalHundred\% and \EditLClassifierLocalHundred\% review. Recalibrating from
+scratch with 100 labels escalates \EditLUpgradeScratchHundred\% and
+\EditLClassifierScratchHundred\% of inputs with Pareto testing and everything with the LC
+certificate; with 1{,}000 labels it still needs \EditLUpgradeScratchLCThousand\% and
+\EditLClassifierScratchLCThousand\%, against \EditLUpgradeLocalThousand\% and
+\EditLClassifierLocalThousand\% edit-local. The second edit also shows when per-node
+thresholds matter. The classifier's confidences are not saturated, so a threshold shared
+with the language-model leaves is too strict for it, and per-node modules
+(\EditLClassifierLocalNodeThousand\% at $m=1{,}000$) overtake per-level ones.

@@ -141,6 +141,8 @@ def charge(tr, rule="fd", anchor=None):
     rule="fd":   the first wrong decision. Depends only on the node and its ancestors.
     rule="min":  the least confident node on the route (anchor=None), or the node with the
                  smallest margin conf_v - anchor_v. Exact for thresholds anchor + const.
+                 Ties go to the first wrong decision if it is among the minima, else to the
+                 earliest node; they are common when confidences saturate at 1.
     """
     if rule == "fd":
         return tr.dev_node, tr.dev_conf
@@ -151,6 +153,9 @@ def charge(tr, rule="fd", anchor=None):
         pos = margin.argmin(axis=1)
         rows = np.arange(len(tr))
         dev = tr.deviated
+        first_error = np.maximum(tr.dev_pos, 0)
+        tied = dev & (margin[rows, first_error] == margin[rows, pos])
+        pos = np.where(tied, first_error, pos)
         return (np.where(dev, tr.path_node[rows, pos], -1), np.where(dev, tr.path_conf[rows, pos], np.nan))
     raise ValueError(rule)
 

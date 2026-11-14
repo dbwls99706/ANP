@@ -124,7 +124,7 @@ def fig_posthoc(res):
 
 def fig_edits(res):
     names = list(res["data"])
-    fig, axes = plt.subplots(len(names), 3, figsize=(6.8, 1.95 * len(names)), sharey=True, squeeze=False)
+    fig, axes = plt.subplots(len(names), 3, figsize=(6.8, 1.7 * len(names)), sharey=True, squeeze=False)
     legend_done = False
     lines = {"scratch: e2e-pareto": ("From scratch: Pareto testing", "#000000", "-", "o"),
              "scratch: min-level": ("From scratch: least-confident, level", "#2ca02c", "--", "D"),
@@ -229,14 +229,15 @@ def numbers():
         out["FdOverstateMin"], out["FdOverstateMax"] = f"{min(ratios):.1f}", f"{max(ratios):.1f}"
         certified = [m for m in meth if m not in ("fixed-0.7", "per-node-selective", "plug-in")]
         worst = lambda names: pct(max(main["data"][n]["results"][f"{e}|{m}"]["violation"]
-                                      for n in names for e in eps_name for m in certified), 0)
+                                      for n in names for e in eps_name for m in certified),
+                                  1 if names[0].startswith("clinc_llm") else 0)
         out["MaxViolCertified"] = worst(["clinc", "massive"])
         llm = [n for n in main["data"] if n.startswith("clinc_llm")]
         if llm:
             out["MaxViolCertifiedLlm"] = worst(llm)
             uniform = [m for m in certified if m not in ("global-e2e", "e2e-pareto")]
             out["MaxViolUniformLlm"] = pct(max(main["data"][n]["results"][f"{e}|{m}"]["violation"]
-                                               for n in llm for e in eps_name for m in uniform), 0)
+                                               for n in llm for e in eps_name for m in uniform))
     post = load("posthoc")
     if post:
         for name, d in post["data"].items():
@@ -265,6 +266,23 @@ def numbers():
             leaf = edits["data"][name]["edits"]["leaf"]["sizes"]["100"]["local: min-level"]
             out[key] = pct(leaf["review_mean"], 0)
         out["EditTrials"] = str(edits["trials"])
+    stats = load("llmstats")
+    if stats:
+        thousands = lambda x: f"{x:,}".replace(",", "{,}")
+        for name, tag in [("clinc_llm", "T"), ("clinc_llm_inscope", "L")]:
+            d = stats["data"][name]
+            out[f"LlmSaturated{tag}"] = pct(d["saturated_share"], 0)
+            out[f"LlmRootAcc{tag}"] = pct(d["root_accuracy"])
+            out[f"LlmRootWrongSat{tag}"] = pct(d["root_wrong_saturated"])
+            out[f"LlmDefaultRisk{tag}"] = pct(d["at_default"]["risk"])
+            out[f"LlmDefaultReview{tag}"] = pct(d["at_default"]["review"])
+            out[f"LlmTopRisk{tag}"] = pct(d["at_top"]["risk"])
+            out[f"LlmTopReview{tag}"] = pct(d["at_top"]["review"])
+            out[f"LlmSize{tag}"] = thousands(d["N"])
+        d = stats["data"]["clinc_llm"]
+        out["LlmModel"], out["LlmUpgrade"] = d["model"], d["upgrade"]
+        out["LlmRequests"], out["LlmUpgradeRequests"] = thousands(d["model_requests"]), thousands(d["upgrade_requests"])
+        out["LlmUnparsed"] = str(d["model_unparsed"])
     ns = load("nsweep")
     if ns:
         out["NsweepTrials"] = str(ns["trials"])

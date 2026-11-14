@@ -123,6 +123,10 @@ enum Commands {
         /// Nodes sharing a threshold: level, node or global
         #[arg(long, default_value = "level")]
         modules: String,
+        /// Add thresholds 0.9999, 0.99999 and 0.999999 for confidences that saturate
+        /// at 1, such as token probabilities of a language model (with --traces)
+        #[arg(long, requires = "traces")]
+        fine_tail: bool,
         /// Write the certificate to this file
         #[arg(long)]
         out: Option<PathBuf>,
@@ -251,6 +255,7 @@ async fn main() -> ExitCode {
             delta,
             rule,
             modules,
+            fine_tail,
             out,
             apply,
         } => cmd_certify(CertifyArgs {
@@ -263,6 +268,7 @@ async fn main() -> ExitCode {
             delta,
             rule,
             modules,
+            fine_tail,
             out,
             apply,
         }),
@@ -739,6 +745,7 @@ struct CertifyArgs {
     delta: f64,
     rule: String,
     modules: String,
+    fine_tail: bool,
     out: Option<PathBuf>,
     apply: Option<PathBuf>,
 }
@@ -796,7 +803,12 @@ fn cmd_certify(args: CertifyArgs) -> CliResult {
             }
         };
         let traces = load_traces(traces_path)?;
-        let cert = risk::certify(&graph, &traces, rule, granularity, args.delta).map_err(fail)?;
+        let mut grid = risk::GRID.to_vec();
+        if args.fine_tail {
+            grid.extend(risk::FINE_TAIL);
+        }
+        let cert = risk::certify_on_grid(&graph, &traces, rule, granularity, args.delta, &grid)
+            .map_err(fail)?;
         println!(
             "Certified {} decision node(s) in {} module(s) from {} runs.",
             cert.fingerprints.len(),

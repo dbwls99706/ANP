@@ -79,12 +79,43 @@ the confidences of later nodes are shrunk towards $0.5$ by a uniform random fact
 one half, modelling rescue. The offset $b$ is set by bisection so that 20\% of runs deviate
 for every $K$. The population has 400{,}000 runs.
 
+\paragraph{Language-model workflows.}\label{app:llm}
+Every node of the CLINC150 workflow is answered by \texttt{\LlmModel} through the provider's
+chat-completions API, at temperature 0 with one output token. The system message states the
+task (``You route requests sent to a virtual assistant\,\dots\ Reply with the letter only''),
+the question of the node and its lettered options; the user message is the request. The
+\texttt{scope} question lists the ten topics with their intents and asks whether the request
+is covered by a supported intent; the \texttt{domain} question offers the ten topics, each
+with its intents; an \texttt{intent} question offers the 15 intents of its topic. Intent and
+topic names are the dataset's identifiers with underscores replaced by spaces; no examples
+are given. The answer is the option letter with the largest probability among the 20 most
+likely first tokens, and the confidence is that probability, stored with six decimals.
+\LlmUnparsed\ of the \LlmRequests\ answers contained no option letter among those tokens and
+are treated as confidence zero. A node is queried on every input whose free run or oracle
+route can reach it. For the edit, the \texttt{intent[banking]} node is also answered by
+\texttt{\LlmUpgrade} (\LlmUpgradeRequests\ requests), which returns the probability of its
+answer token only; the other edit replaces \texttt{intent[auto and commute]} by the trained
+classifier of the CLINC150 workflow. LLM-3 is the full workflow on all 8{,}600 inputs, LLM-2
+the workflow without the \texttt{scope} node on the \LlmSizeL\ in-scope inputs. Both use
+$n=4{,}000$ and the grid extended by $1-10^{-4}$, $1-10^{-5}$ and $1-10^{-6}$. The extension
+was chosen from the distribution of the confidences alone, without labels and before any
+calibration draw; the guarantee holds for any grid fixed in this way.
+
+The \texttt{scope} prompt was not tuned on the evaluation data. On 350 requests of the
+training split (260 in scope, 90 out of scope) the prompt above was right on 80.3\% of them;
+a more lenient wording reached 83.7\% and adding 24 in-context examples 83.4\%, in all cases
+with confidences near 1 on the errors. Folding the decision into the first question, as a
+``none of these topics'' option, sent 40\% of the out-of-scope requests to a topic. We
+therefore kept the first prompt and report LLM-3 as it is.
+
 \paragraph{Compute.} All experiments run on 4 CPU cores in under two hours; the certificate
-and its optimisation take milliseconds per workflow.
+and its optimisation take milliseconds per workflow. The language-model answers took about
+six minutes of wall-clock time with 32 parallel requests.
 
 \section{Additional results}\label{app:more}
 
-Table~\ref{tab:main-massive} repeats Table~\ref{tab:main} for MASSIVE.
+Table~\ref{tab:main-massive} repeats Table~\ref{tab:main} for MASSIVE and
+Table~\ref{tab:main-llm} for the language-model workflow LLM-2.
 Table~\ref{tab:footprints} counts, on the whole population, the nodes whose count curves
 change when one node's model is replaced, for each charging rule. No curve changes outside
 the sets given by Proposition~\ref{prop:footprint} (for FE the size of that set is shown in
@@ -97,6 +128,15 @@ identical before and after the edit (Proposition~\ref{prop:local}).
 \input{tables/main_massive}
 \caption{MASSIVE, $n=8{,}000$, $\delta=0.1$, \Trials\ trials. Columns as in
 Table~\ref{tab:main}.}\label{tab:main-massive}
+\end{table}
+
+\begin{table}[h]
+\centering\footnotesize
+\setlength{\tabcolsep}{3.5pt}
+\input{tables/main_clinc_llm_inscope}
+\caption{LLM-2 (\texttt{\LlmModel} at every node, in-scope traffic), $n=4{,}000$, $\delta=0.1$,
+\Trials\ trials, grid with the extended tail. Columns as in Table~\ref{tab:main}. No threshold
+assignment reaches $\eps=2\%$.}\label{tab:main-llm}
 \end{table}
 
 \begin{table}[h]

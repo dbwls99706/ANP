@@ -29,6 +29,10 @@ pub const GRID: [f64; 25] = [
     0.80, 0.85, 0.90, 0.95, 0.97, 0.98, 0.99, 0.995, 0.999,
 ];
 
+/// Extra thresholds for models whose confidences saturate at 1, such as the
+/// token probabilities of a language model.
+pub const FINE_TAIL: [f64; 3] = [0.9999, 0.99999, 0.999999];
+
 const DEFAULT_THRESHOLD: f64 = 0.7;
 
 #[derive(Debug, thiserror::Error)]
@@ -77,7 +81,8 @@ fn yes() -> bool {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Rule {
-    /// The least confident node on the route. Exact when all thresholds are equal.
+    /// The least confident node on the route (ties: the first wrong decision if it
+    /// is among them). Exact when all thresholds are equal.
     Min,
     /// The first wrong decision. Ignores that later nodes may still escalate.
     FirstError,
@@ -446,11 +451,25 @@ fn route_stats(
         if let Some(first_error) = trace.steps.iter().position(|s| !s.correct) {
             let charged = match rule {
                 Rule::FirstError => &trace.steps[first_error],
-                Rule::Min => trace
-                    .steps
-                    .iter()
-                    .min_by(|a, b| a.confidence.total_cmp(&b.confidence))
-                    .expect("validated: runs are not empty"),
+                Rule::Min => {
+                    // Ties go to the first wrong decision if it is among the least
+                    // confident, else to the earliest node; they are common when
+                    // confidences saturate at 1.
+                    let lowest = trace
+                        .steps
+                        .iter()
+                        .map(|s| s.confidence)
+                        .fold(f64::INFINITY, f64::min);
+                    if trace.steps[first_error].confidence == lowest {
+                        &trace.steps[first_error]
+                    } else {
+                        trace
+                            .steps
+                            .iter()
+                            .find(|s| s.confidence == lowest)
+                            .expect("validated: runs are not empty")
+                    }
+                }
             };
             let m = module_of[charged.node.as_str()];
             // Committed at threshold g when the confidence is at least it; never for "never".
@@ -463,7 +482,7 @@ fn route_stats(
     table.into_values().collect()
 }
 
-/// Issue a certificate from labelled traces of all traffic.
+/// Issue a certificate from labelled traces of all traffic, on the default grid.
 pub fn certify(
     graph: &AnpGraph,
     traces: &[RunTrace],
@@ -471,6 +490,25 @@ pub fn certify(
     granularity: Granularity,
     delta: f64,
 ) -> Result<RiskCertificate, RiskError> {
+    certify_on_grid(graph, traces, rule, granularity, delta, &GRID)
+}
+
+/// Issue a certificate on a given grid of finite thresholds (ascending, within
+/// [0, 1]). The grid must be chosen before looking at the traces.
+pub fn certify_on_grid(
+    graph: &AnpGraph,
+    traces: &[RunTrace],
+    rule: Rule,
+    granularity: Granularity,
+    delta: f64,
+    grid: &[f64],
+) -> Result<RiskCertificate, RiskError> {
+    let ascending = grid.windows(2).all(|w| w[0] < w[1]);
+    if grid.is_empty() || !ascending || grid[0] < 0.0 || grid[grid.len() - 1] > 1.0 {
+        return Err(RiskError::Other(
+            "the threshold grid must be ascending and within [0, 1]".into(),
+        ));
+    }
     if !(delta > 0.0 && delta < 1.0) {
         return Err(RiskError::BadDelta);
     }
@@ -481,11 +519,11 @@ pub fn certify(
     let decisions: BTreeSet<&str> = fingerprints.keys().map(String::as_str).collect();
     validate_traces(traces, &decisions)?;
     let modules = build_modules(traces, &decisions, granularity);
-    let routes = route_stats(traces, &modules, &GRID, rule);
+    let routes = route_stats(traces, &modules, grid, rule);
     Ok(RiskCertificate {
         version: 1,
         rule,
-        grid: GRID.to_vec(),
+        grid: grid.to_vec(),
         parts: vec![Part {
             n: traces.len() as u64,
             delta,
@@ -1054,6 +1092,45 @@ mod tests {
         // Least-confident charging: the root errors are charged to leaf_a (0.30), which escalates.
         assert_eq!(count(&min), 30);
         assert!(min.bound(&[half; 3]) < fd.bound(&[half; 3]));
+    }
+
+    #[test]
+    fn min_rule_breaks_ties_towards_the_first_error() {
+        let g = graph();
+        // Both nodes are fully confident; leaf_b is the one that is wrong.
+        let tied = vec![run(&[("root", 1.0, true), ("leaf_b", 1.0, false)]); 10];
+        let cert = certify(&g, &tied, Rule::Min, Granularity::Node, 0.1).unwrap();
+        let top = GRID.len() - 1;
+        let leaf_b = cert.modules.iter().position(|m| m[0] == "leaf_b").unwrap();
+        let root = cert.modules.iter().position(|m| m[0] == "root").unwrap();
+        assert_eq!(cert.parts[0].errors(leaf_b, top), 10);
+        assert_eq!(cert.parts[0].errors(root, top), 0);
+    }
+
+    #[test]
+    fn fine_tail_separates_saturated_confidences() {
+        let g = graph();
+        // A language-model-like node: every answer is near 1, the wrong ones slightly less so.
+        let mut runs = Vec::new();
+        for i in 0..2000 {
+            runs.push(if i % 20 == 0 {
+                run(&[("root", 0.9995, false), ("leaf_a", 0.99995, true)])
+            } else {
+                run(&[("root", 0.9999995, true), ("leaf_a", 0.9999995, true)])
+            });
+        }
+        let coarse = certify(&g, &runs, Rule::Min, Granularity::Global, 0.1).unwrap();
+        let grid: Vec<f64> = GRID.iter().chain(&FINE_TAIL).copied().collect();
+        let fine = certify_on_grid(&g, &runs, Rule::Min, Granularity::Global, 0.1, &grid).unwrap();
+        // 5% of the runs are wrong at 0.9995: the default grid cannot exclude them, the tail can.
+        let coarse_pick = coarse.optimize(0.02).unwrap();
+        assert_eq!(coarse_pick.choice, vec![GRID.len()]);
+        let fine_pick = fine.optimize(0.02).unwrap();
+        assert_eq!(fine.threshold(fine_pick.choice[0]), Some(0.9999));
+        assert!(fine_pick.review < 0.06);
+        assert!(
+            certify_on_grid(&g, &runs, Rule::Min, Granularity::Global, 0.1, &[0.5, 0.2]).is_err()
+        );
     }
 
     #[test]
