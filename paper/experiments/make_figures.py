@@ -19,9 +19,11 @@ plt.rcParams.update({"font.size": 8, "axes.spines.top": False, "axes.spines.righ
 TITLE = {"clinc": "CLINC150 (12 decisions)", "massive": "MASSIVE (21 decisions)",
          "clinc_llm": "LLM-3 (12 decisions)", "clinc_llm_inscope": "LLM-2 (11 decisions)",
          "clinc_llm_fs": "LLM-3-FS (12 decisions)", "clinc_llm_fs_inscope": "LLM-2-FS (11 decisions)",
-         "clinc_llm_claude": "LLM-3-C (12 decisions)", "clinc_llm_claude_inscope": "LLM-2-C (11 decisions)"}
+         "clinc_llm_claude": "LLM-3-C (12 decisions)", "clinc_llm_claude_inscope": "LLM-2-C (11 decisions)",
+         "kg_webqsp": "WebQSP (7 decisions)", "kg_cwq": "CWQ (9 decisions)"}
 KIND = {"leaf": "leaf edit", "middle": "middle edit", "root": "root edit", "upgrade": "leaf, newer LLM",
-        "classifier": "leaf, trained classifier"}
+        "classifier": "leaf, trained classifier", "answer": "answer step, newer LLM",
+        "late": "last relation, newer LLM"}
 STYLE = {  # label, colour, linestyle, marker
     "global-e2e": ("Shared threshold, end-to-end", "#7f7f7f", "--", "s"),
     "e2e-pareto": ("End-to-end Pareto testing", "#000000", "-", "o"),
@@ -50,6 +52,7 @@ def pct(x, digits=1):
 
 
 def table_main(res):
+    eps_list = sorted({key.split("|")[0] for d in res["data"].values() for key in d["results"]}, key=float)
     rows = [("fixed-0.7", "Fixed threshold 0.7", "none"),
             ("per-node-selective", "Per-node selective risk", "none"),
             ("plug-in", "Plug-in (no confidence bound)", "none"),
@@ -63,15 +66,18 @@ def table_main(res):
             ("min-level", "Least-confident, per level", "uniform"),
             ("min-global", "Least-confident, shared", "uniform"),
             ("anchored-level", "Anchored, per level", "uniform")]
-    eps_list = ["0.02", "0.05", "0.1"]
     for name, data in res["data"].items():
+        agent = name.startswith("kg_")   # modules of an agent are the roles of its decisions
         lines = [r"\begin{tabular}{llrrrrrrrrr}", r"\toprule",
-                 r" & & \multicolumn{3}{c}{$\varepsilon=2\%$} & \multicolumn{3}{c}{$\varepsilon=5\%$} & "
-                 r"\multicolumn{3}{c}{$\varepsilon=10\%$} \\",
+                 " & & " + " & ".join(rf"\multicolumn{{3}}{{c}}{{$\varepsilon={100 * float(e):.0f}\%$}}"
+                                      for e in eps_list) + r" \\",
                  r"\cmidrule(lr){3-5}\cmidrule(lr){6-8}\cmidrule(lr){9-11}",
                  r"Method & Guarantee & viol. & risk & review & viol. & risk & review & viol. & risk & review \\",
                  r"\midrule"]
         for key, label, kind in rows:
+            if f"{eps_list[0]}|{key}" not in data["results"]:
+                continue
+            label = label.replace("per level", "per role") if agent else label
             cells = []
             for e in eps_list:
                 r = data["results"][f"{e}|{key}"]
@@ -124,13 +130,15 @@ def fig_posthoc(res):
     fig.savefig(os.path.join(FIG, "posthoc.pdf"))
 
 
-def fig_edits(res):
+def fig_edits(res, out="edits.pdf"):
     names = list(res["data"])
     fig, axes = plt.subplots(len(names), 3, figsize=(6.8, 1.7 * len(names)), sharey=True, squeeze=False)
     legend_done = False
     lines = {"scratch: e2e-pareto": ("From scratch: Pareto testing", "#000000", "-", "o"),
              "scratch: min-level": ("From scratch: least-confident, level", "#2ca02c", "--", "D"),
              "local: min-level": ("Edit-local (ours)", "#d62728", "-", "^")}
+    if out != "edits.pdf":   # the modules of an agent are roles
+        lines = {m: (label.replace(", level", ", role"), *rest) for m, (label, *rest) in lines.items()}
     for i, name in enumerate(names):
         kinds = list(res["data"][name]["edits"])
         for j in range(3):
@@ -160,7 +168,9 @@ def fig_edits(res):
             if j == 0:
                 ax.set_ylabel("human review (%)")
     fig.tight_layout()
-    fig.savefig(os.path.join(FIG, "edits.pdf"))
+    fig.savefig(os.path.join(FIG, out))
+    if out != "edits.pdf":
+        return
 
     rows = []
     for name in names:
@@ -355,6 +365,78 @@ def numbers():
                               ("fd-node", "FEnode")]:
                     out[f"Synth{kn}{nn}{mn}"] = pct(sy["data"][k][n][m]["review_mean"])
         out["SynthFEmin"] = pct(min(v["fd-node"]["review_mean"] for d in sy["data"].values() for v in d.values()), 0)
+    agent = load("main_agent")
+    if agent:
+        tags = {"kg_webqsp": "W", "kg_cwq": "Q"}
+        eps_agent = {"0.05": "Five", "0.1": "Ten", "0.2": "Twenty"}
+        thousands = lambda x: f"{x:,}".replace(",", "{,}")
+        viol = []
+        for name, d in agent["data"].items():
+            tag = tags[name]
+            out[f"AgentSize{tag}"] = thousands(d["N"])
+            out[f"AgentNodes{tag}"] = str(d["K"])
+            out[f"AgentBudget{tag}"] = str(d["budget"])
+            out[f"AgentErr{tag}"] = pct(d["free_run_error"])
+            out[f"AgentSuccess{tag}"] = pct(1 - d["free_run_error"])
+            out[f"AgentDecisions{tag}"] = f"{d['decisions_mean']:.1f}"
+            out[f"AgentDecisionsMax{tag}"] = str(d["decisions_max"])
+            out[f"AgentRoutes{tag}"] = str(d["routes"])
+            out[f"AgentSaturated{tag}"] = pct(d["saturated_share"], 0)
+            out[f"AgentDefaultRisk{tag}"] = pct(d["at_default"]["risk"])
+            out[f"AgentDefaultReview{tag}"] = pct(d["at_default"]["review"])
+            out[f"AgentTopRisk{tag}"] = pct(d["at_top"]["risk"])
+            out[f"AgentTopReview{tag}"] = pct(d["at_top"]["review"])
+            if "goes_on" in d:
+                out[f"AgentGoesOn{tag}"] = pct(d["goes_on"], 0)
+                out[f"AgentLeastLater{tag}"] = pct(d["least_confident_later"], 0)
+                out[f"AgentConfidentSound{tag}"] = pct(d["confident_sound"], 0)
+                out[f"AgentConfidentAfter{tag}"] = pct(d["confident_after"], 0)
+            for e, en in eps_agent.items():
+                out[f"OracleShared{tag}{en}"] = pct(d["oracle"][e]["shared"])
+                out[f"OracleNode{tag}{en}"] = pct(d["oracle"][e]["node"])
+                for m, mn in meth.items():
+                    r = d["results"].get(f"{e}|{m}")
+                    if r is None:
+                        continue
+                    out[f"Rev{tag}{mn}{en}"] = pct(r["review_mean"])
+                    out[f"Risk{tag}{mn}{en}"] = pct(r["risk_mean"])
+                    out[f"Viol{tag}{mn}{en}"] = pct(r["violation"], 0)
+                    if m not in ("fixed-0.7", "plug-in"):
+                        viol.append(r["violation"])
+                r = d["results"][f"{e}|global-e2e"]
+                if r["risk_mean"] > 0:
+                    out[f"FdRatio{tag}{en}"] = f"{r['fd_mass_mean'] / r['risk_mean']:.1f}"
+                    out[f"FdMass{tag}{en}"] = pct(r["fd_mass_mean"])
+                    out[f"RescuedShare{tag}{en}"] = pct(1 - r["risk_mean"] / r["fd_mass_mean"], 0)
+        out["AgentModel"] = next(iter(agent["data"].values()))["model"]
+        out["AgentSkipped"] = str(sum(d["skipped"] for d in agent["data"].values()))
+        out["AgentTrials"] = str(agent["trials"])
+        out["MaxViolCertifiedAgent"] = pct(max(viol), 1)
+        for model, count in agent.get("requests", {}).items():
+            out["AgentRequests" + ("Base" if model == out["AgentModel"] else "Upgrade")] = thousands(count)
+    post = load("posthoc_agent")
+    if post:
+        for name, d in post["data"].items():
+            for m, mn in [("min-level", "LClevel"), ("min-node", "LCnode"), ("global-e2e", "Shared"),
+                          ("e2e-pareto", "Pareto")]:
+                out[f"AnyViol{tags[name]}{mn}"] = pct(d[m]["any_violation"])
+    edits = load("edits_agent")
+    if edits:
+        worst = 0.0
+        for name, d in edits["data"].items():
+            out["AgentEditEps"] = pct(d["eps"], 0)
+            for kind, info in d["edits"].items():
+                key = tags[name] + kind.capitalize()
+                out[f"EditShare{key}"] = pct(info["traffic_share"], 0)
+                out[f"EditErrBefore{key}"] = pct(info["error_before"])
+                out[f"EditErrAfter{key}"] = pct(info["error_after"])
+                for size, sn in size_name.items():
+                    for m, mn in mm.items():
+                        r = info["sizes"][size][m]
+                        out[f"Edit{key}{mn}{sn}"] = pct(r["review_mean"])
+                        if mn.startswith("Local"):
+                            worst = max(worst, r["violation"])
+        out["EditMaxViolLocalAgent"] = pct(worst, 0)
     with open(os.path.join(HERE, "..", "numbers.tex"), "w") as f:
         f.write("% Generated by experiments/make_figures.py from results/*.json. Do not edit.\n")
         for key in sorted(out):
@@ -366,7 +448,8 @@ if __name__ == "__main__":
     numbers()
 
     for name, fn in [("main", table_main), ("nsweep", fig_nsweep), ("posthoc", fig_posthoc),
-                     ("edits", fig_edits), ("synth", fig_synth), ("ablation", table_ablation)]:
+                     ("edits", fig_edits), ("synth", fig_synth), ("ablation", table_ablation),
+                     ("main_agent", table_main), ("edits_agent", lambda r: fig_edits(r, "edits_agent.pdf"))]:
         res = load(name)
         if res is None:
             print("missing", name)

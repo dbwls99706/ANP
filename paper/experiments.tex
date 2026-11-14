@@ -311,6 +311,110 @@ thresholds matter. The classifier's confidences are not saturated, so a threshol
 with the language-model leaves is too strict for it, and per-node modules
 (\EditLClassifierLocalNodeThousand\% at $m=1{,}000$) overtake per-level ones.
 
+\subsection{A tool-using agent}\label{sec:exp-agent}
+
+The workflows so far route a request once. An agent takes a variable number of steps, acts
+on what its tools return, and after a bad step it may recover or wander. We build a
+knowledge-graph agent in the style of Think-on-Graph~\citep{sun2024tog}, an environment that
+is also part of AgentBench~\citep{liu2024agentbench}, on WebQSP~\citep{yih2016webqsp} and
+CWQ~\citep{talmor2018cwq} with the Freebase subgraphs of \citet{luo2024rog}. The language
+model (\texttt{\AgentModel}) only decides: which entity of the question to start from, which
+of the ten relations proposed by an embedding retriever to follow, whether the entities
+reached answer the question, and which of them to return. The program executes the walk
+(Appendix~\ref{app:details}). The loop is unrolled to at most \AgentBudgetW\ relations on
+WebQSP and \AgentBudgetQ\ on CWQ, which gives \AgentNodesW\ and \AgentNodesQ\ decision nodes;
+the copies of a decision share a threshold, so there is one module per role (start, relation,
+stop, answer). A run takes \AgentDecisionsW\ (\AgentDecisionsQ) decisions on average, up to
+\AgentDecisionsMaxW\ (\AgentDecisionsMaxQ), along one of \AgentRoutesW\ (\AgentRoutesQ)
+routes.
+
+A run is an error when the entity it returns is not a gold answer. This is outcome
+labelling (\S\ref{sec:setting}): the graph offers several walks to an answer, so there is no
+oracle route, and teacher forcing and per-node selective calibration are not defined. LC
+charging needs nothing else. To have FE as a comparison we mark a decision wrong when it
+puts every gold answer out of reach. Without abstention the agent fails on \AgentErrW\% of
+the \AgentSizeW\ WebQSP questions and on \AgentErrQ\% of the \AgentSizeQ\ CWQ questions; the
+targets are therefore 5\%, 10\% and 20\%.
+
+\begin{table}[t]
+\centering\footnotesize
+\setlength{\tabcolsep}{3.5pt}
+\input{tables/main_kg_webqsp}
+\caption{The knowledge-graph agent on WebQSP (\AgentNodesW\ decisions, four roles),
+$n=4{,}000$, $\delta=0.1$, \AgentTrials\ draws, grid with the extended tail. Columns as in
+Table~\ref{tab:main}.}\label{tab:agent}
+\end{table}
+
+\paragraph{Results.} Table~\ref{tab:agent} gives the results for WebQSP and
+Table~\ref{tab:agent-cwq} in the appendix for CWQ. The runtime's default threshold of 0.7
+lets \AgentDefaultRiskW\% errors through on WebQSP while escalating \AgentDefaultReviewW\% of
+the runs, and \AgentDefaultRiskQ\% on CWQ. At $\eps=10\%$ on WebQSP the end-to-end methods
+need \RevWSharedTen\% (shared threshold) and \RevWParetoTen\% (Pareto testing) review; the LC
+certificate needs \RevWLClevelTen\% with one module per role, \RevWLCnodeTen\% per node and
+\RevWLCsharedTen\% shared. At $\eps=20\%$ the certificate per role costs nothing
+(\RevWLClevelTwenty\% against \RevWSharedTwenty\% and \RevWParetoTwenty\%), and at
+$\eps=5\%$ it costs three points (\RevWLClevelFive\% against \RevWParetoFive\%). The roles
+differ in kind: stop decisions are almost always saturated, relation choices are not. With
+thresholds optimised on the population, separate thresholds reach $\eps=10\%$ at
+\OracleNodeWTen\% review against \OracleSharedWTen\% for a shared one, a wider gap than in
+the routing workflows, and among the uniform certificates one module per role is the best
+choice at every target on WebQSP. CWQ is the hard case. Its questions combine several conditions, which a single walk
+cannot satisfy, and the agent fails on \AgentErrQ\% of them. A 20\% target then costs
+\RevQParetoTwenty\% review end to end and \RevQLClevelTwenty\% with the LC certificate per
+role, and a 5\% target more than nine runs in ten with any method. The certificate does not
+make the agent better; it states what its confidences support. Over both benchmarks and all
+targets the largest violation rate of a method with a guarantee is \MaxViolCertifiedAgent\%;
+the plug-in certificate violates in up to \ViolWPlugFive\% of draws.
+
+\paragraph{Rescue is stronger in an agent.} An agent that has taken a wrong turn keeps
+deciding: \AgentGoesOnW\% of the failed runs on WebQSP and \AgentGoesOnQ\% on CWQ take
+further decisions after the first wrong one. It is then offered relations that do not fit
+the question, and it hesitates. Decisions taken after the first wrong one have a confidence
+of at least 0.95 in \AgentConfidentAfterW\% of the cases on WebQSP, against
+\AgentConfidentSoundW\% for decisions on a walk that is still sound, and in
+\AgentLeastLaterW\% (\AgentLeastLaterQ\% on CWQ) of the failed runs the least confident
+decision comes after the first wrong one. At the shared threshold certified for $\eps=10\%$ on WebQSP, the failed
+runs whose first wrong decision commits have mass \FdMassWTen\%, which is \FdRatioWTen\ times
+the risk of \RiskWSharedTen\%; on CWQ at $\eps=20\%$ the factor is \FdRatioQTwenty. The FE
+certificate pays for this in full. On WebQSP it needs \RevWFEnodeTen\% review at
+$\eps=10\%$ where LC needs \RevWLCnodeTen\% with the same modules, and it certifies nothing at
+$\eps=5\%$; on CWQ, per node, it certifies nothing at any of the three targets. FE also needed a label
+for every decision, which for an agent had to be constructed, whereas LC used the outcome of
+the run and the logged confidences.
+
+\paragraph{Retuning and edits.} Selecting thresholds for five targets from 5\% to 25\% on one
+calibration set leaves the LC certificates without a violation in any draw on either
+benchmark; re-running the end-to-end procedures for each target gives simultaneous violation
+rates of \AnyViolWShared\% (shared threshold) and \AnyViolWPareto\% (Pareto testing) on WebQSP.
+
+For the edits we move one decision to a newer model (\texttt{\LlmUpgrade}) and certify
+$\eps=\AgentEditEps\%$ (Figure~\ref{fig:edits-agent}). On WebQSP the last relation decision is
+reached by \EditShareWLate\% of the runs. After editing it, the edit-local certificate needs
+\EditWLateLocalHundred\% review with $m=100$ fresh labels and \EditWLateLocalTwoFifty\% with
+250, where recalibration from scratch escalates \EditWLateScratchHundred\% and
+\EditWLateScratchTwoFifty\% of the runs with Pareto testing and more with the LC certificate;
+with 1{,}000 labels edit-local and Pareto testing meet (\EditWLateLocalThousand\% and
+\EditWLateScratchThousand\%). The answer decision is reached by \EditShareWAnswer\% of the
+runs, and there locality does not pay: with 100 labels nothing is certified, and from 250
+labels on Pareto testing from scratch is as good or better (\EditWAnswerScratchFiveHundred\%
+against \EditWAnswerLocalFiveHundred\% at $m=500$). On CWQ the two decisions carry
+\EditShareQLate\% and \EditShareQAnswer\% of the runs and the target is close to what the
+agent supports at all; the edit-local certificate and Pareto testing from scratch are within
+three points of each other from 250 labels on. No edit-local certificate violated its target.
+This is the picture of \S\ref{sec:exp-edits}: locality is worth the traffic an edit leaves
+alone. An agent leaves less alone than a router does. Its late steps are reached by a large
+share of the runs, and an edit to a role, such as a new prompt for every relation decision,
+touches all of them.
+
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/edits_agent.pdf}
+\caption{The agent after one decision is moved to a newer model: review needed to certify
+$\eps=\AgentEditEps\%$ as a function of the number $m$ of fresh labelled runs. Lines as in
+Figure~\ref{fig:edits}.}\label{fig:edits-agent}
+\end{figure}
+
 \subsection{Which certificate when}\label{sec:exp-summary}
 
 The experiments suggest a simple division of labour. For a workflow that is frozen and has
@@ -322,5 +426,8 @@ review at a few thousand runs, and less than the end-to-end alternatives when ca
 data are scarce. A workflow that is edited should keep its counts per route, so that an edit
 costs labels in proportion to the traffic it touches. Per-node thresholds are worth their
 larger union bound only when nodes differ in kind, as when a trained classifier sits next
-to language-model nodes. In all cases the certificate should be allowed to refuse: on LLM-3
+to language-model nodes. For an agent, whose steps have no labels of their own, the
+certificate to use is least-confident charging with one module per role: it needs the
+outcome of each run and nothing else, and it stayed within three points of end-to-end
+calibration. In all cases the certificate should be allowed to refuse: on LLM-3
 the correct answer to ``which thresholds give 5\% error?'' is that none do.

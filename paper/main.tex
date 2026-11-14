@@ -64,7 +64,10 @@ replacing one leaf model, \EditM\ fresh labels restore a 5\% certificate at
 \EditLocalClinc\% and \EditLocalMassive\% review, where recalibration from scratch escalates
 more than nine inputs in ten. With a hosted language model, a zero-shot workflow whose
 default threshold lets \LlmDefaultRiskT\% errors through cannot be certified at a 5\% target by any choice of thresholds, and
-becomes certifiable with in-context examples. The price of uniform validity is statistical,
+becomes certifiable with in-context examples. On a knowledge-graph agent that takes up to nine
+tool-mediated decisions and is labelled by the outcome of its run only, the certificate stays
+within three points of end-to-end calibration, while first-error charging overstates the risk
+by a factor of \FdRatioWTen. The price of uniform validity is statistical,
 of order $M\ln G/n$ for $M$ thresholds on a grid of size $G$. The method is implemented in
 an open-source workflow runtime that checks the certificate statically.
 \end{abstract}
@@ -129,8 +132,9 @@ recertification procedure that reuses the old sample for the untouched traffic a
 fresh labels only on traffic through the edit (Theorem~\ref{thm:recert}).
 \item \textbf{An empirical account of the trade-offs} (\S\ref{sec:exp}). On two workflows built
 from public intent-classification data (12 and 21 decision nodes; 8{,}600 and 20{,}028
-held-out inputs), on the same task driven by a hosted language model, and on synthetic
-chains, we measure validity exactly, the cost of uniformity and of fine-grained thresholds,
+held-out inputs), on the same task driven by a hosted language model, on a tool-using
+knowledge-graph agent (WebQSP and CWQ) whose runs are labelled by outcome only, and on
+synthetic chains, we measure validity exactly, the cost of uniformity and of fine-grained thresholds,
 and the label savings of edit-local recertification. Per-node selective calibration, the
 common practice, exceeds the target in virtually every draw on one workflow; all certified
 methods hold.
@@ -235,9 +239,15 @@ R(\tau)=\Prob\bigl(D\cap\Comp(\tau)\bigr),\qquad H(\tau)=1-\Prob\bigl(\Comp(\tau
 The goal is to choose $\tau$ from $n$ labelled calibration inputs so that $R(\tau)\le\eps$ with
 probability at least $1-\delta$ over the calibration sample, and $H(\tau)$ is small.
 
+The oracle route enters only through $D$. When a workflow has no unique correct route, as for
+an agent that can reach its goal in several ways, we let $D$ be the inputs whose free run ends
+in a result that fails a check, and call this \emph{outcome labelling}. Everything below holds
+for such a $D$ except the statements about the FE and TF rules, which need a label for every
+decision (\S\ref{sec:exp-agent}).
+
 \paragraph{Assumptions.} (A1) Calibration and deployment inputs are i.i.d.\ from $P$. (A2) The
 state a node receives depends only on the input and the choices taken before it, so the free
-run is well defined and deterministic given $x$. (A3) Labels identify the oracle route. Models are deterministic functions of their input; the
+run is well defined and deterministic given $x$. (A3) Labels identify the oracle route or, under outcome labelling, whether the free run fails. Models are deterministic functions of their input; the
 randomness of a sampled model can be made part of $x$. We
 present the case where each run is a path. If a choice feeds several decision nodes, $\pi(x)$
 is the set of visited nodes and every statement below holds with ``on the route'' read as ``in
@@ -296,7 +306,9 @@ its own domain, which a component owner could certify in isolation. It is also t
 confidence, or more generally the smallest margin $c_j(x)-a_{v_j}$ for a fixed anchor
 $a\in\mathbb{R}^V$. Ties go to the first wrong node if it is among the minimisers and to the
 earliest node otherwise; ties matter when confidences saturate (\S\ref{sec:exp-llm}). The rule
-looks at the whole route, so it sees rescue.
+looks at the whole route, so it sees rescue. It needs the confidences of the run and whether
+the run is in $D$, but no label for the individual decisions, so it applies under outcome
+labelling as it stands.
 
 \begin{proposition}[Exactness]\label{prop:exact}
 For the LC rule with anchor $a$, $B_u(a+s\mathbf{1})=R(a+s\mathbf{1})$ for every $s$. In
@@ -411,8 +423,9 @@ same states, so it is identical in $W$ and $W'$; this gives (i), and for $x\noti
 whole run is identical. Such a run deviates iff it differs from the oracle route. If the
 oracle route avoids $E$ it is unchanged by the edit. If it meets $E$ in either workflow it
 meets $E$ in both, because its prefix up to $E$ is determined by unedited labels, and then the
-run, which avoids $E$, deviates in both. The displayed identity is the law of total
-probability.
+run, which avoids $E$, deviates in both. Under outcome labelling the result of a run that
+avoids $E$ is produced by unedited nodes and is unchanged. The displayed identity is the law
+of total probability.
 \end{proof}
 
 \subsection{Route-indexed certificates}
@@ -547,16 +560,20 @@ the program or tracks its validity under edits; our static check is a step in th
 \emph{Exchangeability.} All guarantees assume calibration and deployment traffic are i.i.d.
 Under drift the certificate is evidence about the past. Edit locality does not help here; it
 concerns changes to the program, not to the world.
-\emph{Labels.} Calibration needs the oracle route of each input. In our datasets one label
-determines the route; in general each decision may need its own annotator.
+\emph{Labels.} Calibration needs the oracle route of each input, or for LC charging the
+outcome of its free run. In our routing datasets one label determines the route; in general
+each decision may need its own annotator.
 \emph{Model class.} The method is agnostic to how confidences are produced. Most of our
 experiments use classifiers on frozen sentence embeddings. The language-model experiments use
-one provider, two models and a single task, zero-shot and with in-context examples; the token
+one provider, two models and two tasks, intent routing (zero-shot and with in-context
+examples) and one agent of simple design, which fails often on the harder benchmark; the token
 probabilities saturate, which leaves thresholds little to work with, and we did not study
 verbalised or sampled confidences~\citep{tian2023just,xiong2024can}, other providers, or
 fine-tuned models.
 \emph{Structure.} We assume acyclic routing, deterministic states and an escalation that fully
-resolves the run. Loops, stochastic nodes and partial human corrections are out of scope.
+resolves the run. A loop is handled only by unrolling it to a fixed number of steps, as for
+the agent of \S\ref{sec:exp-agent}; stochastic nodes and partial human corrections are out of
+scope.
 \emph{Adaptive edits.} Theorem~\ref{thm:recert} requires the edited set to be chosen
 independently of the calibration sample; choosing which node to replace by inspecting the
 certificate calls for a union over the candidate edits. Each repair also spends additional
@@ -580,8 +597,9 @@ upstream is often caught downstream.
 \paragraph{Reproducibility.} The experiment code, the exported traces of one workflow and the
 runtime implementation are available at \url{https://github.com/dbwls99706/ANP}, under
 \texttt{paper/} and \texttt{examples/certify/}. One script regenerates every number, table and
-figure from the public datasets. The answers of the hosted language models are stored with
-the code, so those experiments run without an API key; regenerating the answers needs one.
+figure from the public datasets. The answers of the hosted language models and the runs of
+the agent are stored with the code, so those experiments run without an API key; regenerating
+them needs one.
 
 \bibliographystyle{plainnat}
 \bibliography{refs}

@@ -36,14 +36,34 @@ def llm_workflows():
 LLM_TAIL = (0.9999, 0.99999, 0.999999)
 
 
+# Knowledge-graph agents (kg_agent.py). Their runs are labelled by outcome, not by route.
+AGENT_WORKFLOWS = ["kg_webqsp", "kg_cwq"]
+DEFAULT_N.update({name: 4000 for name in AGENT_WORKFLOWS})
+AGENT_EPS = [0.05, 0.10, 0.20]
+AGENT_EDIT_EPS = 0.10
+
+
+def agent_workflows():
+    return [n for n in AGENT_WORKFLOWS if os.path.exists(table_path(n))]
+
+
 def table_path(name):
-    return os.path.join(DATA if name.startswith("clinc_llm") else CACHE, f"{name}.npz")
+    return os.path.join(DATA if name.startswith(("clinc_llm", "kg_")) else CACHE, f"{name}.npz")
 
 
 def load(name, swap=None):
     """Load a workflow; swap = nodes whose model is replaced by an alternative one, given
     as node indices (alternative "alt") or (node, alternative) pairs."""
     d = np.load(table_path(name))
+    if name.startswith("kg_"):
+        # Stored as free runs. An edited agent is a second set of runs on the same questions.
+        assert len(swap or []) <= 1
+        suffix = "".join(f"__{alt}" for _, alt in swap or [])
+        k = len(d["nodes"])
+        tr = rc.Traces(d["path_node" + suffix].astype(np.int32), d["path_conf" + suffix].astype(float),
+                       d["dev_pos" + suffix].astype(np.int32), k)
+        later = np.array([[u if u > v else -1 for u in range(k)] for v in range(k)])  # the loop is unrolled
+        return tr, later
     pred, conf = d["pred"].astype(int).copy(), d["conf"].astype(float).copy()
     for item in swap or []:
         v, alt = item if isinstance(item, tuple) else (item, "alt")
@@ -59,6 +79,15 @@ def levels(tr):
             if v >= 0 and depth[v] < 0:
                 depth[v] = j
     return [list(np.where(depth == j)[0]) for j in range(depth.max() + 1)]
+
+
+def groups(name, tr):
+    """Modules that share a threshold: the levels of a routing workflow, the roles of an
+    agent (start, relation, stop, answer), whose unrolled steps are copies of one decision."""
+    if not name.startswith("kg_"):
+        return levels(tr)
+    roles = [str(n).rstrip("0123456789") for n in np.load(table_path(name))["nodes"]]
+    return [[v for v, r in enumerate(roles) if r == x] for x in dict.fromkeys(roles)]
 
 
 def descendants(nxt, w):
@@ -109,6 +138,9 @@ def run_methods(cal, eps, rng, lv, which):
 MAIN_METHODS = ["fixed-0.7", "per-node-selective", "plug-in", "global-e2e", "e2e-pareto", "e2e-uniform",
                 "tf-node", "fd-node", "fd-level", "min-node", "min-level", "min-global",
                 "anchored-node", "anchored-level"]
+# An agent has no oracle route, so the methods that evaluate nodes on oracle-route inputs
+# (per-node selective risk, teacher forcing) do not apply.
+AGENT_METHODS = [m for m in MAIN_METHODS if m not in ("per-node-selective", "tf-node")]
 
 _POP = {}
 
@@ -139,7 +171,7 @@ def _main_trial(args):
     pop, _ = population(name)
     rng = np.random.default_rng(seed)
     cal = pop.subset(rng.integers(0, len(pop), n))
-    lv = levels(pop)
+    lv = groups(name, pop)
     res = {}
     for eps in eps_list:
         for m, (tau, b) in run_methods(cal, eps, rng, lv, methods).items():
@@ -152,15 +184,15 @@ def collect(jobs, func, workers=4):
         return pool.map(func, jobs, chunksize=1)
 
 
-def exp_main(trials, names=("clinc", "massive")):
+def exp_main(trials, names=("clinc", "massive"), eps_list=(0.02, 0.05, 0.10), methods=MAIN_METHODS):
     out = {}
-    eps_list = [0.02, 0.05, 0.10]
+    eps_list = list(eps_list)
     for name in names:
         pop, _ = population(name)
         k = pop.n_nodes
         n = DEFAULT_N[name]
         t0 = time.time()
-        res = collect([(name, n, eps_list, MAIN_METHODS, s) for s in range(trials)], _main_trial)
+        res = collect([(name, n, eps_list, methods, s) for s in range(trials)], _main_trial)
         out[name] = dict(n=n, K=k, N=len(pop), free_run_error=pop.risk(np.zeros(k)),
                          oracle={str(e): dict(node=pop.review(rc.e2e_optimize(pop, e)),
                                               shared=pop.review(next(
@@ -168,7 +200,7 @@ def exp_main(trials, names=("clinc", "massive")):
                                                    if pop.risk(np.full(k, g)) <= e), np.full(k, rc.INF))))
                                  for e in eps_list},
                          results={f"{e}|{m}": summarise([r[(e, m)] for r in res], e)
-                                  for e in eps_list for m in MAIN_METHODS})
+                                  for e in eps_list for m in methods})
         print(name, "main done", round(time.time() - t0), "s", flush=True)
     return out
 
@@ -191,16 +223,16 @@ SWEEP = [0.02, 0.04, 0.06, 0.08, 0.10]
 
 
 def _posthoc_trial(args):
-    name, n, seed = args
+    name, n, seed, sweep = args
     pop, _ = population(name)
     rng = np.random.default_rng(seed)
     cal = pop.subset(rng.integers(0, len(pop), n))
-    lv = levels(pop)
+    lv = groups(name, pop)
     res = {}
     certs = {"min-level": rc.certify(cal, DELTA, modules=lv, mode="min"),
              "min-node": rc.certify(cal, DELTA, mode="min")}
     split_seed = int(rng.integers(1 << 30))
-    for eps in SWEEP:
+    for eps in sweep:
         for m, cert in certs.items():
             tau, _ = rc.pick(cert, eps, cal.review, cal.n_nodes)
             res[(eps, m)] = (pop.risk(tau), pop.review(tau))
@@ -212,18 +244,18 @@ def _posthoc_trial(args):
     return res
 
 
-def exp_posthoc(trials):
+def exp_posthoc(trials, names=("clinc", "massive"), sweep=SWEEP):
     out = {}
-    for name in ["clinc", "massive"]:
-        res = collect([(name, DEFAULT_N[name], 20_000 + s) for s in range(trials)], _posthoc_trial)
+    for name in names:
+        res = collect([(name, DEFAULT_N[name], 20_000 + s, sweep) for s in range(trials)], _posthoc_trial)
         out[name] = {}
         for m in ["min-level", "min-node", "global-e2e", "e2e-pareto"]:
-            viol = np.array([[r[(e, m)][0] > e + 1e-12 for e in SWEEP] for r in res])
+            viol = np.array([[r[(e, m)][0] > e + 1e-12 for e in sweep] for r in res])
             out[name][m] = dict(any_violation=float(viol.any(axis=1).mean()),
                                 per_eps_violation=[float(v) for v in viol.mean(axis=0)],
-                                review=[float(np.mean([r[(e, m)][1] for r in res])) for e in SWEEP],
-                                risk=[float(np.mean([r[(e, m)][0] for r in res])) for e in SWEEP])
-        out[name]["eps"] = SWEEP
+                                review=[float(np.mean([r[(e, m)][1] for r in res])) for e in sweep],
+                                risk=[float(np.mean([r[(e, m)][0] for r in res])) for e in sweep])
+        out[name]["eps"] = list(sweep)
         print(name, "posthoc done", flush=True)
     return out
 
@@ -238,7 +270,7 @@ def _edit_trial(args):
     pop1, _ = population(name, (edit,))
     k = pop1.n_nodes
     rng = np.random.default_rng(seed)
-    lv = levels(pop1)
+    lv = groups(name, pop1)
     hit = np.where(pop1.through([w]))[0]
     reach = np.unique(pop1.path_node[hit])          # nodes on some route through the edit
     reach = reach[reach >= 0]
@@ -277,6 +309,9 @@ def exp_edits(trials, only=None, names=("clinc", "massive")):
     plans = {"clinc": dict(eps=0.05, nodes={"leaf": 3, "middle": 1, "root": 0}),
              "massive": dict(eps=0.05, nodes={"leaf": 7, "middle": 2}),
              "clinc_llm_inscope": LLM_EDITS}
+    for name in agent_workflows():   # the edits that kg_agent.py ran: one node gets a newer model
+        made = json.loads(str(np.load(table_path(name))["edits"]))
+        plans[name] = dict(eps=AGENT_EDIT_EPS, nodes={label: (e["node"], label) for label, e in made.items()})
     plans = {k: v for k, v in plans.items() if k in names}
     if only:
         name, label = only.split(":")
@@ -297,12 +332,14 @@ def exp_edits(trials, only=None, names=("clinc", "massive")):
             changed = lambda mode: [int(v) for v in range(pop0.n_nodes) if not np.array_equal(
                 rc.error_counts(pop0, grid, mode)[v], rc.error_counts(pop1, grid, mode)[v])]
             fd_set = {w} | descendants(nxt, w)
+            routed = pop0.tf_on is not None   # footprints are statements about route labels
             info = dict(node=int(w), traffic_share=float(hit.mean()),
                         error_before=pop0.risk(np.zeros(pop0.n_nodes)),
                         error_after=pop1.risk(np.zeros(pop0.n_nodes)),
-                        fd_predicted=sorted(fd_set), fd_changed=changed("fd"), tf_changed=changed("tf"),
+                        fd_predicted=sorted(fd_set), fd_changed=changed("fd"),
+                        tf_changed=changed("tf") if routed else None,
                         min_changed=changed("min"), sizes={})
-            assert set(info["fd_changed"]) <= fd_set and set(info["tf_changed"]) <= {w}
+            assert not routed or (set(info["fd_changed"]) <= fd_set and set(info["tf_changed"]) <= {w})
             assert info["error_before"] != info["error_after"], "the edit changed nothing"
             for m_new in [100, 250, 500, 1000]:
                 res = collect([(name, edit, DEFAULT_N[name], m_new, plan["eps"], 30_000 + s)
@@ -397,6 +434,41 @@ def exp_llmstats(_trials=None):
     return out
 
 
+def agent_stats(name):
+    """Population facts about an agent (no sampling involved)."""
+    d = np.load(table_path(name))
+    pop, _ = population(name)
+    k = pop.n_nodes
+    on = pop.path_node >= 0
+    top = LLM_TAIL[-1]
+    shared = lambda t: dict(risk=pop.risk(np.full(k, t)), review=pop.review(np.full(k, t)))
+    routes = {tuple(r[r >= 0]) for r in pop.path_node}
+    marked = lambda u: float((pop.deviated & (pop.dev_node == u)).mean())
+    # What a failed run does after its first wrong decision.
+    pos = np.arange(pop.path_node.shape[1])[None, :]
+    fail = pop.deviated[:, None]
+    after = on & fail & (pos > pop.dev_pos[:, None])
+    sound = on & ~(fail & (pos >= pop.dev_pos[:, None]))
+    least = np.where(on, pop.path_conf, np.inf).argmin(axis=1)
+    confident = lambda mask: float((pop.path_conf[mask] >= 0.95).mean())
+    return dict(model=str(d["model"]), nodes=[str(x) for x in d["nodes"]], budget=int(d["budget"]),
+                skipped=int(d["skipped"]), edits=json.loads(str(d["edits"])),
+                decisions_mean=float(on.sum(axis=1).mean()), decisions_max=int(on.sum(axis=1).max()),
+                routes=len(routes), saturated_share=float((pop.path_conf[on] >= top).mean()),
+                visit_share=[float((pop.path_node == v).any(axis=1).mean()) for v in range(k)],
+                first_error_share=[marked(v) for v in range(k)],
+                at_default=shared(0.7), at_top=shared(top),
+                goes_on=float(after.any(axis=1)[pop.deviated].mean()),
+                least_confident_later=float((least > pop.dev_pos)[pop.deviated].mean()),
+                confident_sound=confident(sound), confident_after=confident(after))
+
+
+def agent_requests():
+    """Distinct prompts answered by each model for the agents (written by kg_agent.py)."""
+    path = os.path.join(DATA, "kg_requests.json")
+    return json.load(open(path)) if os.path.exists(path) else {}
+
+
 # -- synthetic scaling ----------------------------------------------------
 
 
@@ -463,11 +535,25 @@ if __name__ == "__main__":
     ap.add_argument("--trials", type=int, default=200)
     ap.add_argument("--only", help="edits: re-run a single edit, e.g. clinc:root, and merge it")
     ap.add_argument("--llm", action="store_true", help="main / edits on the language-model workflow")
+    ap.add_argument("--agent", action="store_true", help="main / edits / posthoc on the knowledge-graph agents")
     a = ap.parse_args()
     t0 = time.time()
     os.makedirs(RESULTS, exist_ok=True)
-    path = os.path.join(RESULTS, f"{a.experiment}{'_llm' if a.llm else ''}.json")
-    if a.experiment == "llmstats":
+    path = os.path.join(RESULTS, f"{a.experiment}{'_llm' if a.llm else '_agent' if a.agent else ''}.json")
+    if a.agent:
+        rc.set_grid_tail(LLM_TAIL)
+        if a.experiment == "main":
+            data = exp_main(a.trials, agent_workflows(), AGENT_EPS, AGENT_METHODS)
+            for name in data:
+                data[name].update(agent_stats(name))
+        elif a.experiment == "posthoc":
+            data = exp_posthoc(a.trials, agent_workflows(), [0.05, 0.10, 0.15, 0.20, 0.25])
+        else:
+            data = exp_edits(a.trials, names=agent_workflows())
+        result = {"delta": DELTA, "trials": a.trials, "data": data, "grid_tail": list(LLM_TAIL)}
+        if a.experiment == "main" and agent_requests():
+            result["requests"] = agent_requests()
+    elif a.experiment == "llmstats":
         result = {"data": exp_llmstats(), "grid_tail": list(LLM_TAIL)}
     elif a.llm:
         rc.set_grid_tail(LLM_TAIL)

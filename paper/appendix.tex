@@ -119,9 +119,45 @@ prefix. Unlike the 24-example pilot, the larger example sets raise the accuracy 
 \texttt{scope} on the evaluation pool from \LlmRootAccT\% to \LlmRootAccG\%. The edit
 experiments were not repeated for the few-shot workflows.
 
-\paragraph{Compute.} All experiments run on 4 CPU cores in under two hours; the certificate
+\paragraph{Knowledge-graph agent.} WebQSP~\citep{yih2016webqsp} and CWQ~\citep{talmor2018cwq}
+ask questions that are answered by entities of Freebase. We use the question subgraphs
+released with RoG~\citep{luo2024rog}: for every question a set of triples around its topic
+entities (a few thousand), the topic entities and the gold answer entities.
+The population is all \AgentSizeW\ questions of WebQSP and the \AgentSizeQ\ questions of the
+validation and test splits of CWQ; nothing is trained, so the splits play no role;
+questions without a topic entity in their subgraph are left out (\AgentSkipped\ in all). The agent keeps a
+set of current entities, initially one topic entity, and repeats two decisions. \emph{Relation}:
+the relations that lead from the current entities to unvisited ones, in either direction, are
+ranked by the cosine similarity of their name to the question
+(\texttt{all-MiniLM-L6-v2}~\citep{reimers2019sbert}); the model chooses one of the first ten
+and the agent moves to the entities it leads to. \emph{Stop}: the model decides whether the
+answer is among these entities or another relation has to be followed. Compound nodes of
+Freebase have no name and are walked through without a stop decision, and after the last
+allowed relation the walk ends without one. Two further decisions occur only when needed:
+\emph{start}, if the question has several topic entities, and \emph{answer}, if the walk ends
+with several named entities, of which the first ten in alphabetical order are offered. Every
+decision is a multiple-choice question answered with one letter, with the system message
+stating the role (``You answer a question by walking a knowledge graph one relation at a
+time\,\dots\ Reply with the letter only''), the question, the path so far and the lettered
+options; the confidence is the probability of the letter, as for the workflows above, and the
+grid has the same extended tail. A relation step with a single candidate is taken without
+asking, except the first. The agent was written once; its prompts and parameters were not tuned on these questions.
+
+The run fails when the returned entity is not a gold answer, or when the walk ends without a
+named entity. For first-error charging, a start or relation decision is marked wrong when no
+gold answer lies within the remaining number of relations of the entities it leads to; a stop
+decision when it stops without a gold answer among the entities offered, or continues
+although one has been reached; an answer decision when the entity is not a gold answer. A
+failed run without a marked decision is charged to its last decision. The base agent took
+\AgentRequestsBase\ requests. For the edits, the answer decision, or the last relation
+decision, is answered by \texttt{\LlmUpgrade} instead, and the walk is continued from there
+(\AgentRequestsUpgrade\ requests); runs that do not reach the edited decision are reused and
+were verified to be identical.
+
+\paragraph{Compute.} All experiments run on 4 CPU cores in under three hours; the certificate
 and its optimisation take milliseconds per workflow. The language-model answers took about
-six minutes of wall-clock time with 32 parallel requests.
+six minutes of wall-clock time with 32 parallel requests, and the runs of the agent under an
+hour per benchmark with 24 runs in parallel.
 
 \section{Certificate format}\label{app:format}
 
@@ -171,6 +207,15 @@ assignment reaches $\eps=2\%$.}\label{tab:main-llm}
 \caption{LLM-3-FS (\texttt{\LlmModel} with in-context examples at every node, all traffic),
 $n=4{,}000$, $\delta=0.1$, \Trials\ trials, grid with the extended tail. Columns as in
 Table~\ref{tab:main}.}\label{tab:main-llm-fs}
+\end{table}
+
+\begin{table}[!htb]
+\centering\footnotesize
+\setlength{\tabcolsep}{3.5pt}
+\input{tables/main_kg_cwq}
+\caption{The knowledge-graph agent on CWQ (\AgentNodesQ\ decisions, four roles),
+$n=4{,}000$, $\delta=0.1$, \AgentTrials\ draws, grid with the extended tail. Columns as in
+Table~\ref{tab:main}.}\label{tab:agent-cwq}
 \end{table}
 
 \begin{table}[!htb]
