@@ -353,6 +353,12 @@ Path traversal prevention, SSRF protection (scheme-restricted URLs), XSS-safe HT
 
 ## Research Value
 
+**Paper.** *Risk Certificates That Survive Edits: Separable, Route-Indexed Calibration for
+Decision Workflows* (Yujin Hong). The manuscript is [`paper/main.pdf`](paper/main.pdf); the
+experiment code, data and the script that regenerates every number are in
+[`paper/`](paper/README.md), and the method is implemented in `anp certify` and
+`anp verify --risk` (see [Certify a Decision Workflow](#certify-a-decision-workflow)).
+
 ANP introduces three novel contributions to the graph-based programming literature:
 
 1. **Formal verification for executable graphs** — type-safe port connections, reachability analysis, and cycle detection as a unified verification pass. No prior graph execution engine offers mathematical correctness guarantees.

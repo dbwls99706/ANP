@@ -196,13 +196,34 @@ below the risk at any assignment. This happened in \CoverageCertViolations\ of
 \CoverageCertDraws\ draws for the certificate (at most \CoverageCertWorst\% of the draws of
 one workflow) and in \CoverageRecertViolations\ of \CoverageRecertDraws\ draws for the bound
 issued after an edit, over all edits of \S\ref{sec:exp-edits} and \S\ref{sec:exp-agent} with
-100 and with 1{,}000 fresh labels; the theorems allow $\delta=10\%$. The union over the grid
-is what makes these rates small. For a single shared threshold fixed in advance and bounded
+100 and with 1{,}000 fresh labels. The theorems permit a failure in up to $\delta=10\%$ of
+the draws, so both rates are far inside what is guaranteed, and the union over the grid is
+what makes them so small. The iteration described below Theorem~\ref{thm:recert} was checked
+in the same way on \CoverageTwoConfigs\ pairs of successive edits of CLINC150 and MASSIVE (a
+leaf and a node above it, in either order, and two leaves; 500 fresh labels per edit and
+$\delta/5$ per bound): the bound was violated in \CoverageTwoViolations\ of
+\CoverageTwoDraws\ draws. For a single shared threshold fixed in advance and bounded
 at level $\delta$ without a union, the Clopper--Pearson bound falls below the risk in
 \CoverageSingleMeanLow--\CoverageSingleMeanHigh\% of \CoverageSingleDraws\ draws on average
 over the grid, and in at most \CoverageSingleLargest\% for one grid value, which is $\delta$
 up to the sampling error of the check: the binomial model behind the bound is exact, and the
 conservatism of the certificate is that of the union.
+
+\paragraph{Check of the deterministic statements.} Lemma~\ref{lem:charging} and
+Propositions~\ref{prop:exact}, \ref{prop:local} and~\ref{prop:footprint} involve no
+probability once the population is fixed, so they can be checked exactly. We drew
+\ClaimsWorkflows\ random workflows: DAGs of two to eight nodes with two to four choices per
+node, \ClaimsJoins\ of them with joins and \ClaimsTies\ with confidences on a five-point
+scale, so that ties are frequent. On each we checked the charging inequality and its gap
+for FE and LC charging with and without an anchor, exactness along the ray
+$a+s\mathbf 1$, that raising a threshold never raises the risk, both parts of
+Proposition~\ref{prop:local} with its risk identity after editing a random node, and the
+three footprints of Proposition~\ref{prop:footprint}; the first two were repeated with
+arbitrary outcome labels in place of route labels. All \ClaimsChecks\ checks passed. The
+checks can fail: three stronger statements are refuted on these workflows, namely that an
+edit changes only the FE curve of the edited node (\ClaimsRefutedFEnode\ workflows), that it
+changes the LC curves of the node and its descendants only (\ClaimsRefutedLCdesc), and that
+FE charging is exact for a shared threshold (\ClaimsRefutedFEexact).
 
 \begin{table}[!htb]
 \centering\footnotesize

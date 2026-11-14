@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use the risk certification method or its experiments, please cite the paper."
+title: "ANP: AI Native Programming"
+authors:
+  - family-names: Hong
+    given-names: Yujin
+repository-code: "https://github.com/dbwls99706/ANP"
+license: MIT
+preferred-citation:
+  type: article
+  title: "Risk Certificates That Survive Edits: Separable, Route-Indexed Calibration for Decision Workflows"
+  authors:
+    - family-names: Hong
+      given-names: Yujin
+  year: 2026
+  url: "https://github.com/dbwls99706/ANP/blob/main/paper/main.pdf"

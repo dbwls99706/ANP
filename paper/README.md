@@ -13,7 +13,8 @@ Manuscript and experiments for the risk certification method implemented in
 - `experiments/` — code: `riskcert.py` (the method and baselines), `prep_data.py` (datasets and
   node models), `llm_nodes.py` (the same workflow answered by a hosted language model),
   `kg_agent.py` (a knowledge-graph agent on WebQSP and CWQ), `check_theorems.py` (the two
-  guarantees checked for every threshold assignment at once),
+  guarantees checked for every threshold assignment at once), `test_claims.py` (the lemma and
+  the propositions checked exactly on random workflows),
   `run_experiments.py`, `make_figures.py`, `export_example.py` (writes `examples/certify/`).
 
 ## Reproduce

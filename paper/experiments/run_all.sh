@@ -20,4 +20,6 @@ $PY run_experiments.py posthoc --agent --trials 200
 $PY run_experiments.py edits --agent --trials 100
 # The guarantees themselves, for every threshold assignment on the grid at once.
 $PY check_theorems.py --draws 1000
+# The deterministic statements, on random workflows.
+$PY test_claims.py --workflows 2000
 $PY make_figures.py

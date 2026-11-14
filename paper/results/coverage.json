@@ -308,5 +308,67 @@
    "mean_violation_rate": 0.09649285714285714,
    "modules": 1
   }
+ },
+ "two_edits": {
+  "clinc|3|1": {
+   "draws": 1000,
+   "violations": 0,
+   "violation_rate": 0.0,
+   "smallest_slack": 0.020268862273684816,
+   "assignments": 17576,
+   "modules": 3,
+   "n": 4000,
+   "m": 500,
+   "share_first": 0.08790697674418604,
+   "share_second": 0.8852325581395348
+  },
+  "clinc|1|3": {
+   "draws": 1000,
+   "violations": 0,
+   "violation_rate": 0.0,
+   "smallest_slack": 0.04937748276973372,
+   "assignments": 17576,
+   "modules": 3,
+   "n": 4000,
+   "m": 500,
+   "share_first": 0.8852325581395348,
+   "share_second": 0.08348837209302326
+  },
+  "clinc|3|4": {
+   "draws": 1000,
+   "violations": 0,
+   "violation_rate": 0.0,
+   "smallest_slack": 0.008810208606090046,
+   "assignments": 17576,
+   "modules": 3,
+   "n": 4000,
+   "m": 500,
+   "share_first": 0.08790697674418604,
+   "share_second": 0.08744186046511628
+  },
+  "massive|7|2": {
+   "draws": 1000,
+   "violations": 0,
+   "violation_rate": 0.0,
+   "smallest_slack": 0.013921782567128059,
+   "assignments": 17576,
+   "modules": 3,
+   "n": 8000,
+   "m": 500,
+   "share_first": 0.1457958857599361,
+   "share_second": 0.2481026562812063
+  },
+  "massive|2|7": {
+   "draws": 1000,
+   "violations": 0,
+   "violation_rate": 0.0,
+   "smallest_slack": 0.016504540063629607,
+   "assignments": 17576,
+   "modules": 3,
+   "n": 8000,
+   "m": 500,
+   "share_first": 0.2481026562812063,
+   "share_second": 0.1451467944877172
+  }
  }
 }
