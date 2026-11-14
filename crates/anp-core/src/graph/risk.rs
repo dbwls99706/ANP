@@ -114,8 +114,13 @@ pub struct RiskCertificate {
 pub struct Part {
     /// Number of calibration runs.
     pub n: u64,
-    /// Failure probability spent on this part.
+    /// Failure probability of this part's own bound.
     pub delta: f64,
+    /// Failure probability spent on other estimates taken from this sample: the traffic
+    /// shares of later edits. It counts against the confidence of the certificate but
+    /// must not loosen the bound of this part.
+    #[serde(default)]
+    pub spent: f64,
     /// Number of modules the union bound ranges over.
     pub exponent: u32,
     /// Share of the traffic this sample was drawn from (1 for a sample of all traffic).
@@ -527,6 +532,7 @@ pub fn certify_on_grid(
         parts: vec![Part {
             n: traces.len() as u64,
             delta,
+            spent: 0.0,
             exponent: modules.len() as u32,
             scale: 1.0,
             edited: Vec::new(),
@@ -563,7 +569,7 @@ impl RiskCertificate {
 
     /// Probability that every bound of this certificate holds.
     pub fn confidence(&self) -> f64 {
-        1.0 - self.parts.iter().map(|p| p.delta).sum::<f64>()
+        1.0 - self.parts.iter().map(|p| p.delta + p.spent).sum::<f64>()
     }
 
     /// Certified upper bound on the error rate for one grid option per module.
@@ -853,7 +859,7 @@ impl RiskCertificate {
             .find(|p| p.edited.is_empty())
             .ok_or_else(|| RiskError::Other("certificate has no sample of all traffic".into()))?;
 
-        // Nodes added by the edit join the module of the first edited node they follow.
+        // Nodes added by the edit get a module of their own.
         let mut modules = self.modules.clone();
         let known: HashSet<String> = modules.iter().flatten().cloned().collect();
         for node in fingerprints.keys().filter(|n| !known.contains(*n)) {
@@ -893,14 +899,16 @@ impl RiskCertificate {
         parts.push(Part {
             n: fresh.len() as u64,
             delta: delta / 2.0,
+            spent: 0.0,
             exponent: touched.max(1) as u32,
             scale: share,
             edited: edited.to_vec(),
             routes: route_stats(fresh, &modules, &self.grid, self.rule),
         });
-        // The share estimate spends the other half of delta; record it on the base part.
+        // The share estimate spends the other half of delta. It is recorded on the base
+        // part, whose own bound keeps the level it was certified at.
         if let Some(base) = parts.iter_mut().find(|p| p.edited.is_empty()) {
-            base.delta += delta / 2.0;
+            base.spent += delta / 2.0;
         }
 
         let mut merged = self.fingerprints.clone();
@@ -1245,6 +1253,18 @@ mod tests {
         assert!(next.stale_nodes(&edited).is_empty());
         assert_eq!(next.parts.len(), 2);
         assert!((next.confidence() - 0.9).abs() < 1e-12);
+        // The failure probability of the share estimate must not loosen the old bound.
+        assert_eq!(next.parts[0].delta, cert.parts[0].delta);
+        assert_eq!(
+            next.parts[0].upper(3, options(&GRID)),
+            cert.parts[0].upper(3, options(&GRID))
+        );
+        // A second edit spends its own failure probability on top.
+        let again = next
+            .recertify(&edited, &fresh, &["leaf_b".to_string()], 0.02)
+            .unwrap();
+        assert!((again.confidence() - 0.88).abs() < 1e-12);
+        assert_eq!(again.parts[0].delta, cert.parts[0].delta);
 
         // Routes through leaf_b are dropped from the old evidence, the others are kept.
         let old = &next.parts[0];
