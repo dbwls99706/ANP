@@ -126,16 +126,15 @@ impl NodeExecutor for MetricsNode {
         }
 
         // Validate that most operations require metric_name
-        match self.operation.as_str() {
-            "increment" | "decrement" | "set" | "get" | "record" => {
-                if self.metric_name.is_none() {
-                    return Err(NodeError::InvalidConfig(format!(
-                        "operation '{}' requires 'metric_name'",
-                        self.operation
-                    )));
-                }
-            }
-            _ => {}
+        let needs_name = matches!(
+            self.operation.as_str(),
+            "increment" | "decrement" | "set" | "get" | "record"
+        );
+        if needs_name && self.metric_name.is_none() {
+            return Err(NodeError::InvalidConfig(format!(
+                "operation '{}' requires 'metric_name'",
+                self.operation
+            )));
         }
 
         Ok(())

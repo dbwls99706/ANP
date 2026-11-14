@@ -601,12 +601,9 @@ pub fn unify(a: &PortType, b: &PortType) -> Option<PortType> {
                 for (key, b_ty) in fb {
                     if let Some(a_ty) = merged.get(key) {
                         // Both sides have this field — unify recursively.
-                        match unify(a_ty, b_ty) {
-                            Some(unified) => {
-                                merged.insert(key.clone(), unified);
-                            }
-                            None => return None, // Field type conflict.
-                        }
+                        // A field type conflict makes the whole unification fail.
+                        let unified = unify(a_ty, b_ty)?;
+                        merged.insert(key.clone(), unified);
                     } else {
                         merged.insert(key.clone(), b_ty.clone());
                     }
