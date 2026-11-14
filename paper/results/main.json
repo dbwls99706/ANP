@@ -95,7 +95,7 @@
      "violation": 0.0,
      "review_mean": 1.0,
      "review_sd": 0.0,
-     "bound_mean": 0.024112506800277256,
+     "bound_mean": 0.0,
      "fd_mass_mean": 0.0,
      "trials": 300
     },
@@ -243,14 +243,14 @@
      "trials": 300
     },
     "0.05|tf-node": {
-     "risk_mean": 0.00212984496124031,
+     "risk_mean": 0.0020585271317829458,
      "risk_q90": 0.004546511627906979,
      "risk_max": 0.006162790697674419,
      "violation": 0.0,
-     "review_mean": 0.8720693798449612,
-     "review_sd": 0.1050097591326643,
-     "bound_mean": 0.049797517555240665,
-     "fd_mass_mean": 0.017297674418604646,
+     "review_mean": 0.8767864341085272,
+     "review_sd": 0.10609833609680533,
+     "bound_mean": 0.04979992928809904,
+     "fd_mass_mean": 0.017244961240310077,
      "trials": 300
     },
     "0.05|fd-node": {
@@ -579,7 +579,7 @@
      "violation": 0.0,
      "review_mean": 1.0,
      "review_sd": 0.0,
-     "bound_mean": 0.02257651628303112,
+     "bound_mean": 0.0,
      "fd_mass_mean": 0.0,
      "trials": 300
     },
