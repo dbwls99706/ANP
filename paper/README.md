@@ -5,6 +5,7 @@ Manuscript and experiments for the risk certification method implemented in
 
 - `main.tex`, `experiments.tex`, `appendix.tex`, `refs.bib` — the paper; `main.pdf` is the built copy.
 - `numbers.tex`, `tables/`, `figures/` — generated from `results/*.json`; do not edit by hand.
+- `build.sh` — builds `main.pdf` and the arXiv source package `arxiv.tar.gz`.
 - `results/` — raw results of every experiment.
 - `experiments/data/` — the answers of the hosted language models as tables (and the CLINC150
   structure they refer to), so the language-model experiments run without calling a model.
@@ -18,7 +19,7 @@ Manuscript and experiments for the risk certification method implemented in
 python3 -m venv venv && ./venv/bin/pip install numpy scipy scikit-learn pandas matplotlib \
     datasets huggingface_hub sentence-transformers httpx
 PYTHON=./venv/bin/python experiments/run_all.sh     # under two hours on 4 CPU cores
-pdflatex main && bibtex main && pdflatex main && pdflatex main
+./build.sh                                        # main.pdf and arxiv.tar.gz
 ```
 
 The language-model tables in `experiments/data/` are enough to re-run those experiments.

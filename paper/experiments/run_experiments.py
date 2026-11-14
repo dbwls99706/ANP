@@ -313,6 +313,53 @@ def exp_edits(trials, only=None, names=("clinc", "massive")):
     return out
 
 
+# -- ablations ---------------------------------------------------------------
+
+ABLATION_GRIDS = {
+    "coarse (13)": np.r_[np.arange(10) * 0.1, 0.95, 0.99, rc.INF],
+    "default (26)": None,
+    "fine (103)": np.r_[np.arange(100) * 0.01, 0.995, 0.999, rc.INF],
+}
+ABLATION_DELTAS = [0.01, 0.05, 0.1, 0.2]
+
+
+def _ablation_trial(args):
+    name, n, eps, seed = args
+    pop, _ = population(name)
+    rng = np.random.default_rng(seed)
+    cal = pop.subset(rng.integers(0, len(pop), n))
+    lv = levels(pop)
+    k = pop.n_nodes
+    res = {}
+
+    def score(key, tau):
+        res[key] = (pop.risk(tau), pop.review(tau), None)
+
+    for label, modules in [("node", None), ("level", lv)]:
+        # One pooled binomial bound against one confidence band per module.
+        for pooled in (True, False):
+            tau = rc.select(cal, eps, DELTA, modules=modules, mode="min", pooled=pooled)[0]
+            score(f"bound|{label}|{'pooled' if pooled else 'separate'}", tau)
+        # The knapsack solution alone, without the local search on the review rate.
+        cert = rc.certify(cal, DELTA, modules=modules, mode="min")
+        score(f"search|{label}|knapsack only", cert.thresholds(rc.optimize(cert, eps), k))
+        score(f"search|{label}|with refinement", rc.pick(cert, eps, cal.review, k)[0])
+        for grid_name, grid in ABLATION_GRIDS.items():
+            score(f"grid|{label}|{grid_name}", rc.select(cal, eps, DELTA, grid=grid, modules=modules, mode="min")[0])
+        for delta in ABLATION_DELTAS:
+            score(f"delta|{label}|{delta}", rc.select(cal, eps, delta, modules=modules, mode="min")[0])
+    return res
+
+
+def exp_ablation(trials):
+    out = {}
+    for name in ["clinc", "massive"]:
+        res = collect([(name, DEFAULT_N[name], 0.05, 50_000 + s) for s in range(trials)], _ablation_trial)
+        out[name] = {key: summarise([r[key] for r in res], 0.05) for key in res[0]}
+        print(name, "ablation done", flush=True)
+    return out
+
+
 # -- description of the language-model workflows ----------------------------
 
 
@@ -411,7 +458,8 @@ def exp_synth(trials):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("experiment", choices=["main", "nsweep", "posthoc", "edits", "synth", "llmstats"])
+    ap.add_argument("experiment", choices=["main", "nsweep", "posthoc", "edits", "synth", "llmstats",
+                                           "ablation"])
     ap.add_argument("--trials", type=int, default=200)
     ap.add_argument("--only", help="edits: re-run a single edit, e.g. clinc:root, and merge it")
     ap.add_argument("--llm", action="store_true", help="main / edits on the language-model workflow")
@@ -434,7 +482,7 @@ if __name__ == "__main__":
         result["data"][name]["edits"][label] = exp_edits(a.trials, a.only)[name]["edits"][label]
     else:
         result = {"main": exp_main, "nsweep": exp_nsweep, "posthoc": exp_posthoc, "edits": exp_edits,
-                  "synth": exp_synth}[a.experiment](a.trials)
+                  "synth": exp_synth, "ablation": exp_ablation}[a.experiment](a.trials)
         result = {"delta": DELTA, "trials": a.trials, "data": result}
     with open(path, "w") as f:
         json.dump(result, f, indent=1)

@@ -11,6 +11,8 @@
 \usepackage[numbers,sort&compress]{natbib}
 \usepackage[colorlinks,linkcolor=blue!50!black,citecolor=blue!50!black,urlcolor=blue!50!black]{hyperref}
 \usepackage{microtype}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
 \usepackage{tikz}
 \usetikzlibrary{positioning,arrows.meta}
 
@@ -30,8 +32,7 @@
 \newcommand{\ind}{\mathbf{1}}
 \newcommand{\anp}{\textsc{anp}}
 
-% Replace with the author's name before submission.
-\newcommand{\authorname}{dbwls99706}
+\newcommand{\authorname}{Yujin Hong}
 
 \input{numbers}
 
@@ -46,33 +47,26 @@ Separable, Route-Indexed Calibration for Decision Workflows}
 \begin{abstract}
 A decision workflow is a program whose branches are taken by learned models: each decision
 node commits to a choice when its confidence clears a threshold and escalates to a human
-otherwise. Operators want the rate of wrong, unescalated runs below a target $\eps$ with as
-little human review as possible, and they keep changing the workflow: thresholds are retuned,
-a model is swapped, a step is added. Distribution-free risk control certifies one frozen
-configuration end to end, so every change sends the whole workflow back to calibration.
-We study certificates that survive such changes.
-First, we show that any threshold-independent rule that \emph{charges} each erroneous run to
-one node on its route yields an upper bound on the end-to-end risk that is separable across
-nodes. Its sufficient statistics are one integer curve per node, it holds uniformly over all
-threshold assignments on a grid with a single binomial bound, and the least-review thresholds
-are an exactly solvable knapsack. Charging the least confident node is exact for shared
-thresholds, whereas the natural rule---charge the first wrong decision, the routing analogue
-of additive stage-wise decompositions---is loose: on two real workflows it overstates the
-risk by factors of \FdOverstateMax\ and \FdOverstateMin, because downstream nodes escalate misrouted inputs.
-Second, we prove that an edit changes only the runs that pass through the edited node, and that
-which runs do is decided by unedited nodes. Indexing the counts by route therefore lets a
-certificate be repaired with labels from the affected traffic alone. After replacing one leaf
-model in workflows with 12 and 21 decisions, \EditM\ fresh labels restore a 5\% certificate at
-\EditLocalClinc\% and \EditLocalMassive\% review, where recalibrating from scratch with the
-same number of labels escalates more than nine inputs in ten. With a hosted language model
-at every node the findings carry over where certification is possible; where a zero-shot
-node is confidently wrong too often, no threshold is safe, the certificates decline to
-commit, and the default threshold lets an error rate of \LlmDefaultRiskT\% through; with
-in-context examples the same workflow becomes certifiable.
-The price of validity under post hoc retuning is statistical,
-of order $M\ln G/n$ for $M$ independently tuned thresholds on a grid of size $G$; we measure
-it, and show that tying thresholds by level recovers most of it. All methods are implemented
-in an open-source workflow runtime, where the certificate is checked statically.
+otherwise. Operators want the rate of wrong, unescalated runs below a target with as little
+human review as possible, and they keep editing the workflow. Distribution-free risk control
+certifies one frozen configuration end to end, so every retuned threshold or swapped model
+sends the whole workflow back to calibration. We study certificates that survive such
+changes. First, any threshold-independent rule that \emph{charges} each erroneous run to one
+node on its route bounds the end-to-end risk by a sum of per-node terms. The bound holds
+uniformly over a grid of threshold assignments with a single binomial confidence bound, and
+the least-review thresholds solve a knapsack exactly. Charging the least confident node is
+exact for shared thresholds; charging the first wrong decision, the natural analogue of
+stage-wise decompositions, overstates the risk by factors of \FdOverstateMax\ and
+\FdOverstateMin\ on two real workflows, because downstream nodes escalate misrouted inputs.
+Second, an edit changes only the runs that pass through the edited node, so a certificate
+indexed by route can be repaired with labels from the affected traffic alone: after
+replacing one leaf model, \EditM\ fresh labels restore a 5\% certificate at
+\EditLocalClinc\% and \EditLocalMassive\% review, where recalibration from scratch escalates
+more than nine inputs in ten. With a hosted language model, a zero-shot workflow whose
+default threshold lets \LlmDefaultRiskT\% errors through cannot be certified at a 5\% target by any choice of thresholds, and
+becomes certifiable with in-context examples. The price of uniform validity is statistical,
+of order $M\ln G/n$ for $M$ thresholds on a grid of size $G$. The method is implemented in
+an open-source workflow runtime that checks the certificate statically.
 \end{abstract}
 
 \section{Introduction}
@@ -145,6 +139,27 @@ open-source graph workflow runtime, as a \texttt{certify} command and a verifica
 rejects a workflow whose thresholds exceed its certified risk or whose certificate is stale.
 \end{enumerate}
 
+\begin{table}[t]
+\centering\small
+\begin{tabular}{lcccl}
+\toprule
+Method & Valid & Any thresholds & Edit-local & Calibration runs \\
+\midrule
+Per-node selective calibration & no & -- & -- & per node \\
+Shared threshold, end to end~\citep{angelopoulos2021ltt} & yes & no & no & whole workflow \\
+Pareto testing~\citep{laufer2022pareto} & yes & no & no & whole workflow \\
+End-to-end bound, uniform over the grid & yes & yes & no & whole workflow \\
+Charged certificate (\S\ref{sec:sep}) & yes & yes & no & whole workflow \\
+Route-indexed charged certificate (\S\ref{sec:edits}) & yes & yes & yes & affected traffic \\
+\bottomrule
+\end{tabular}
+\caption{What each calibration method provides. \emph{Valid}: a finite-sample bound on the
+end-to-end error rate. \emph{Any thresholds}: the bound holds simultaneously for all threshold
+assignments on a grid, so thresholds and targets may be chosen after calibration.
+\emph{Edit-local}: after a node is edited, only the traffic through it is labelled again.}
+\label{tab:properties}
+\end{table}
+
 \begin{figure}[t]
 \centering
 \begin{tikzpicture}[font=\footnotesize, node distance=6mm and 13mm,
@@ -176,13 +191,16 @@ rejects a workflow whose thresholds exceed its certified risk or whose certifica
 \caption{A decision workflow and a rescued error. An out-of-scope request is confidently
 passed by \texttt{scope} (the first error), reaches nodes that were not built for it, and is
 escalated by an unsure \texttt{intent} node. Charging the run to its first error counts it as
-an error at every threshold below $0.99$; charging it to the least confident node counts it
-only when $\tau_{\text{intent}}\le0.30$, which is when it actually completes.}
+an error whenever $\tau_{\text{scope}}\le0.99$, although the run completes only if the
+threshold of \texttt{intent} is at most $0.30$; charging it to the least confident node
+counts it exactly in that case.}
 \label{fig:workflow}
 \end{figure}
 
-We also state plainly what the results do not show. Uniform certificates are not free: at a
-fixed target, end-to-end Pareto testing~\citep{laufer2022pareto} escalates less than any
+Table~\ref{tab:properties} places these properties next to existing methods. We also state
+plainly what the results do not show. Uniform certificates are not free: with enough
+calibration data and a single fixed target, end-to-end
+calibration~\citep{angelopoulos2021ltt,laufer2022pareto} escalates a few points less than a
 certificate that remains valid under retuning. A certificate cannot repair a model: the
 token probabilities of a zero-shot language model are close to uninformative at one of our
 nodes, and there the honest outcome is a refusal. And the guarantees are for exchangeable
@@ -219,7 +237,8 @@ probability at least $1-\delta$ over the calibration sample, and $H(\tau)$ is sm
 
 \paragraph{Assumptions.} (A1) Calibration and deployment inputs are i.i.d.\ from $P$. (A2) The
 state a node receives depends only on the input and the choices taken before it, so the free
-run is well defined and deterministic given $x$. (A3) Labels identify the oracle route. We
+run is well defined and deterministic given $x$. (A3) Labels identify the oracle route. Models are deterministic functions of their input; the
+randomness of a sampled model can be made part of $x$. We
 present the case where each run is a path. If a choice feeds several decision nodes, $\pi(x)$
 is the set of visited nodes and every statement below holds with ``on the route'' read as ``in
 the visited set''.
@@ -276,8 +295,8 @@ its own domain, which a component owner could certify in isolation. It is also t
 \paragraph{Least confident (LC).} $u(x)$ is the node of the free run with the smallest
 confidence, or more generally the smallest margin $c_j(x)-a_{v_j}$ for a fixed anchor
 $a\in\mathbb{R}^V$. Ties go to the first wrong node if it is among the minimisers and to the
-earliest node otherwise; they matter when confidences saturate (\S\ref{sec:exp-llm}). The rule looks at the whole route, so it sees
-rescue.
+earliest node otherwise; ties matter when confidences saturate (\S\ref{sec:exp-llm}). The rule
+looks at the whole route, so it sees rescue.
 
 \begin{proposition}[Exactness]\label{prop:exact}
 For the LC rule with anchor $a$, $B_u(a+s\mathbf{1})=R(a+s\mathbf{1})$ for every $s$. In
@@ -333,8 +352,9 @@ Bounding the $M$ curves separately and adding the bounds is also valid, and is w
 requires, but pays $M$ confidence margins instead of one. \emph{(iii) The price of
 uniformity.} With no observed errors the bound is about $(M\ln G+\ln\frac1\delta)/n$. Tying
 thresholds lowers $M$. Some dependence on $M$ is inherent in bounds that hold for all
-thresholds at once, as the family of completion events has VC dimension $M$; we do not claim
-the constant is optimal.
+thresholds at once: the events $\{c_u(x)\ge\tau_{u(x)}\}$ indexed by $\tau$ form a class of VC
+dimension $M$ in general. We do not claim the constant is optimal
+(Appendix~\ref{app:more} varies the grid).
 
 \subsection{Choosing thresholds}
 
@@ -346,6 +366,26 @@ review rate by a union bound. The result is a multiple-choice knapsack problem w
 weights~\citep{kellerer2004}, solved exactly by dynamic programming in $O(MG\,k_{\max})$ time.
 Since the certificate is uniform, the solution may then be refined by any local search on the
 empirical review rate without affecting validity; we use coordinate descent.
+Algorithm~\ref{alg:certify} summarises the procedure.
+
+\begin{algorithm}[t]
+\caption{Certify a workflow and choose thresholds}\label{alg:certify}
+\begin{algorithmic}[1]
+\Require labelled free runs $x_1,\dots,x_n$; charging rule $u$; modules $1,\dots,M$; grid
+$\mathcal G$; confidence $1-\delta$
+\For{each deviating run $x_i$} \Comment{issue the certificate}
+  \State $v\gets u(x_i)$;\ \ increment $k_{m(v)}(t)$ for every $t\in\mathcal G$ with $t\le c_u(x_i)$
+\EndFor
+\State store the table $k_m(t)$ and $n$ \Comment{per free route, to allow edits (\S\ref{sec:edits})}
+\Statex
+\Require target $\eps$ \Comment{any time later, for any target}
+\State $k_{\max}\gets\max\{k:\CP(k,n,\delta/G^M)\le\eps\}$
+\State $\hat g\gets\arg\min_{g\in\mathcal G^M}\sum_m h_m(g_m)$ subject to $\sum_m k_m(g_m)\le k_{\max}$
+\Comment{knapsack, exact}
+\State refine $\hat g$ by local search on the empirical review rate, keeping the constraint
+\State \Return thresholds $\tau_{\hat g}$ and the certified bound $\CP(k(\hat g),n,\delta/G^M)$
+\end{algorithmic}
+\end{algorithm}
 
 \section{Edits}\label{sec:edits}
 
@@ -409,8 +449,9 @@ The fresh sample is drawn from the traffic that reaches the edited node, which i
 operator can collect cheaply after a change: log the runs through the new node and label
 those. Its bound is multiplied by the traffic share, so a node that handles 9\% of the traffic
 needs roughly one eleventh of the labels for the same contribution to the bound. The theorem
-iterates: after a second edit the remaining routes of every earlier part are kept, and the
-share of the new edit is bounded from the original sample.
+iterates. After a second edit the remaining routes of every earlier part are kept, and the
+share of the new edit is bounded from the original sample by counting every run whose
+recorded route meets the new edit or an earlier one.
 
 \subsection{Node-level footprints}\label{sec:footprint}
 
@@ -454,8 +495,10 @@ code used for the experiments and is tested against it on real traces.
 \section{Related work}\label{sec:related}
 
 \paragraph{Risk control and selective prediction.} Abstaining to bound error goes back to
-\citet{chow1970}; \citet{geifman2017selective} gave finite-sample guarantees for a single
-selective classifier. Conformal prediction~\citep{vovk2005} and its risk-controlling
+\citet{chow1970}; \citet{elyaniv2010} formalised the risk--coverage trade-off, and
+\citet{geifman2017selective} gave finite-sample guarantees for a single selective classifier.
+Learning to defer~\citep{mozannar2020} trains the abstention rule jointly with the model
+instead of calibrating it afterwards. Conformal prediction~\citep{vovk2005} and its risk-controlling
 extensions~\citep{bates2021rcps,angelopoulos2021ltt,angelopoulos2022crc} certify
 hyperparameters of arbitrary predictors; Pareto testing~\citep{laufer2022pareto} makes
 multi-dimensional configurations tractable by ordering candidates on a split and testing them
@@ -463,9 +506,10 @@ in sequence. We use these tools as baselines and building blocks. They certify a
 pre-specified system and a pre-ordered set of candidates; our certificate is uniform over a
 product grid and is designed to be repaired.
 
-\paragraph{Guarantees for multi-stage LLM systems.} For language models, abstention with
-guarantees has been studied for single calls~\citep{yadkori2024abstention} and for judges that
-escalate to humans~\citep{jung2024trust}. Multi-stage guarantees have mostly been obtained in
+\paragraph{Guarantees for multi-stage LLM systems.} For language models, conformal methods
+have been used to calibrate sampling and stopping rules~\citep{quach2024clm}, to abstain on
+single calls~\citep{yadkori2024abstention} and for judges that escalate to
+humans~\citep{jung2024trust}. Multi-stage guarantees have mostly been obtained in
 two ways. One calibrates a single scalar over whole trajectories: KnowNo~\citep{ren2023knowno}
 for multi-step robot planning and PASC~\citep{kotte2026pasc} for NLP pipelines; this is tight
 for one shared threshold, which corresponds to our LC rule with a single module, and must be
@@ -484,7 +528,15 @@ rather than escalating a multi-model program. \citet{chatrath2026ready} argue fo
 whole workflows on held-out data; we give that qualification a form that persists across
 edits.
 
-\paragraph{Languages for model-driven programs.} Declarative
+\paragraph{Confidence of language models.} Neural classifiers are
+overconfident~\citep{guo2017calibration}, and so are language models, whether the confidence
+is read from token probabilities or stated by the model~\citep{tian2023just,xiong2024can}.
+Our certificates take the confidence as given: they are valid for any score, and as
+\S\ref{sec:exp-llm} shows, an uninformative one is reported as a workflow that cannot be
+certified, not hidden.
+
+\paragraph{Languages for model-driven programs.} Compound systems are increasingly written
+as programs~\citep{zaharia2024compound}. Declarative
 frameworks~\citep{khattab2023dspy} and typed calculi and languages for agent
 composition~\citep{liu2026lambda,kizito2026turn} treat model calls as program constructs, the
 latter exposing a confidence value to the program. None attaches a statistical guarantee to
@@ -501,7 +553,8 @@ determines the route; in general each decision may need its own annotator.
 experiments use classifiers on frozen sentence embeddings. The language-model experiments use
 one provider, two models and a single task, zero-shot and with in-context examples; the token
 probabilities saturate, which leaves thresholds little to work with, and we did not study
-verbalised or sampled confidences, other providers, or fine-tuned models.
+verbalised or sampled confidences~\citep{tian2023just,xiong2024can}, other providers, or
+fine-tuned models.
 \emph{Structure.} We assume acyclic routing, deterministic states and an escalation that fully
 resolves the run. Loops, stochastic nodes and partial human corrections are out of scope.
 \emph{Adaptive edits.} Theorem~\ref{thm:recert} requires the edited set to be chosen
@@ -524,12 +577,11 @@ results are as useful as the positive ones: blaming the first error, the intuiti
 compose stage-wise guarantees, can misjudge routing workflows, because what goes wrong
 upstream is often caught downstream.
 
-\paragraph{Reproducibility.} Code for the experiments, the exported traces of one workflow,
-and the runtime implementation are available in the project repository under
-\texttt{paper/} and \texttt{examples/certify/}. A single script regenerates every number, table
-and figure from the public datasets; the language-model experiment additionally needs an API
-key to regenerate the model's answers; the answers we obtained are stored with the code, so
-the experiment itself runs without one.
+\paragraph{Reproducibility.} The experiment code, the exported traces of one workflow and the
+runtime implementation are available at \url{https://github.com/dbwls99706/ANP}, under
+\texttt{paper/} and \texttt{examples/certify/}. One script regenerates every number, table and
+figure from the public datasets. The answers of the hosted language models are stored with
+the code, so those experiments run without an API key; regenerating the answers needs one.
 
 \bibliographystyle{plainnat}
 \bibliography{refs}

@@ -123,51 +123,6 @@ experiments were not repeated for the few-shot workflows.
 and its optimisation take milliseconds per workflow. The language-model answers took about
 six minutes of wall-clock time with 32 parallel requests.
 
-\section{Additional results}\label{app:more}
-
-Table~\ref{tab:main-massive} repeats Table~\ref{tab:main} for MASSIVE,
-Table~\ref{tab:main-llm} for the zero-shot language-model workflow LLM-2 and
-Table~\ref{tab:main-llm-fs} for the few-shot workflow LLM-3-FS.
-Table~\ref{tab:footprints} counts, on the whole population, the nodes whose count curves
-change when one node's model is replaced, for each charging rule. No curve changes outside
-the sets given by Proposition~\ref{prop:footprint} (for FE the size of that set is shown in
-parentheses), and in every case the runs that avoid the edited node were verified to be
-identical before and after the edit (Proposition~\ref{prop:local}).
-
-\begin{table}[h]
-\centering\footnotesize
-\setlength{\tabcolsep}{3.5pt}
-\input{tables/main_massive}
-\caption{MASSIVE, $n=8{,}000$, $\delta=0.1$, \Trials\ trials. Columns as in
-Table~\ref{tab:main}.}\label{tab:main-massive}
-\end{table}
-
-\begin{table}[h]
-\centering\footnotesize
-\setlength{\tabcolsep}{3.5pt}
-\input{tables/main_clinc_llm_inscope}
-\caption{LLM-2 (\texttt{\LlmModel} at every node, in-scope traffic), $n=4{,}000$, $\delta=0.1$,
-\Trials\ trials, grid with the extended tail. Columns as in Table~\ref{tab:main}. No threshold
-assignment reaches $\eps=2\%$.}\label{tab:main-llm}
-\end{table}
-
-\begin{table}[h]
-\centering\footnotesize
-\setlength{\tabcolsep}{3.5pt}
-\input{tables/main_clinc_llm_fs}
-\caption{LLM-3-FS (\texttt{\LlmModel} with in-context examples at every node, all traffic),
-$n=4{,}000$, $\delta=0.1$, \Trials\ trials, grid with the extended tail. Columns as in
-Table~\ref{tab:main}.}\label{tab:main-llm-fs}
-\end{table}
-
-\begin{table}[h]
-\centering\small
-\input{tables/footprints}
-\caption{Number of nodes whose count curve changes after replacing one node's model, by
-charging rule (TF: teacher forced, FE: first error, LC: least confident), and the share of
-traffic through the edited node.}\label{tab:footprints}
-\end{table}
-
 \section{Certificate format}\label{app:format}
 
 A certificate is a JSON document with the charging rule, the grid, the modules, the
@@ -179,3 +134,59 @@ visits that would be escalated at it. A certificate issued from all traffic has 
 each repair marks the routes through the edited nodes as stale in the existing parts and adds
 one part for the fresh sample. For the CLINC150 workflow (12 decisions, 3 modules, 11
 distinct routes in 3{,}000 runs) the certificate is 6\,kB and contains no inputs or labels.
+
+\section{Additional results}\label{app:more}
+
+Table~\ref{tab:main-massive} repeats Table~\ref{tab:main} for MASSIVE,
+Table~\ref{tab:main-llm} for the zero-shot language-model workflow LLM-2 and
+Table~\ref{tab:main-llm-fs} for the few-shot workflow LLM-3-FS.
+Table~\ref{tab:ablation} varies the design choices of the certificate.
+Table~\ref{tab:footprints} counts, on the whole population, the nodes whose count curves
+change when one node's model is replaced, for each charging rule. No curve changes outside
+the sets given by Proposition~\ref{prop:footprint} (for FE the size of that set is shown in
+parentheses), and in every case the runs that avoid the edited node were verified to be
+identical before and after the edit (Proposition~\ref{prop:local}).
+
+\begin{table}[!htb]
+\centering\footnotesize
+\setlength{\tabcolsep}{3.5pt}
+\input{tables/main_massive}
+\caption{MASSIVE, $n=8{,}000$, $\delta=0.1$, \Trials\ trials. Columns as in
+Table~\ref{tab:main}.}\label{tab:main-massive}
+\end{table}
+
+\begin{table}[!htb]
+\centering\footnotesize
+\setlength{\tabcolsep}{3.5pt}
+\input{tables/main_clinc_llm_inscope}
+\caption{LLM-2 (\texttt{\LlmModel} at every node, in-scope traffic), $n=4{,}000$, $\delta=0.1$,
+\Trials\ trials, grid with the extended tail. Columns as in Table~\ref{tab:main}. No threshold
+assignment reaches $\eps=2\%$.}\label{tab:main-llm}
+\end{table}
+
+\begin{table}[!htb]
+\centering\footnotesize
+\setlength{\tabcolsep}{3.5pt}
+\input{tables/main_clinc_llm_fs}
+\caption{LLM-3-FS (\texttt{\LlmModel} with in-context examples at every node, all traffic),
+$n=4{,}000$, $\delta=0.1$, \Trials\ trials, grid with the extended tail. Columns as in
+Table~\ref{tab:main}.}\label{tab:main-llm-fs}
+\end{table}
+
+\begin{table}[!htb]
+\centering\small
+\input{tables/ablation}
+\caption{Design choices of the LC certificate: mean human review (\%) needed to certify
+$\eps=5\%$ ($n=4{,}000$ and $8{,}000$, \AblationTrials\ draws). Each block varies one choice
+and keeps the others at their defaults; the default rows use a separate set of draws and
+differ from Tables~\ref{tab:main} and~\ref{tab:main-massive} by sampling noise. The largest
+violation rate over all cells is \AblationMaxViol\%.}\label{tab:ablation}
+\end{table}
+
+\begin{table}[!htb]
+\centering\small
+\input{tables/footprints}
+\caption{Number of nodes whose count curve changes after replacing one node's model, by
+charging rule (TF: teacher forced, FE: first error, LC: least confident), and the share of
+traffic through the edited node.}\label{tab:footprints}
+\end{table}

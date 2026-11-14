@@ -195,6 +195,38 @@ def fig_synth(res):
     fig.savefig(os.path.join(FIG, "synth.pdf"))
 
 
+def table_ablation(res):
+    groups = [("Confidence bound", "bound", [("one pooled binomial (default)", "pooled"),
+                                             ("one band per module", "separate")]),
+              ("Threshold search", "search", [("knapsack only", "knapsack only"),
+                                              ("knapsack and refinement (default)", "with refinement")]),
+              ("Grid size $G$", "grid", [("13", "coarse (13)"), ("26 (default)", "default (26)"),
+                                         ("103", "fine (103)")]),
+              ("Confidence $1-\\delta$", "delta", [("0.99", "0.01"), ("0.95", "0.05"), ("0.90 (default)", "0.1"),
+                                                   ("0.80", "0.2")])]
+    names = [n for n in ("clinc", "massive") if n in res["data"]]
+    lines = ["\\begin{tabular}{ll" + "rr" * len(names) + "}", "\\toprule",
+             " & & " + " & ".join(f"\\multicolumn{{2}}{{c}}{{{TITLE[n].split(' ')[0]}}}" for n in names) + " \\\\",
+             "".join(f"\\cmidrule(lr){{{3 + 2 * i}-{4 + 2 * i}}}" for i in range(len(names))),
+             "Design choice & Setting & " + " & ".join("per node & per level" for _ in names) + " \\\\",
+             "\\midrule"]
+    worst = 0.0
+    for gi, (title, key, rows) in enumerate(groups):
+        for ri, (label, setting) in enumerate(rows):
+            cells = []
+            for n in names:
+                for modules in ("node", "level"):
+                    r = res["data"][n][f"{key}|{modules}|{setting}"]
+                    cells.append(pct(r["review_mean"]))
+                    worst = max(worst, r["violation"])
+            lines.append(f"{title if ri == 0 else ''} & {label} & " + " & ".join(cells) + " \\\\")
+        if gi < len(groups) - 1:
+            lines.append("\\midrule")
+    lines += ["\\bottomrule", "\\end{tabular}"]
+    open(os.path.join(TAB, "ablation.tex"), "w").write("\n".join(lines) + "\n")
+    return worst
+
+
 def numbers():
     """numbers.tex: every figure quoted in the prose, as a LaTeX macro."""
     out = {}
@@ -231,6 +263,9 @@ def numbers():
                 out[f"FdMass{tag}"] = pct(r["fd_mass_mean"])
                 out[f"RescuedShare{tag}"] = pct(1 - r["risk_mean"] / r["fd_mass_mean"], 0)
         out["FdOverstateMin"], out["FdOverstateMax"] = f"{min(ratios):.1f}", f"{max(ratios):.1f}"
+        se = lambda keep: f"{100 * max(r['review_sd'] / r['trials'] ** 0.5 for n in ('clinc', 'massive') for k, r in main['data'][n]['results'].items() if keep(k)):.1f}"
+        out["MaxSeReview"] = se(lambda k: True)
+        out["MaxSeReviewFive"] = se(lambda k: k.startswith("0.05|"))
         certified = [m for m in meth if m not in ("fixed-0.7", "per-node-selective", "plug-in")]
         worst = lambda names: pct(max(main["data"][n]["results"][f"{e}|{m}"]["violation"]
                                       for n in names for e in eps_name for m in certified),
@@ -290,6 +325,18 @@ def numbers():
         if "clinc_llm_fs" in stats["data"]:
             out["LlmFsRequests"] = thousands(stats["data"]["clinc_llm_fs"]["model_requests"])
             out["LlmFsUnparsed"] = str(stats["data"]["clinc_llm_fs"]["model_unparsed"])
+    ab = load("ablation")
+    if ab:
+        out["AblationTrials"] = str(ab["trials"])
+        out["AblationMaxViol"] = pct(max(r["violation"] for d in ab["data"].values() for r in d.values()))
+        for name, d in ab["data"].items():
+            for modules, mn in [("node", "Node"), ("level", "Level")]:
+                for key, kn in [("bound|{}|pooled", "Pooled"), ("bound|{}|separate", "Separate"),
+                                ("search|{}|knapsack only", "Knapsack"), ("search|{}|with refinement", "Refined"),
+                                ("grid|{}|coarse (13)", "GridCoarse"), ("grid|{}|default (26)", "GridDefault"),
+                                ("grid|{}|fine (103)", "GridFine"), ("delta|{}|0.01", "DeltaStrict"),
+                                ("delta|{}|0.2", "DeltaLoose")]:
+                    out[f"Ab{ds[name]}{mn}{kn}"] = pct(d[key.format(modules)]["review_mean"])
     ns = load("nsweep")
     if ns:
         out["NsweepTrials"] = str(ns["trials"])
@@ -319,7 +366,7 @@ if __name__ == "__main__":
     numbers()
 
     for name, fn in [("main", table_main), ("nsweep", fig_nsweep), ("posthoc", fig_posthoc),
-                     ("edits", fig_edits), ("synth", fig_synth)]:
+                     ("edits", fig_edits), ("synth", fig_synth), ("ablation", table_ablation)]:
         res = load(name)
         if res is None:
             print("missing", name)

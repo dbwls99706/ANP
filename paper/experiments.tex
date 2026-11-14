@@ -18,7 +18,9 @@ To measure validity without test-set noise we treat the pooled held-out data (8{
 selected threshold vector is scored by its exact risk and review rate on the population. We
 report means over repeated draws and the \emph{violation rate}, the fraction of draws whose
 population risk exceeds $\eps$; a method with a $(1-\delta)$ guarantee must keep it below
-$\delta=0.1$.
+$\delta=0.1$. With \Trials\ draws the standard error of every mean review rate in
+Tables~\ref{tab:main} and~\ref{tab:main-massive} is at most \MaxSeReview\ points, and a
+violation rate observed as zero has a 95\% upper confidence limit of 1\%.
 
 \paragraph{Methods.} Without guarantee: a fixed threshold of 0.7; \emph{per-node selective
 risk}, which tunes each node separately so that its own error rate among committed inputs is
@@ -75,8 +77,8 @@ Attributing each error to the stage that caused it is exact for a cascade of int
 solvers; under routing it ignores that much of what goes wrong upstream is caught downstream,
 and by how much depends on the workflow.
 
-\paragraph{The price of uniformity.} At a fixed target the end-to-end methods escalate least:
-at $\eps=5\%$, Pareto testing needs \RevCParetoFive\% review on CLINC150 and \RevMParetoFive\%
+\paragraph{The price of uniformity.} At a fixed target and with this much calibration data
+the end-to-end methods escalate least: at $\eps=5\%$, Pareto testing needs \RevCParetoFive\% review on CLINC150 and \RevMParetoFive\%
 on MASSIVE, and a single shared threshold calibrated end to end needs \RevCSharedFive\% and
 \RevMSharedFive\%. They test a short pre-ordered list of configurations and pay no union over
 the grid. Certificates that stay valid under retuning pay for it, and how much depends on the
@@ -103,7 +105,7 @@ CLINC150 (\RevCLClevelTwo\% review at $\eps=2\%$, against \RevCLCsharedTwo\% sha
 the shared module elsewhere. Anchoring the charging rule on a tuning split did not pay for the data it
 consumes (\RevCAnchFive\% against \RevCLClevelFive\% per level on CLINC150 at $\eps=5\%$).
 
-\subsection{Calibration size and number of decisions}
+\subsection{Calibration size, number of decisions and design choices}
 
 \begin{figure}[t]
 \centering
@@ -143,6 +145,20 @@ target. At $n=4{,}000$ it needs \SynthThirtyTwoMidLCnode\% against \SynthThirtyT
 for the shared module, and at $n=16{,}000$ \SynthThirtyTwoLargeLCnode\% against
 \SynthThirtyTwoLargeLCshared\%. FE charging needs at least \SynthFEmin\% review in every
 setting, because the chains have rescue by construction.
+
+Table~\ref{tab:ablation} in the appendix varies the design choices of the certificate at
+$\eps=5\%$. Pooling the charges into one binomial count (remark~(ii) of
+\S\ref{sec:sep}) matters most for fine-grained modules: with one confidence band per node
+the review rate rises from \AbCNodePooled\% to \AbCNodeSeparate\% on CLINC150 and from
+\AbMNodePooled\% to \AbMNodeSeparate\% on MASSIVE. The grid trades resolution against the
+union bound. Per level the trade is flat (\AbCLevelGridCoarse\%, \AbCLevelGridDefault\% and
+\AbCLevelGridFine\% review on CLINC150 with 13, 26 and 103 grid values); per node, where the
+union is over twelve thresholds, the coarse grid is the better one (\AbCNodeGridCoarse\%
+against \AbCNodeGridFine\% for the fine grid). A confidence of 0.99 instead of 0.90 costs
+less than a point (\AbCLevelDeltaStrict\% against \AbCLevelGridDefault\% per level), since
+$\delta$ enters the margin only through $\ln(1/\delta)$. The local search after the knapsack
+did not improve on the knapsack solution in any of these settings; it remains useful for
+certificates with several parts, where the selection is not solved exactly.
 
 \subsection{Post hoc retuning}
 
@@ -294,3 +310,17 @@ certificate; with 1{,}000 labels it still needs \EditLUpgradeScratchLCThousand\%
 thresholds matter. The classifier's confidences are not saturated, so a threshold shared
 with the language-model leaves is too strict for it, and per-node modules
 (\EditLClassifierLocalNodeThousand\% at $m=1{,}000$) overtake per-level ones.
+
+\subsection{Which certificate when}\label{sec:exp-summary}
+
+The experiments suggest a simple division of labour. For a workflow that is frozen and has
+one target, a shared threshold calibrated end to end is the baseline to beat: it is simple
+and, with a few thousand calibration runs, needs the least review. A certificate that must
+stay valid while thresholds and targets are retuned should be a charged certificate with
+least-confident charging and coarse modules, per level or shared; it costs a few points of
+review at a few thousand runs, and less than the end-to-end alternatives when calibration
+data are scarce. A workflow that is edited should keep its counts per route, so that an edit
+costs labels in proportion to the traffic it touches. Per-node thresholds are worth their
+larger union bound only when nodes differ in kind, as when a trained classifier sits next
+to language-model nodes. In all cases the certificate should be allowed to refuse: on LLM-3
+the correct answer to ``which thresholds give 5\% error?'' is that none do.
