@@ -96,7 +96,8 @@ module the LC certificate uses exactly the end-to-end error counts
 union over the grid alone.
 
 \paragraph{Granularity.} Fine-grained thresholds buy less than one might expect on these
-workflows. With thresholds optimised directly on the population, per-node thresholds reach
+workflows. With thresholds optimised directly on the population (by coordinate descent for
+the per-node ones), per-node thresholds reach
 $\eps=5\%$ at \OracleNodeCFive\% review against \OracleSharedCFive\% for the best shared
 threshold on CLINC150 (\OracleNodeCTwo\% against \OracleSharedCTwo\% at $\eps=2\%$), and
 \OracleNodeMFive\% against \OracleSharedMFive\% on MASSIVE; in line with this, Pareto testing
@@ -257,9 +258,13 @@ right on \LlmRootAccT\% of inputs and, on \LlmRootWrongSatT\% of all inputs, wro
 confidence of at least $1-10^{-6}$. Rewording the question, tried on training-split requests
 only, did not change this (Appendix~\ref{app:llm}); in-context examples do, as shown below. The
 runtime's default threshold of 0.7 escalates \LlmDefaultReviewT\% of runs and lets an error
-rate of \LlmDefaultRiskT\% through. Even the strictest finite threshold leaves
-\LlmTopRiskT\% errors at \LlmTopReviewT\% review, so targets of 2\% and 5\% are out of reach
-for any threshold rule, and every certified method declines to commit. At $\eps=10\%$ a
+rate of \LlmDefaultRiskT\% through. Even the strictest finite shared threshold leaves
+\LlmTopRiskT\% errors at \LlmTopReviewT\% review. Separate thresholds do not help. If only
+\texttt{scope} commits, at its strictest finite threshold, and every other node escalates,
+the workflow still declines \LlmRootOnlyRiskT\% of all inputs wrongly, and committing anywhere
+else can only add errors. Targets of 2\% and 5\% are therefore reached by one assignment
+only, the one that escalates every run ($\tau=\infty$), and every certified method returns
+it. At $\eps=10\%$ a
 shared threshold calibrated end to end certifies with \RevTSharedTen\% review and Pareto
 testing with \RevTParetoTen\%; the uniform certificates, whose margins exceed the little
 room that is left, escalate \RevTLCsharedTen\% with a shared module and practically
@@ -267,8 +272,8 @@ everything otherwise. The value of a certificate in this workflow is that it say
 
 \paragraph{Where certification is possible.} Without abstention LLM-2 errs on
 \FreeErrLlm\% of inputs, and on \LlmDefaultRiskL\% at the default threshold
-(Table~\ref{tab:main-llm} in the appendix). A 2\% target is again out of reach---the
-strictest threshold leaves \LlmTopRiskL\%---and the certified methods escalate at least
+(Table~\ref{tab:main-llm} in the appendix). A 2\% target is again out of reach for a shared threshold---the
+strictest finite one leaves \LlmTopRiskL\%---and the certified methods escalate at least
 99\% of inputs. At
 $\eps=5\%$ the picture matches the trained workflows. The end-to-end methods need
 \RevLSharedFive\% (shared threshold) and \RevLParetoFive\% (Pareto testing) review. LC
@@ -288,7 +293,8 @@ now right on \LlmRootAccG\% of inputs, and the error rate without abstention fal
 \FreeErrLlmThree\% to \FreeErrLlmThreeFs\% on all traffic (\textbf{LLM-3-FS}) and from
 \FreeErrLlm\% to \FreeErrLlmFs\% on the in-scope traffic (\textbf{LLM-2-FS}). The confidences
 are even more saturated (\LlmSaturatedG\% and \LlmSaturatedF\% at least $1-10^{-6}$). The
-three-level workflow, which could not be certified at 5\% zero-shot, now can
+three-level workflow, which zero-shot reached 5\% only by escalating every run, can now be
+certified
 (Table~\ref{tab:main-llm-fs}): it needs \RevGSharedFive\% review with the shared end-to-end
 threshold, \RevGParetoFive\% with Pareto testing, \RevGLClevelFive\% with LC per level and
 \RevGLCnodeFive\% per node; FE per node needs \RevGFEnodeFive\%. On LLM-2-FS a 5\%
@@ -434,4 +440,5 @@ to language-model nodes. For an agent, whose steps have no labels of their own, 
 certificate to use is least-confident charging with one module per role: it needs the
 outcome of each run and nothing else, and it stayed within three points of end-to-end
 calibration. In all cases the certificate should be allowed to refuse: on LLM-3
-the correct answer to ``which thresholds give 5\% error?'' is that none do.
+the correct answer to ``which thresholds give 5\% error?'' is that none do, short of escalating
+every run.

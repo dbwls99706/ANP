@@ -327,6 +327,9 @@ def numbers():
             out[f"LlmDefaultReview{tag}"] = pct(d["at_default"]["review"])
             out[f"LlmTopRisk{tag}"] = pct(d["at_top"]["risk"])
             out[f"LlmTopReview{tag}"] = pct(d["at_top"]["review"])
+            if "root_only" in d:
+                out[f"LlmRootOnlyRisk{tag}"] = pct(d["root_only"]["risk"])
+                out[f"LlmRootOnlyReview{tag}"] = pct(d["root_only"]["review"])
             out[f"LlmSize{tag}"] = thousands(d["N"])
         d = stats["data"]["clinc_llm"]
         out["LlmModel"], out["LlmUpgrade"] = d["model"], d["upgrade"]

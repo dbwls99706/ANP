@@ -400,6 +400,14 @@ def exp_ablation(trials):
 # -- description of the language-model workflows ----------------------------
 
 
+def root_only(pop, top):
+    """Only the root commits, at its strictest finite threshold. Risk is monotone in every
+    threshold, so this is the smallest risk of any assignment in which the root commits."""
+    tau = np.full(pop.n_nodes, rc.INF)
+    tau[0] = top
+    return dict(risk=pop.risk(tau), review=pop.review(tau))
+
+
 def exp_llmstats(_trials=None):
     """Population facts about the language-model workflows (no sampling involved)."""
     out = {}
@@ -418,6 +426,7 @@ def exp_llmstats(_trials=None):
                          saturated_share=float((conf >= top).mean()),
                          root_wrong_saturated=float((root_first & (pop.dev_conf >= top)).mean()),
                          at_default=shared(0.7), at_top=shared(top),
+                         root_only=root_only(pop, top),
                          conf_when_wrong=float(pop.dev_conf[pop.deviated].mean()))
     # Number of requests answered by each model.
     files = {("clinc_llm", "model"): "{model}", ("clinc_llm", "upgrade"): "{upgrade}",

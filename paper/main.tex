@@ -1,3 +1,4 @@
+\pdfoutput=1
 \documentclass[11pt]{article}
 \usepackage[margin=1in]{geometry}
 \usepackage[T1]{fontenc}
@@ -47,30 +48,27 @@ Separable, Route-Indexed Calibration for Decision Workflows}
 \begin{abstract}
 A decision workflow is a program whose branches are taken by learned models: each decision
 node commits to a choice when its confidence clears a threshold and escalates to a human
-otherwise. Operators want the rate of wrong, unescalated runs below a target with as little
-human review as possible, and they keep editing the workflow. Distribution-free risk control
-is usually run for one target on one frozen workflow, so a renegotiated target or a swapped
-model sends the whole workflow back to calibration. We study certificates that survive such
-changes. First, any threshold-independent rule that \emph{charges} each erroneous run to one
-node on its route bounds the end-to-end risk by a sum of per-node terms. The bound holds
-uniformly over a grid of threshold assignments with a single binomial confidence bound, and
-thresholds are chosen by minimising a separable surrogate of the review rate, which is a
-knapsack solved exactly. Charging the least confident node is
-exact for shared thresholds; charging the first wrong decision, the natural analogue of
-stage-wise decompositions, overstates the risk by factors of \FdOverstateMax\ and
+otherwise. Operators want the rate of wrong, unescalated runs below a target with little
+human review, and they keep editing the workflow. Distribution-free risk control is usually
+run for one target on one frozen workflow, so a new target or model sends everything back
+to calibration. We study certificates that survive such changes. First, any
+threshold-independent rule that \emph{charges} each erroneous run to one node on its route
+bounds the end-to-end risk by a sum of per-node terms; the bound holds uniformly over a grid
+of thresholds, and a separable surrogate of the review rate is minimised exactly as a
+knapsack. Charging the least confident node is exact for shared thresholds, whereas charging
+the first wrong decision overstates the risk by factors of \FdOverstateMax\ and
 \FdOverstateMin\ on two real workflows, because downstream nodes escalate misrouted inputs.
-Second, an edit changes only the runs that pass through the edited node, so a certificate
-indexed by route can be repaired with labels from the affected traffic alone: after
-replacing one leaf model, \EditM\ fresh labels restore a 5\% certificate at
-\EditLocalClinc\% and \EditLocalMassive\% review, where recalibration from scratch escalates
-more than nine inputs in ten. With a hosted language model, a zero-shot workflow whose
-default threshold lets \LlmDefaultRiskT\% errors through cannot be certified at a 5\% target by any choice of thresholds, and
-becomes certifiable with in-context examples. On a knowledge-graph agent that takes up to nine
-tool-mediated decisions and is labelled by the outcome of its run only, the certificate stays
-within three points of end-to-end calibration, while first-error charging overstates the risk
-by a factor of \FdRatioWTen. The price of uniform validity is statistical,
-of order $M\ln G/n$ for $M$ thresholds on a grid of size $G$. The method is implemented in
-an open-source workflow runtime that checks the certificate statically.
+Second, an edit changes only the runs through the edited node, so a certificate indexed by
+route is repaired with labels from the affected traffic: after replacing one leaf model,
+\EditM\ fresh labels restore a 5\% certificate at \EditLocalClinc\% and \EditLocalMassive\%
+review, where recalibration from scratch escalates over nine inputs in ten. A zero-shot
+language-model workflow whose default threshold lets \LlmDefaultRiskT\% errors through
+reaches a 5\% target only by escalating every run, and certifies it at \RevGLClevelFive\%
+review with in-context examples. On a knowledge-graph agent labelled by the outcome of
+its run only, the certificate stays within three points of end-to-end calibration, while
+first-error charging overstates the risk \FdRatioWTen-fold. Uniform validity costs a margin
+of order $M\ln G/n$ for $M$ thresholds on a grid of size $G$. The method is implemented in an
+open-source runtime that checks certificates statically.
 \end{abstract}
 
 \section{Introduction}
