@@ -440,6 +440,18 @@ def exp_llmstats(_trials=None):
             rows = [json.loads(line) for line in open(raw)]
             out[name][f"{key}_requests"] = len(rows)
             out[name][f"{key}_unparsed"] = sum(1 for r in rows if max(r["probs"]) == 0)
+    # The request counts come from the raw answers, which are not tracked. They are kept
+    # with the tables so that a clone without the raw answers reports the same numbers.
+    path = os.path.join(DATA, "llm_requests.json")
+    stored = json.load(open(path)) if os.path.exists(path) else {}
+    for name, d in out.items():
+        counted = {k: v for k, v in d.items() if k.endswith(("_requests", "_unparsed"))}
+        if counted:
+            stored[name] = counted
+        else:
+            d.update(stored.get(name, {}))
+    with open(path, "w") as f:
+        json.dump(stored, f, indent=1, sort_keys=True)
     return out
 
 
