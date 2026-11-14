@@ -1,0 +1,22 @@
+\begin{tabular}{llrrrrrrrrr}
+\toprule
+ & & \multicolumn{3}{c}{$\varepsilon=5\%$} & \multicolumn{3}{c}{$\varepsilon=10\%$} & \multicolumn{3}{c}{$\varepsilon=20\%$} \\
+\cmidrule(lr){3-5}\cmidrule(lr){6-8}\cmidrule(lr){9-11}
+Method & Guarantee & viol. & risk & review & viol. & risk & review & viol. & risk & review \\
+\midrule
+Fixed threshold 0.7 & none & 100 & 21.3 & 21.1 & 100 & 21.3 & 21.1 & 100 & 21.3 & 21.1 \\
+Plug-in (no confidence bound) & none & 51 & 5.0 & 63.1 & 18 & 9.6 & 41.9 & 28 & 19.6 & 19.3 \\
+\midrule
+Shared threshold, end-to-end LTT & fixed & 2 & 4.0 & 71.2 & 8 & 8.7 & 51.7 & 0 & 18.2 & 26.6 \\
+End-to-end Pareto testing & fixed & 4 & 4.1 & 70.0 & 4 & 8.6 & 51.4 & 1 & 17.7 & 27.5 \\
+End-to-end, uniform over grid & uniform & 0 & 2.9 & 77.5 & 0 & 7.0 & 56.5 & 0 & 15.8 & 31.6 \\
+\midrule
+First-error, per node & uniform & 0 & 0.0 & 100.0 & 0 & 2.2 & 78.7 & 0 & 6.6 & 48.1 \\
+First-error, per role & uniform & 0 & 0.0 & 100.0 & 0 & 2.3 & 76.1 & 0 & 6.8 & 50.0 \\
+\midrule
+Least-confident, per node & uniform & 0 & 2.8 & 75.9 & 0 & 6.9 & 54.1 & 0 & 15.2 & 27.5 \\
+Least-confident, per role & uniform & 0 & 3.2 & 72.8 & 0 & 7.4 & 52.4 & 0 & 16.4 & 26.5 \\
+Least-confident, shared & uniform & 0 & 3.3 & 74.7 & 0 & 8.2 & 53.3 & 0 & 17.3 & 28.8 \\
+Anchored, per role & uniform & 0 & 2.3 & 81.4 & 0 & 6.4 & 58.3 & 0 & 15.2 & 29.7 \\
+\bottomrule
+\end{tabular}

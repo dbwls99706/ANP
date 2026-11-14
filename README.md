@@ -112,7 +112,7 @@ Topological sort identifies independent stages. Nodes within a stage execute con
 
 ---
 
-## 103 Built-in Nodes
+## 104 Built-in Nodes
 
 Every node is **production-tested Rust** — no npm packages, no pip dependencies, no supply chain risk.
 
@@ -123,7 +123,7 @@ Every node is **production-tested Rust** — no npm packages, no pip dependencie
 | **Data Formats** | 9 | json_parse, csv, yaml, xml, toml, markdown, base64, url_encode, gzip |
 | **Data Processing** | 8 | diff, group_by, pivot, lookup, math, array, string, regex |
 | **AI / ML** | 8 | llm_call, tool_router, embedding, sentiment, summarize, classify, extract, translate |
-| **AI Workflow** | 2 | prompt_chain, agent_loop |
+| **AI Workflow** | 3 | prompt_chain, agent_loop, decision |
 | **Auth & Security** | 9 | jwt, api_key, password, totp, encrypt, hash, sanitize, aes, oauth |
 | **State & Storage** | 10 | database, memory, cache, queue, priority_queue, session, kv_store, counter, redis, sql_query |
 | **Resilience & Flow** | 9 | rate_limit, retry, circuit_breaker, semaphore, deduplicate, throttle, batch, cron, aggregate |
@@ -132,7 +132,7 @@ Every node is **production-tested Rust** — no npm packages, no pip dependencie
 | **Integration** | 3 | email, image_resize, multipart |
 | **Advanced Workflow** | 5 | event_emitter, metrics, state_machine, message_broker, ws |
 
-From a REST API to a real-time dashboard to an autonomous AI agent — 103 nodes compose into anything.
+From a REST API to a real-time dashboard to an autonomous AI agent — 104 nodes compose into anything.
 
 ---
 
@@ -180,6 +180,42 @@ anp edit graph.anp.json "add rate limiting before the API handler"
 anp edit graph.anp.json "change the LLM to Claude"
 ```
 
+### Certify a Decision Workflow
+
+A `decision` node commits to a choice when its confidence reaches its threshold and sends
+the input to its `uncertain` port (human review) otherwise. `anp certify` turns labelled
+calibration runs into a certificate: an upper bound on the rate of wrong, unescalated runs
+that holds for every threshold setting at once, so thresholds can be retuned later without
+recalibrating.
+
+```bash
+# 1. Issue a certificate from labelled runs (one JSON object per line)
+anp certify examples/certify/workflow.anp.json \
+    --traces examples/certify/traces.jsonl --out cert.json
+
+# 2. Pick the thresholds with the least human review for a 5% error target
+anp certify examples/certify/workflow.anp.json --cert cert.json \
+    --epsilon 0.05 --apply tuned.anp.json
+
+# 3. Check a graph against the certificate (fails if thresholds are too low
+#    or a decision node changed since it was certified)
+anp verify tuned.anp.json --risk cert.json --epsilon 0.05
+
+# 4. After editing a node, relabel only the traffic that passes through it
+anp certify examples/certify/workflow_edited.anp.json --cert cert.json \
+    --fresh examples/certify/fresh_intent_banking.jsonl --edited intent_banking \
+    --out cert.json --epsilon 0.05 --apply tuned.anp.json
+```
+
+Token probabilities of language models sit very close to 1; pass `--fine-tail` when issuing
+the certificate to add the thresholds 0.9999, 0.99999 and 0.999999.
+
+A trace line lists the decisions of one run with every node committing, in order:
+`{"steps": [{"node": "scope", "confidence": 0.93, "correct": true}, ...]}`. `correct` says
+whether the decision matches the ground truth; only the first `false` of a run matters.
+The example traces are real model outputs on CLINC150. The method and its evaluation are
+described in [`paper/`](paper/).
+
 ### CLI Commands
 
 ```bash
@@ -190,6 +226,7 @@ anp verify <graph>           # Formal verification (types, cycles, reachability)
 anp optimize <graph>         # Dead node elimination, transform fusion
 anp compile <graph>          # AOT compilation to execution plan
 anp diff <a> <b>             # Semantic graph diff
+anp certify <graph>          # Certify the error rate of decision nodes, tune thresholds
 anp validate <graph>         # Validate without executing
 anp info <graph>             # Display graph structure
 anp explain <graph>          # Human-readable explanation
@@ -267,7 +304,7 @@ anp init <name>              # Scaffold a new project
 ANP/
 ├── crates/
 │   ├── anp-core/      # Graph spec, validator, scheduler, executor, GraphOp editor, tracing
-│   ├── anp-nodes/     # 103 built-in node implementations (pure Rust)
+│   ├── anp-nodes/     # 104 built-in node implementations (pure Rust)
 │   ├── anp-planner/   # LLM-powered graph generation from prompts
 │   └── anp-cli/       # CLI interface (run, prompt, edit, verify, optimize, compile, diff)
 ├── examples/          # Example ANP graph files
@@ -308,7 +345,7 @@ Path traversal prevention, SSRF protection (scheme-restricted URLs), XSS-safe HT
 | AI-Native Nodes | 10 nodes | Limited | Yes | Limited |
 | Prompt to Graph | Yes | No | No | No |
 | Parallel Execution | Automatic | No | No | No |
-| Built-in Nodes | 103 (Rust) | ~5000 (community JS) | ~100 | ~400 |
+| Built-in Nodes | 104 (Rust) | ~5000 (community JS) | ~100 | ~400 |
 | Zero GC Pauses | Yes | No | No | No |
 | Graph Editing via LLM | Yes | No | No | No |
 

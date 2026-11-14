@@ -25,7 +25,7 @@ const crates = [
   { name: "anp-cli", desc: "CLI interface" },
   { name: "anp-planner", desc: "LLM graph generation" },
   { name: "anp-core", desc: "Graph spec, runtime, scheduler" },
-  { name: "anp-nodes", desc: "103 built-in nodes" },
+  { name: "anp-nodes", desc: "104 built-in nodes" },
 ];
 
 export default function Architecture() {

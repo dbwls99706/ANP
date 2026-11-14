@@ -73,6 +73,7 @@ const NETWORK_TYPES: &[&str] = &[
 const AI_TYPES: &[&str] = &[
     "llm_call",
     "tool_router",
+    "decision",
     "embedding",
     "sentiment",
     "summarize",
@@ -260,21 +261,102 @@ fn check_completeness(graph: &AnpGraph) -> VerificationCheck {
     }
 }
 
-/// 3. Determinism: no node receives multiple edges on the same input port.
-fn check_determinism(graph: &AnpGraph) -> VerificationCheck {
-    // Map (to_node, to_port) -> count of incoming edges
-    let mut port_counts: HashMap<(&str, &str), usize> = HashMap::new();
+/// Node types that emit on exactly one output port per run.
+const ROUTER_TYPES: &[&str] = &["decision", "conditional", "tool_router"];
+
+/// For every node, the (router, port) pairs that every path to it passes through.
+fn branch_guards(graph: &AnpGraph) -> HashMap<&str, HashSet<(&str, &str)>> {
+    let routers: HashSet<&str> = graph
+        .nodes
+        .iter()
+        .filter(|n| ROUTER_TYPES.contains(&n.node_type.as_str()))
+        .map(|n| n.id.as_str())
+        .collect();
+    let mut incoming: HashMap<&str, Vec<&crate::graph::spec::Edge>> = HashMap::new();
     for e in &graph.edges {
-        *port_counts
+        incoming.entry(e.to_node.as_str()).or_default().push(e);
+    }
+    let mut guards: HashMap<&str, HashSet<(&str, &str)>> = HashMap::new();
+    for layer in topological_layers(graph) {
+        for id in layer {
+            let mut common: Option<HashSet<(&str, &str)>> = None;
+            for e in incoming.get(id).into_iter().flatten() {
+                let mut via = guards
+                    .get(e.from_node.as_str())
+                    .cloned()
+                    .unwrap_or_default();
+                if routers.contains(e.from_node.as_str()) {
+                    via.insert((e.from_node.as_str(), e.from_port.as_str()));
+                }
+                common = Some(match common {
+                    None => via,
+                    Some(c) => c.intersection(&via).copied().collect(),
+                });
+            }
+            guards.insert(id, common.unwrap_or_default());
+        }
+    }
+    guards
+}
+
+/// The router ports an edge's data must have passed through: router -> port.
+fn edge_branch<'a>(
+    e: &'a crate::graph::spec::Edge,
+    guards: &HashMap<&'a str, HashSet<(&'a str, &'a str)>>,
+    routers: &HashSet<&'a str>,
+) -> HashMap<&'a str, &'a str> {
+    let mut map: HashMap<&str, &str> = guards
+        .get(e.from_node.as_str())
+        .into_iter()
+        .flatten()
+        .copied()
+        .collect();
+    if routers.contains(e.from_node.as_str()) {
+        map.insert(e.from_node.as_str(), e.from_port.as_str());
+    }
+    map
+}
+
+/// 3. Determinism: no input port can receive data from two edges in the same run.
+///
+/// Several edges into one port are fine when they come from mutually exclusive
+/// branches: somewhere upstream they leave the same router through different ports.
+fn check_determinism(graph: &AnpGraph) -> VerificationCheck {
+    let guards = branch_guards(graph);
+    let routers: HashSet<&str> = graph
+        .nodes
+        .iter()
+        .filter(|n| ROUTER_TYPES.contains(&n.node_type.as_str()))
+        .map(|n| n.id.as_str())
+        .collect();
+    let mut by_port: HashMap<(&str, &str), Vec<&crate::graph::spec::Edge>> = HashMap::new();
+    for e in &graph.edges {
+        by_port
             .entry((e.to_node.as_str(), e.to_port.as_str()))
-            .or_default() += 1;
+            .or_default()
+            .push(e);
     }
 
-    let ambiguous: Vec<String> = port_counts
-        .iter()
-        .filter(|(_, &count)| count > 1)
-        .map(|((node, port), count)| format!("{}.{} ({} sources)", node, port, count))
-        .collect();
+    let mut ambiguous: Vec<String> = Vec::new();
+    for ((node, port), edges) in &by_port {
+        if edges.len() < 2 {
+            continue;
+        }
+        let branches: Vec<HashMap<&str, &str>> = edges
+            .iter()
+            .map(|e| edge_branch(e, &guards, &routers))
+            .collect();
+        let exclusive = |a: &HashMap<&str, &str>, b: &HashMap<&str, &str>| {
+            a.iter()
+                .any(|(router, port)| b.get(router).is_some_and(|other| other != port))
+        };
+        let clash = (0..branches.len())
+            .any(|i| (i + 1..branches.len()).any(|j| !exclusive(&branches[i], &branches[j])));
+        if clash {
+            ambiguous.push(format!("{}.{} ({} sources)", node, port, edges.len()));
+        }
+    }
+    ambiguous.sort();
 
     if ambiguous.is_empty() {
         VerificationCheck {
@@ -439,6 +521,98 @@ fn check_termination(graph: &AnpGraph) -> VerificationCheck {
     }
 }
 
+/// 6. Decision Paths: every outcome of a `decision` node is handled.
+///
+/// A decision routes to one port per choice, or to its uncertain port when the
+/// winning probability is below the threshold. An unhandled uncertain port
+/// silently drops low-confidence inputs, so it fails verification. The top
+/// probability over n choices is always at least 1/n, so the uncertain port is
+/// unreachable — and not required — when threshold <= 1/n.
+fn check_decision_paths(graph: &AnpGraph) -> VerificationCheck {
+    let used_outputs: HashSet<(&str, &str)> = graph
+        .edges
+        .iter()
+        .map(|e| (e.from_node.as_str(), e.from_port.as_str()))
+        .collect();
+
+    let mut decisions = 0;
+    let mut unhandled_uncertain: Vec<String> = Vec::new();
+    let mut unhandled_choices: Vec<String> = Vec::new();
+
+    for node in graph.nodes.iter().filter(|n| n.node_type == "decision") {
+        decisions += 1;
+        let id = node.id.as_str();
+
+        let choices: Vec<&str> = node
+            .config
+            .get("choices")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|c| c.as_str().or_else(|| c.get("name")?.as_str()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        for choice in &choices {
+            if !used_outputs.contains(&(id, choice)) {
+                unhandled_choices.push(format!("{}.{}", id, choice));
+            }
+        }
+
+        let threshold = node
+            .config
+            .get("threshold")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.7);
+        let never_commit = node.config.get("never_commit").and_then(|v| v.as_bool()) == Some(true);
+        let uncertain_reachable =
+            never_commit || choices.is_empty() || threshold > 1.0 / choices.len() as f64;
+        let uncertain_port = node
+            .config
+            .get("uncertain_port")
+            .and_then(|v| v.as_str())
+            .unwrap_or("uncertain");
+        if uncertain_reachable && !used_outputs.contains(&(id, uncertain_port)) {
+            unhandled_uncertain.push(format!("{}.{}", id, uncertain_port));
+        }
+    }
+
+    let mut details = Vec::new();
+    let mut status = CheckStatus::Pass;
+
+    if !unhandled_uncertain.is_empty() {
+        status = CheckStatus::Fail;
+        details.push(format!(
+            "{} unhandled low-confidence path(s): {}",
+            unhandled_uncertain.len(),
+            unhandled_uncertain.join(", ")
+        ));
+    }
+    if !unhandled_choices.is_empty() {
+        if status == CheckStatus::Pass {
+            status = CheckStatus::Warn;
+        }
+        details.push(format!(
+            "{} unhandled choice(s): {}",
+            unhandled_choices.len(),
+            unhandled_choices.join(", ")
+        ));
+    }
+    if details.is_empty() {
+        details.push(if decisions == 0 {
+            "No decision nodes".to_string()
+        } else {
+            "All decision outcomes handled".to_string()
+        });
+    }
+
+    VerificationCheck {
+        name: "Decision Paths".to_string(),
+        status,
+        details,
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Metrics computation
 // ---------------------------------------------------------------------------
@@ -525,6 +699,7 @@ pub fn verify(graph: &AnpGraph) -> VerificationReport {
         check_determinism(graph),
         check_port_coverage(graph),
         check_termination(graph),
+        check_decision_paths(graph),
     ];
 
     let overall_pass = checks
@@ -1044,6 +1219,138 @@ mod tests {
     }
 
     // -- Empty graph --
+
+    fn decision(id: &str, config: serde_json::Value) -> Node {
+        let mut n = node(id, "decision", NodeKind::Processor);
+        n.config = config;
+        n
+    }
+
+    fn decision_graph(config: serde_json::Value, ports: &[&str]) -> AnpGraph {
+        let mut nodes = vec![source("src"), decision("d", config)];
+        let mut edges = vec![edge("e0", "src", "d")];
+        for (i, port) in ports.iter().enumerate() {
+            let sink_id = format!("sink_{}", port);
+            nodes.push(sink(&sink_id));
+            edges.push(edge_port(
+                &format!("e{}", i + 1),
+                "d",
+                port,
+                &sink_id,
+                "default",
+            ));
+        }
+        make_graph("decision", nodes, edges)
+    }
+
+    #[test]
+    fn test_join_of_exclusive_branches_is_deterministic() {
+        // d routes to a or b; both branches (and d's uncertain port) rejoin in one sink.
+        let d = decision(
+            "d",
+            serde_json::json!({"question": "q", "choices": ["a", "b"]}),
+        );
+        let g = make_graph(
+            "join",
+            vec![
+                source("src"),
+                d,
+                processor("pa"),
+                processor("pb"),
+                sink("out"),
+            ],
+            vec![
+                edge("e0", "src", "d"),
+                edge_port("e1", "d", "a", "pa", "default"),
+                edge_port("e2", "d", "b", "pb", "default"),
+                edge("e3", "pa", "out"),
+                edge("e4", "pb", "out"),
+                edge_port("e5", "d", "uncertain", "out", "default"),
+            ],
+        );
+        assert_eq!(
+            find_check(&verify(&g), "Determinism").status,
+            CheckStatus::Pass
+        );
+
+        // The same port of a router feeding one input twice is still ambiguous.
+        let mut twice = g.clone();
+        twice
+            .edges
+            .push(edge_port("e6", "d", "a", "out", "default"));
+        assert_eq!(
+            find_check(&verify(&twice), "Determinism").status,
+            CheckStatus::Warn
+        );
+    }
+
+    #[test]
+    fn test_decision_all_paths_handled() {
+        let g = decision_graph(
+            serde_json::json!({"question": "q", "choices": ["a", {"name": "b"}]}),
+            &["a", "b", "uncertain"],
+        );
+        let report = verify(&g);
+        assert_eq!(
+            find_check(&report, "Decision Paths").status,
+            CheckStatus::Pass
+        );
+        assert!(report.metrics.has_ai_nodes);
+    }
+
+    #[test]
+    fn test_decision_unhandled_uncertain_fails() {
+        let g = decision_graph(
+            serde_json::json!({"question": "q", "choices": ["a", "b"]}),
+            &["a", "b"],
+        );
+        let report = verify(&g);
+        let check = find_check(&report, "Decision Paths");
+        assert_eq!(check.status, CheckStatus::Fail);
+        assert!(check.details[0].contains("d.uncertain"));
+        assert!(!report.overall_pass);
+    }
+
+    #[test]
+    fn test_decision_custom_uncertain_port() {
+        let config = serde_json::json!({
+            "question": "q", "choices": ["a", "b"], "uncertain_port": "review"
+        });
+        let handled = verify(&decision_graph(config.clone(), &["a", "b", "review"]));
+        assert_eq!(
+            find_check(&handled, "Decision Paths").status,
+            CheckStatus::Pass
+        );
+        let missing = verify(&decision_graph(config, &["a", "b", "uncertain"]));
+        assert_eq!(
+            find_check(&missing, "Decision Paths").status,
+            CheckStatus::Fail
+        );
+    }
+
+    #[test]
+    fn test_decision_unreachable_uncertain_not_required() {
+        // With 2 choices the top probability is always >= 0.5.
+        let g = decision_graph(
+            serde_json::json!({"question": "q", "choices": ["a", "b"], "threshold": 0.5}),
+            &["a", "b"],
+        );
+        assert_eq!(
+            find_check(&verify(&g), "Decision Paths").status,
+            CheckStatus::Pass
+        );
+    }
+
+    #[test]
+    fn test_decision_unhandled_choice_warns() {
+        let g = decision_graph(
+            serde_json::json!({"question": "q", "choices": ["a", "b"]}),
+            &["a", "uncertain"],
+        );
+        let check = find_check(&verify(&g), "Decision Paths").clone();
+        assert_eq!(check.status, CheckStatus::Warn);
+        assert!(check.details[0].contains("d.b"));
+    }
 
     #[test]
     fn test_empty_graph() {

@@ -259,6 +259,13 @@ pub fn get_node_signature(node_type: &str) -> NodeTypeSignature {
             inputs: HashMap::from([("default".into(), PortType::Any)]),
             outputs: HashMap::from([("default".into(), PortType::Any)]),
         },
+        "decision" => NodeTypeSignature {
+            inputs: HashMap::from([("default".into(), PortType::Any)]),
+            outputs: HashMap::from([
+                ("default".into(), PortType::Object(None)),
+                ("uncertain".into(), PortType::Object(None)),
+            ]),
+        },
         "switch" => NodeTypeSignature {
             inputs: HashMap::from([("default".into(), PortType::Any)]),
             outputs: HashMap::from([("default".into(), PortType::Any)]),

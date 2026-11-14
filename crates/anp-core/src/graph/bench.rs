@@ -78,6 +78,7 @@ fn python_loc_for_node(node_type: &str) -> usize {
         "llm_call" | "agent_loop" | "prompt_chain" => 30,
         "template" | "template_engine" | "html_template" => 15,
         "transform" | "filter" | "conditional" | "switch" => 10,
+        "decision" => 30,
         "file_read" | "file_write" => 12,
         "console" | "log" => 5,
         "jwt" | "oauth" | "api_key" | "password" | "totp" => 35,
@@ -180,6 +181,7 @@ fn classify_io(node_type: &str) -> (bool, bool, bool) {
         node_type,
         "llm_call"
             | "tool_router"
+            | "decision"
             | "embedding"
             | "sentiment"
             | "summarize"

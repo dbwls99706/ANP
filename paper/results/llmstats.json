@@ -1,0 +1,107 @@
+{
+ "data": {
+  "clinc_llm": {
+   "N": 8600,
+   "K": 12,
+   "model": "gpt-4.1-mini",
+   "upgrade": "gpt-5.4-mini",
+   "free_run_error": 0.24220930232558138,
+   "root_accuracy": 0.8309302325581396,
+   "saturated_share": 0.8113054281345565,
+   "root_wrong_saturated": 0.08,
+   "at_default": {
+    "risk": 0.21558139534883722,
+    "review": 0.08348837209302329
+   },
+   "at_top": {
+    "risk": 0.09104651162790697,
+    "review": 0.3859302325581395
+   },
+   "root_only": {
+    "risk": 0.07709302325581395,
+    "review": 0.8104651162790698
+   },
+   "conf_when_wrong": 0.9486278391742679,
+   "model_requests": 24045,
+   "model_unparsed": 113,
+   "upgrade_requests": 830,
+   "upgrade_unparsed": 0
+  },
+  "clinc_llm_inscope": {
+   "N": 7500,
+   "K": 11,
+   "model": "gpt-4.1-mini",
+   "upgrade": "gpt-5.4-mini",
+   "free_run_error": 0.1208,
+   "root_accuracy": 0.9564,
+   "saturated_share": 0.8529333333333333,
+   "root_wrong_saturated": 0.012533333333333334,
+   "at_default": {
+    "risk": 0.102,
+    "review": 0.025599999999999956
+   },
+   "at_top": {
+    "risk": 0.024,
+    "review": 0.25226666666666664
+   },
+   "root_only": {
+    "risk": 0.0,
+    "review": 1.0
+   },
+   "conf_when_wrong": 0.9336656710816778
+  },
+  "clinc_llm_fs": {
+   "N": 8600,
+   "K": 12,
+   "model": "gpt-4.1-mini",
+   "upgrade": "gpt-5.4-mini",
+   "free_run_error": 0.11046511627906977,
+   "root_accuracy": 0.9266279069767441,
+   "saturated_share": 0.8956995866678392,
+   "root_wrong_saturated": 0.01744186046511628,
+   "at_default": {
+    "risk": 0.09720930232558139,
+    "review": 0.02197674418604656
+   },
+   "at_top": {
+    "risk": 0.022906976744186045,
+    "review": 0.23686046511627912
+   },
+   "root_only": {
+    "risk": 0.012558139534883722,
+    "review": 0.8993023255813953
+   },
+   "conf_when_wrong": 0.9426676115789475,
+   "model_requests": 24058,
+   "model_unparsed": 0
+  },
+  "clinc_llm_fs_inscope": {
+   "N": 7500,
+   "K": 11,
+   "model": "gpt-4.1-mini",
+   "upgrade": "gpt-5.4-mini",
+   "free_run_error": 0.05386666666666667,
+   "root_accuracy": 0.9658666666666667,
+   "saturated_share": 0.9252666666666667,
+   "root_wrong_saturated": 0.010133333333333333,
+   "at_default": {
+    "risk": 0.0436,
+    "review": 0.01426666666666665
+   },
+   "at_top": {
+    "risk": 0.0116,
+    "review": 0.12946666666666662
+   },
+   "root_only": {
+    "risk": 0.0,
+    "review": 1.0
+   },
+   "conf_when_wrong": 0.9454081757425742
+  }
+ },
+ "grid_tail": [
+  0.9999,
+  0.99999,
+  0.999999
+ ]
+}

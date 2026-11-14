@@ -1,0 +1,2342 @@
+{
+  "version": "0.1",
+  "metadata": {
+    "name": "Assistant triage (CLINC150)",
+    "description": "Three levels of decisions: scope, product area, intent. Scores come from an upstream classifier; uncertain requests go to human review. Used to demonstrate `anp certify`."
+  },
+  "nodes": [
+    {
+      "id": "request",
+      "node_type": "file_read",
+      "kind": "source",
+      "config": {
+        "path": "examples/triage_ticket.txt"
+      },
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "default"
+        }
+      ]
+    },
+    {
+      "id": "scope",
+      "node_type": "decision",
+      "kind": "processor",
+      "config": {
+        "question": "Can the assistant handle this request?",
+        "choices": [
+          "in_scope",
+          "out_of_scope"
+        ],
+        "provider": "input",
+        "scores_field": "scores.scope",
+        "model": "intent-encoder-v1"
+      },
+      "inputs": [
+        {
+          "name": "default"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "in_scope"
+        },
+        {
+          "name": "out_of_scope"
+        },
+        {
+          "name": "uncertain"
+        }
+      ]
+    },
+    {
+      "id": "domain",
+      "node_type": "decision",
+      "kind": "processor",
+      "config": {
+        "question": "Which product area is the request about?",
+        "choices": [
+          "auto_and_commute",
+          "banking",
+          "credit_cards",
+          "home",
+          "kitchen_and_dining",
+          "meta",
+          "small_talk",
+          "travel",
+          "utility",
+          "work"
+        ],
+        "provider": "input",
+        "scores_field": "scores.domain",
+        "model": "intent-encoder-v1"
+      },
+      "inputs": [
+        {
+          "name": "default"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "auto_and_commute"
+        },
+        {
+          "name": "banking"
+        },
+        {
+          "name": "credit_cards"
+        },
+        {
+          "name": "home"
+        },
+        {
+          "name": "kitchen_and_dining"
+        },
+        {
+          "name": "meta"
+        },
+        {
+          "name": "small_talk"
+        },
+        {
+          "name": "travel"
+        },
+        {
+          "name": "utility"
+        },
+        {
+          "name": "work"
+        },
+        {
+          "name": "uncertain"
+        }
+      ]
+    },
+    {
+      "id": "out_of_scope_reply",
+      "node_type": "console",
+      "kind": "sink",
+      "config": {
+        "prefix": "[out of scope] "
+      },
+      "inputs": [
+        {
+          "name": "default"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "id": "human_review",
+      "node_type": "console",
+      "kind": "sink",
+      "config": {
+        "prefix": "[human review] "
+      },
+      "inputs": [
+        {
+          "name": "default"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "id": "intent_auto_and_commute",
+      "node_type": "decision",
+      "kind": "processor",
+      "config": {
+        "question": "Which auto_and_commute intent is this?",
+        "choices": [
+          "auto_and_commute_00",
+          "auto_and_commute_01",
+          "auto_and_commute_02",
+          "auto_and_commute_03",
+          "auto_and_commute_04",
+          "auto_and_commute_05",
+          "auto_and_commute_06",
+          "auto_and_commute_07",
+          "auto_and_commute_08",
+          "auto_and_commute_09",
+          "auto_and_commute_10",
+          "auto_and_commute_11",
+          "auto_and_commute_12",
+          "auto_and_commute_13",
+          "auto_and_commute_14"
+        ],
+        "provider": "input",
+        "scores_field": "scores.intent_auto_and_commute",
+        "model": "intent-encoder-v1"
+      },
+      "inputs": [
+        {
+          "name": "default"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "auto_and_commute_00"
+        },
+        {
+          "name": "auto_and_commute_01"
+        },
+        {
+          "name": "auto_and_commute_02"
+        },
+        {
+          "name": "auto_and_commute_03"
+        },
+        {
+          "name": "auto_and_commute_04"
+        },
+        {
+          "name": "auto_and_commute_05"
+        },
+        {
+          "name": "auto_and_commute_06"
+        },
+        {
+          "name": "auto_and_commute_07"
+        },
+        {
+          "name": "auto_and_commute_08"
+        },
+        {
+          "name": "auto_and_commute_09"
+        },
+        {
+          "name": "auto_and_commute_10"
+        },
+        {
+          "name": "auto_and_commute_11"
+        },
+        {
+          "name": "auto_and_commute_12"
+        },
+        {
+          "name": "auto_and_commute_13"
+        },
+        {
+          "name": "auto_and_commute_14"
+        },
+        {
+          "name": "uncertain"
+        }
+      ]
+    },
+    {
+      "id": "handle_auto_and_commute",
+      "node_type": "console",
+      "kind": "sink",
+      "config": {
+        "prefix": "[auto_and_commute] "
+      },
+      "inputs": [
+        {
+          "name": "default"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "id": "intent_banking",
+      "node_type": "decision",
+      "kind": "processor",
+      "config": {
+        "question": "Which banking intent is this?",
+        "choices": [
+          "banking_00",
+          "banking_01",
+          "banking_02",
+          "banking_03",
+          "banking_04",
+          "banking_05",
+          "banking_06",
+          "banking_07",
+          "banking_08",
+          "banking_09",
+          "banking_10",
+          "banking_11",
+          "banking_12",
+          "banking_13",
+          "banking_14"
+        ],
+        "provider": "input",
+        "scores_field": "scores.intent_banking",
+        "model": "intent-encoder-v2"
+      },
+      "inputs": [
+        {
+          "name": "default"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "banking_00"
+        },
+        {
+          "name": "banking_01"
+        },
+        {
+          "name": "banking_02"
+        },
+        {
+          "name": "banking_03"
+        },
+        {
+          "name": "banking_04"
+        },
+        {
+          "name": "banking_05"
+        },
+        {
+          "name": "banking_06"
+        },
+        {
+          "name": "banking_07"
+        },
+        {
+          "name": "banking_08"
+        },
+        {
+          "name": "banking_09"
+        },
+        {
+          "name": "banking_10"
+        },
+        {
+          "name": "banking_11"
+        },
+        {
+          "name": "banking_12"
+        },
+        {
+          "name": "banking_13"
+        },
+        {
+          "name": "banking_14"
+        },
+        {
+          "name": "uncertain"
+        }
+      ]
+    },
+    {
+      "id": "handle_banking",
+      "node_type": "console",
+      "kind": "sink",
+      "config": {
+        "prefix": "[banking] "
+      },
+      "inputs": [
+        {
+          "name": "default"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "id": "intent_credit_cards",
+      "node_type": "decision",
+      "kind": "processor",
+      "config": {
+        "question": "Which credit_cards intent is this?",
+        "choices": [
+          "credit_cards_00",
+          "credit_cards_01",
+          "credit_cards_02",
+          "credit_cards_03",
+          "credit_cards_04",
+          "credit_cards_05",
+          "credit_cards_06",
+          "credit_cards_07",
+          "credit_cards_08",
+          "credit_cards_09",
+          "credit_cards_10",
+          "credit_cards_11",
+          "credit_cards_12",
+          "credit_cards_13",
+          "credit_cards_14"
+        ],
+        "provider": "input",
+        "scores_field": "scores.intent_credit_cards",
+        "model": "intent-encoder-v1"
+      },
+      "inputs": [
+        {
+          "name": "default"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "credit_cards_00"
+        },
+        {
+          "name": "credit_cards_01"
+        },
+        {
+          "name": "credit_cards_02"
+        },
+        {
+          "name": "credit_cards_03"
+        },
+        {
+          "name": "credit_cards_04"
+        },
+        {
+          "name": "credit_cards_05"
+        },
+        {
+          "name": "credit_cards_06"
+        },
+        {
+          "name": "credit_cards_07"
+        },
+        {
+          "name": "credit_cards_08"
+        },
+        {
+          "name": "credit_cards_09"
+        },
+        {
+          "name": "credit_cards_10"
+        },
+        {
+          "name": "credit_cards_11"
+        },
+        {
+          "name": "credit_cards_12"
+        },
+        {
+          "name": "credit_cards_13"
+        },
+        {
+          "name": "credit_cards_14"
+        },
+        {
+          "name": "uncertain"
+        }
+      ]
+    },
+    {
+      "id": "handle_credit_cards",
+      "node_type": "console",
+      "kind": "sink",
+      "config": {
+        "prefix": "[credit_cards] "
+      },
+      "inputs": [
+        {
+          "name": "default"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "id": "intent_home",
+      "node_type": "decision",
+      "kind": "processor",
+      "config": {
+        "question": "Which home intent is this?",
+        "choices": [
+          "home_00",
+          "home_01",
+          "home_02",
+          "home_03",
+          "home_04",
+          "home_05",
+          "home_06",
+          "home_07",
+          "home_08",
+          "home_09",
+          "home_10",
+          "home_11",
+          "home_12",
+          "home_13",
+          "home_14"
+        ],
+        "provider": "input",
+        "scores_field": "scores.intent_home",
+        "model": "intent-encoder-v1"
+      },
+      "inputs": [
+        {
+          "name": "default"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "home_00"
+        },
+        {
+          "name": "home_01"
+        },
+        {
+          "name": "home_02"
+        },
+        {
+          "name": "home_03"
+        },
+        {
+          "name": "home_04"
+        },
+        {
+          "name": "home_05"
+        },
+        {
+          "name": "home_06"
+        },
+        {
+          "name": "home_07"
+        },
+        {
+          "name": "home_08"
+        },
+        {
+          "name": "home_09"
+        },
+        {
+          "name": "home_10"
+        },
+        {
+          "name": "home_11"
+        },
+        {
+          "name": "home_12"
+        },
+        {
+          "name": "home_13"
+        },
+        {
+          "name": "home_14"
+        },
+        {
+          "name": "uncertain"
+        }
+      ]
+    },
+    {
+      "id": "handle_home",
+      "node_type": "console",
+      "kind": "sink",
+      "config": {
+        "prefix": "[home] "
+      },
+      "inputs": [
+        {
+          "name": "default"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "id": "intent_kitchen_and_dining",
+      "node_type": "decision",
+      "kind": "processor",
+      "config": {
+        "question": "Which kitchen_and_dining intent is this?",
+        "choices": [
+          "kitchen_and_dining_00",
+          "kitchen_and_dining_01",
+          "kitchen_and_dining_02",
+          "kitchen_and_dining_03",
+          "kitchen_and_dining_04",
+          "kitchen_and_dining_05",
+          "kitchen_and_dining_06",
+          "kitchen_and_dining_07",
+          "kitchen_and_dining_08",
+          "kitchen_and_dining_09",
+          "kitchen_and_dining_10",
+          "kitchen_and_dining_11",
+          "kitchen_and_dining_12",
+          "kitchen_and_dining_13",
+          "kitchen_and_dining_14"
+        ],
+        "provider": "input",
+        "scores_field": "scores.intent_kitchen_and_dining",
+        "model": "intent-encoder-v1"
+      },
+      "inputs": [
+        {
+          "name": "default"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "kitchen_and_dining_00"
+        },
+        {
+          "name": "kitchen_and_dining_01"
+        },
+        {
+          "name": "kitchen_and_dining_02"
+        },
+        {
+          "name": "kitchen_and_dining_03"
+        },
+        {
+          "name": "kitchen_and_dining_04"
+        },
+        {
+          "name": "kitchen_and_dining_05"
+        },
+        {
+          "name": "kitchen_and_dining_06"
+        },
+        {
+          "name": "kitchen_and_dining_07"
+        },
+        {
+          "name": "kitchen_and_dining_08"
+        },
+        {
+          "name": "kitchen_and_dining_09"
+        },
+        {
+          "name": "kitchen_and_dining_10"
+        },
+        {
+          "name": "kitchen_and_dining_11"
+        },
+        {
+          "name": "kitchen_and_dining_12"
+        },
+        {
+          "name": "kitchen_and_dining_13"
+        },
+        {
+          "name": "kitchen_and_dining_14"
+        },
+        {
+          "name": "uncertain"
+        }
+      ]
+    },
+    {
+      "id": "handle_kitchen_and_dining",
+      "node_type": "console",
+      "kind": "sink",
+      "config": {
+        "prefix": "[kitchen_and_dining] "
+      },
+      "inputs": [
+        {
+          "name": "default"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "id": "intent_meta",
+      "node_type": "decision",
+      "kind": "processor",
+      "config": {
+        "question": "Which meta intent is this?",
+        "choices": [
+          "meta_00",
+          "meta_01",
+          "meta_02",
+          "meta_03",
+          "meta_04",
+          "meta_05",
+          "meta_06",
+          "meta_07",
+          "meta_08",
+          "meta_09",
+          "meta_10",
+          "meta_11",
+          "meta_12",
+          "meta_13",
+          "meta_14"
+        ],
+        "provider": "input",
+        "scores_field": "scores.intent_meta",
+        "model": "intent-encoder-v1"
+      },
+      "inputs": [
+        {
+          "name": "default"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "meta_00"
+        },
+        {
+          "name": "meta_01"
+        },
+        {
+          "name": "meta_02"
+        },
+        {
+          "name": "meta_03"
+        },
+        {
+          "name": "meta_04"
+        },
+        {
+          "name": "meta_05"
+        },
+        {
+          "name": "meta_06"
+        },
+        {
+          "name": "meta_07"
+        },
+        {
+          "name": "meta_08"
+        },
+        {
+          "name": "meta_09"
+        },
+        {
+          "name": "meta_10"
+        },
+        {
+          "name": "meta_11"
+        },
+        {
+          "name": "meta_12"
+        },
+        {
+          "name": "meta_13"
+        },
+        {
+          "name": "meta_14"
+        },
+        {
+          "name": "uncertain"
+        }
+      ]
+    },
+    {
+      "id": "handle_meta",
+      "node_type": "console",
+      "kind": "sink",
+      "config": {
+        "prefix": "[meta] "
+      },
+      "inputs": [
+        {
+          "name": "default"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "id": "intent_small_talk",
+      "node_type": "decision",
+      "kind": "processor",
+      "config": {
+        "question": "Which small_talk intent is this?",
+        "choices": [
+          "small_talk_00",
+          "small_talk_01",
+          "small_talk_02",
+          "small_talk_03",
+          "small_talk_04",
+          "small_talk_05",
+          "small_talk_06",
+          "small_talk_07",
+          "small_talk_08",
+          "small_talk_09",
+          "small_talk_10",
+          "small_talk_11",
+          "small_talk_12",
+          "small_talk_13",
+          "small_talk_14"
+        ],
+        "provider": "input",
+        "scores_field": "scores.intent_small_talk",
+        "model": "intent-encoder-v1"
+      },
+      "inputs": [
+        {
+          "name": "default"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "small_talk_00"
+        },
+        {
+          "name": "small_talk_01"
+        },
+        {
+          "name": "small_talk_02"
+        },
+        {
+          "name": "small_talk_03"
+        },
+        {
+          "name": "small_talk_04"
+        },
+        {
+          "name": "small_talk_05"
+        },
+        {
+          "name": "small_talk_06"
+        },
+        {
+          "name": "small_talk_07"
+        },
+        {
+          "name": "small_talk_08"
+        },
+        {
+          "name": "small_talk_09"
+        },
+        {
+          "name": "small_talk_10"
+        },
+        {
+          "name": "small_talk_11"
+        },
+        {
+          "name": "small_talk_12"
+        },
+        {
+          "name": "small_talk_13"
+        },
+        {
+          "name": "small_talk_14"
+        },
+        {
+          "name": "uncertain"
+        }
+      ]
+    },
+    {
+      "id": "handle_small_talk",
+      "node_type": "console",
+      "kind": "sink",
+      "config": {
+        "prefix": "[small_talk] "
+      },
+      "inputs": [
+        {
+          "name": "default"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "id": "intent_travel",
+      "node_type": "decision",
+      "kind": "processor",
+      "config": {
+        "question": "Which travel intent is this?",
+        "choices": [
+          "travel_00",
+          "travel_01",
+          "travel_02",
+          "travel_03",
+          "travel_04",
+          "travel_05",
+          "travel_06",
+          "travel_07",
+          "travel_08",
+          "travel_09",
+          "travel_10",
+          "travel_11",
+          "travel_12",
+          "travel_13",
+          "travel_14"
+        ],
+        "provider": "input",
+        "scores_field": "scores.intent_travel",
+        "model": "intent-encoder-v1"
+      },
+      "inputs": [
+        {
+          "name": "default"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "travel_00"
+        },
+        {
+          "name": "travel_01"
+        },
+        {
+          "name": "travel_02"
+        },
+        {
+          "name": "travel_03"
+        },
+        {
+          "name": "travel_04"
+        },
+        {
+          "name": "travel_05"
+        },
+        {
+          "name": "travel_06"
+        },
+        {
+          "name": "travel_07"
+        },
+        {
+          "name": "travel_08"
+        },
+        {
+          "name": "travel_09"
+        },
+        {
+          "name": "travel_10"
+        },
+        {
+          "name": "travel_11"
+        },
+        {
+          "name": "travel_12"
+        },
+        {
+          "name": "travel_13"
+        },
+        {
+          "name": "travel_14"
+        },
+        {
+          "name": "uncertain"
+        }
+      ]
+    },
+    {
+      "id": "handle_travel",
+      "node_type": "console",
+      "kind": "sink",
+      "config": {
+        "prefix": "[travel] "
+      },
+      "inputs": [
+        {
+          "name": "default"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "id": "intent_utility",
+      "node_type": "decision",
+      "kind": "processor",
+      "config": {
+        "question": "Which utility intent is this?",
+        "choices": [
+          "utility_00",
+          "utility_01",
+          "utility_02",
+          "utility_03",
+          "utility_04",
+          "utility_05",
+          "utility_06",
+          "utility_07",
+          "utility_08",
+          "utility_09",
+          "utility_10",
+          "utility_11",
+          "utility_12",
+          "utility_13",
+          "utility_14"
+        ],
+        "provider": "input",
+        "scores_field": "scores.intent_utility",
+        "model": "intent-encoder-v1"
+      },
+      "inputs": [
+        {
+          "name": "default"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "utility_00"
+        },
+        {
+          "name": "utility_01"
+        },
+        {
+          "name": "utility_02"
+        },
+        {
+          "name": "utility_03"
+        },
+        {
+          "name": "utility_04"
+        },
+        {
+          "name": "utility_05"
+        },
+        {
+          "name": "utility_06"
+        },
+        {
+          "name": "utility_07"
+        },
+        {
+          "name": "utility_08"
+        },
+        {
+          "name": "utility_09"
+        },
+        {
+          "name": "utility_10"
+        },
+        {
+          "name": "utility_11"
+        },
+        {
+          "name": "utility_12"
+        },
+        {
+          "name": "utility_13"
+        },
+        {
+          "name": "utility_14"
+        },
+        {
+          "name": "uncertain"
+        }
+      ]
+    },
+    {
+      "id": "handle_utility",
+      "node_type": "console",
+      "kind": "sink",
+      "config": {
+        "prefix": "[utility] "
+      },
+      "inputs": [
+        {
+          "name": "default"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "id": "intent_work",
+      "node_type": "decision",
+      "kind": "processor",
+      "config": {
+        "question": "Which work intent is this?",
+        "choices": [
+          "work_00",
+          "work_01",
+          "work_02",
+          "work_03",
+          "work_04",
+          "work_05",
+          "work_06",
+          "work_07",
+          "work_08",
+          "work_09",
+          "work_10",
+          "work_11",
+          "work_12",
+          "work_13",
+          "work_14"
+        ],
+        "provider": "input",
+        "scores_field": "scores.intent_work",
+        "model": "intent-encoder-v1"
+      },
+      "inputs": [
+        {
+          "name": "default"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "work_00"
+        },
+        {
+          "name": "work_01"
+        },
+        {
+          "name": "work_02"
+        },
+        {
+          "name": "work_03"
+        },
+        {
+          "name": "work_04"
+        },
+        {
+          "name": "work_05"
+        },
+        {
+          "name": "work_06"
+        },
+        {
+          "name": "work_07"
+        },
+        {
+          "name": "work_08"
+        },
+        {
+          "name": "work_09"
+        },
+        {
+          "name": "work_10"
+        },
+        {
+          "name": "work_11"
+        },
+        {
+          "name": "work_12"
+        },
+        {
+          "name": "work_13"
+        },
+        {
+          "name": "work_14"
+        },
+        {
+          "name": "uncertain"
+        }
+      ]
+    },
+    {
+      "id": "handle_work",
+      "node_type": "console",
+      "kind": "sink",
+      "config": {
+        "prefix": "[work] "
+      },
+      "inputs": [
+        {
+          "name": "default"
+        }
+      ],
+      "outputs": []
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from_node": "request",
+      "from_port": "default",
+      "to_node": "scope",
+      "to_port": "default"
+    },
+    {
+      "id": "e2",
+      "from_node": "scope",
+      "from_port": "in_scope",
+      "to_node": "domain",
+      "to_port": "default"
+    },
+    {
+      "id": "e3",
+      "from_node": "scope",
+      "from_port": "out_of_scope",
+      "to_node": "out_of_scope_reply",
+      "to_port": "default"
+    },
+    {
+      "id": "e4",
+      "from_node": "scope",
+      "from_port": "uncertain",
+      "to_node": "human_review",
+      "to_port": "default"
+    },
+    {
+      "id": "e5",
+      "from_node": "domain",
+      "from_port": "uncertain",
+      "to_node": "human_review",
+      "to_port": "default"
+    },
+    {
+      "id": "e6",
+      "from_node": "domain",
+      "from_port": "auto_and_commute",
+      "to_node": "intent_auto_and_commute",
+      "to_port": "default"
+    },
+    {
+      "id": "e7",
+      "from_node": "intent_auto_and_commute",
+      "from_port": "auto_and_commute_00",
+      "to_node": "handle_auto_and_commute",
+      "to_port": "default"
+    },
+    {
+      "id": "e8",
+      "from_node": "intent_auto_and_commute",
+      "from_port": "auto_and_commute_01",
+      "to_node": "handle_auto_and_commute",
+      "to_port": "default"
+    },
+    {
+      "id": "e9",
+      "from_node": "intent_auto_and_commute",
+      "from_port": "auto_and_commute_02",
+      "to_node": "handle_auto_and_commute",
+      "to_port": "default"
+    },
+    {
+      "id": "e10",
+      "from_node": "intent_auto_and_commute",
+      "from_port": "auto_and_commute_03",
+      "to_node": "handle_auto_and_commute",
+      "to_port": "default"
+    },
+    {
+      "id": "e11",
+      "from_node": "intent_auto_and_commute",
+      "from_port": "auto_and_commute_04",
+      "to_node": "handle_auto_and_commute",
+      "to_port": "default"
+    },
+    {
+      "id": "e12",
+      "from_node": "intent_auto_and_commute",
+      "from_port": "auto_and_commute_05",
+      "to_node": "handle_auto_and_commute",
+      "to_port": "default"
+    },
+    {
+      "id": "e13",
+      "from_node": "intent_auto_and_commute",
+      "from_port": "auto_and_commute_06",
+      "to_node": "handle_auto_and_commute",
+      "to_port": "default"
+    },
+    {
+      "id": "e14",
+      "from_node": "intent_auto_and_commute",
+      "from_port": "auto_and_commute_07",
+      "to_node": "handle_auto_and_commute",
+      "to_port": "default"
+    },
+    {
+      "id": "e15",
+      "from_node": "intent_auto_and_commute",
+      "from_port": "auto_and_commute_08",
+      "to_node": "handle_auto_and_commute",
+      "to_port": "default"
+    },
+    {
+      "id": "e16",
+      "from_node": "intent_auto_and_commute",
+      "from_port": "auto_and_commute_09",
+      "to_node": "handle_auto_and_commute",
+      "to_port": "default"
+    },
+    {
+      "id": "e17",
+      "from_node": "intent_auto_and_commute",
+      "from_port": "auto_and_commute_10",
+      "to_node": "handle_auto_and_commute",
+      "to_port": "default"
+    },
+    {
+      "id": "e18",
+      "from_node": "intent_auto_and_commute",
+      "from_port": "auto_and_commute_11",
+      "to_node": "handle_auto_and_commute",
+      "to_port": "default"
+    },
+    {
+      "id": "e19",
+      "from_node": "intent_auto_and_commute",
+      "from_port": "auto_and_commute_12",
+      "to_node": "handle_auto_and_commute",
+      "to_port": "default"
+    },
+    {
+      "id": "e20",
+      "from_node": "intent_auto_and_commute",
+      "from_port": "auto_and_commute_13",
+      "to_node": "handle_auto_and_commute",
+      "to_port": "default"
+    },
+    {
+      "id": "e21",
+      "from_node": "intent_auto_and_commute",
+      "from_port": "auto_and_commute_14",
+      "to_node": "handle_auto_and_commute",
+      "to_port": "default"
+    },
+    {
+      "id": "e22",
+      "from_node": "intent_auto_and_commute",
+      "from_port": "uncertain",
+      "to_node": "human_review",
+      "to_port": "default"
+    },
+    {
+      "id": "e23",
+      "from_node": "domain",
+      "from_port": "banking",
+      "to_node": "intent_banking",
+      "to_port": "default"
+    },
+    {
+      "id": "e24",
+      "from_node": "intent_banking",
+      "from_port": "banking_00",
+      "to_node": "handle_banking",
+      "to_port": "default"
+    },
+    {
+      "id": "e25",
+      "from_node": "intent_banking",
+      "from_port": "banking_01",
+      "to_node": "handle_banking",
+      "to_port": "default"
+    },
+    {
+      "id": "e26",
+      "from_node": "intent_banking",
+      "from_port": "banking_02",
+      "to_node": "handle_banking",
+      "to_port": "default"
+    },
+    {
+      "id": "e27",
+      "from_node": "intent_banking",
+      "from_port": "banking_03",
+      "to_node": "handle_banking",
+      "to_port": "default"
+    },
+    {
+      "id": "e28",
+      "from_node": "intent_banking",
+      "from_port": "banking_04",
+      "to_node": "handle_banking",
+      "to_port": "default"
+    },
+    {
+      "id": "e29",
+      "from_node": "intent_banking",
+      "from_port": "banking_05",
+      "to_node": "handle_banking",
+      "to_port": "default"
+    },
+    {
+      "id": "e30",
+      "from_node": "intent_banking",
+      "from_port": "banking_06",
+      "to_node": "handle_banking",
+      "to_port": "default"
+    },
+    {
+      "id": "e31",
+      "from_node": "intent_banking",
+      "from_port": "banking_07",
+      "to_node": "handle_banking",
+      "to_port": "default"
+    },
+    {
+      "id": "e32",
+      "from_node": "intent_banking",
+      "from_port": "banking_08",
+      "to_node": "handle_banking",
+      "to_port": "default"
+    },
+    {
+      "id": "e33",
+      "from_node": "intent_banking",
+      "from_port": "banking_09",
+      "to_node": "handle_banking",
+      "to_port": "default"
+    },
+    {
+      "id": "e34",
+      "from_node": "intent_banking",
+      "from_port": "banking_10",
+      "to_node": "handle_banking",
+      "to_port": "default"
+    },
+    {
+      "id": "e35",
+      "from_node": "intent_banking",
+      "from_port": "banking_11",
+      "to_node": "handle_banking",
+      "to_port": "default"
+    },
+    {
+      "id": "e36",
+      "from_node": "intent_banking",
+      "from_port": "banking_12",
+      "to_node": "handle_banking",
+      "to_port": "default"
+    },
+    {
+      "id": "e37",
+      "from_node": "intent_banking",
+      "from_port": "banking_13",
+      "to_node": "handle_banking",
+      "to_port": "default"
+    },
+    {
+      "id": "e38",
+      "from_node": "intent_banking",
+      "from_port": "banking_14",
+      "to_node": "handle_banking",
+      "to_port": "default"
+    },
+    {
+      "id": "e39",
+      "from_node": "intent_banking",
+      "from_port": "uncertain",
+      "to_node": "human_review",
+      "to_port": "default"
+    },
+    {
+      "id": "e40",
+      "from_node": "domain",
+      "from_port": "credit_cards",
+      "to_node": "intent_credit_cards",
+      "to_port": "default"
+    },
+    {
+      "id": "e41",
+      "from_node": "intent_credit_cards",
+      "from_port": "credit_cards_00",
+      "to_node": "handle_credit_cards",
+      "to_port": "default"
+    },
+    {
+      "id": "e42",
+      "from_node": "intent_credit_cards",
+      "from_port": "credit_cards_01",
+      "to_node": "handle_credit_cards",
+      "to_port": "default"
+    },
+    {
+      "id": "e43",
+      "from_node": "intent_credit_cards",
+      "from_port": "credit_cards_02",
+      "to_node": "handle_credit_cards",
+      "to_port": "default"
+    },
+    {
+      "id": "e44",
+      "from_node": "intent_credit_cards",
+      "from_port": "credit_cards_03",
+      "to_node": "handle_credit_cards",
+      "to_port": "default"
+    },
+    {
+      "id": "e45",
+      "from_node": "intent_credit_cards",
+      "from_port": "credit_cards_04",
+      "to_node": "handle_credit_cards",
+      "to_port": "default"
+    },
+    {
+      "id": "e46",
+      "from_node": "intent_credit_cards",
+      "from_port": "credit_cards_05",
+      "to_node": "handle_credit_cards",
+      "to_port": "default"
+    },
+    {
+      "id": "e47",
+      "from_node": "intent_credit_cards",
+      "from_port": "credit_cards_06",
+      "to_node": "handle_credit_cards",
+      "to_port": "default"
+    },
+    {
+      "id": "e48",
+      "from_node": "intent_credit_cards",
+      "from_port": "credit_cards_07",
+      "to_node": "handle_credit_cards",
+      "to_port": "default"
+    },
+    {
+      "id": "e49",
+      "from_node": "intent_credit_cards",
+      "from_port": "credit_cards_08",
+      "to_node": "handle_credit_cards",
+      "to_port": "default"
+    },
+    {
+      "id": "e50",
+      "from_node": "intent_credit_cards",
+      "from_port": "credit_cards_09",
+      "to_node": "handle_credit_cards",
+      "to_port": "default"
+    },
+    {
+      "id": "e51",
+      "from_node": "intent_credit_cards",
+      "from_port": "credit_cards_10",
+      "to_node": "handle_credit_cards",
+      "to_port": "default"
+    },
+    {
+      "id": "e52",
+      "from_node": "intent_credit_cards",
+      "from_port": "credit_cards_11",
+      "to_node": "handle_credit_cards",
+      "to_port": "default"
+    },
+    {
+      "id": "e53",
+      "from_node": "intent_credit_cards",
+      "from_port": "credit_cards_12",
+      "to_node": "handle_credit_cards",
+      "to_port": "default"
+    },
+    {
+      "id": "e54",
+      "from_node": "intent_credit_cards",
+      "from_port": "credit_cards_13",
+      "to_node": "handle_credit_cards",
+      "to_port": "default"
+    },
+    {
+      "id": "e55",
+      "from_node": "intent_credit_cards",
+      "from_port": "credit_cards_14",
+      "to_node": "handle_credit_cards",
+      "to_port": "default"
+    },
+    {
+      "id": "e56",
+      "from_node": "intent_credit_cards",
+      "from_port": "uncertain",
+      "to_node": "human_review",
+      "to_port": "default"
+    },
+    {
+      "id": "e57",
+      "from_node": "domain",
+      "from_port": "home",
+      "to_node": "intent_home",
+      "to_port": "default"
+    },
+    {
+      "id": "e58",
+      "from_node": "intent_home",
+      "from_port": "home_00",
+      "to_node": "handle_home",
+      "to_port": "default"
+    },
+    {
+      "id": "e59",
+      "from_node": "intent_home",
+      "from_port": "home_01",
+      "to_node": "handle_home",
+      "to_port": "default"
+    },
+    {
+      "id": "e60",
+      "from_node": "intent_home",
+      "from_port": "home_02",
+      "to_node": "handle_home",
+      "to_port": "default"
+    },
+    {
+      "id": "e61",
+      "from_node": "intent_home",
+      "from_port": "home_03",
+      "to_node": "handle_home",
+      "to_port": "default"
+    },
+    {
+      "id": "e62",
+      "from_node": "intent_home",
+      "from_port": "home_04",
+      "to_node": "handle_home",
+      "to_port": "default"
+    },
+    {
+      "id": "e63",
+      "from_node": "intent_home",
+      "from_port": "home_05",
+      "to_node": "handle_home",
+      "to_port": "default"
+    },
+    {
+      "id": "e64",
+      "from_node": "intent_home",
+      "from_port": "home_06",
+      "to_node": "handle_home",
+      "to_port": "default"
+    },
+    {
+      "id": "e65",
+      "from_node": "intent_home",
+      "from_port": "home_07",
+      "to_node": "handle_home",
+      "to_port": "default"
+    },
+    {
+      "id": "e66",
+      "from_node": "intent_home",
+      "from_port": "home_08",
+      "to_node": "handle_home",
+      "to_port": "default"
+    },
+    {
+      "id": "e67",
+      "from_node": "intent_home",
+      "from_port": "home_09",
+      "to_node": "handle_home",
+      "to_port": "default"
+    },
+    {
+      "id": "e68",
+      "from_node": "intent_home",
+      "from_port": "home_10",
+      "to_node": "handle_home",
+      "to_port": "default"
+    },
+    {
+      "id": "e69",
+      "from_node": "intent_home",
+      "from_port": "home_11",
+      "to_node": "handle_home",
+      "to_port": "default"
+    },
+    {
+      "id": "e70",
+      "from_node": "intent_home",
+      "from_port": "home_12",
+      "to_node": "handle_home",
+      "to_port": "default"
+    },
+    {
+      "id": "e71",
+      "from_node": "intent_home",
+      "from_port": "home_13",
+      "to_node": "handle_home",
+      "to_port": "default"
+    },
+    {
+      "id": "e72",
+      "from_node": "intent_home",
+      "from_port": "home_14",
+      "to_node": "handle_home",
+      "to_port": "default"
+    },
+    {
+      "id": "e73",
+      "from_node": "intent_home",
+      "from_port": "uncertain",
+      "to_node": "human_review",
+      "to_port": "default"
+    },
+    {
+      "id": "e74",
+      "from_node": "domain",
+      "from_port": "kitchen_and_dining",
+      "to_node": "intent_kitchen_and_dining",
+      "to_port": "default"
+    },
+    {
+      "id": "e75",
+      "from_node": "intent_kitchen_and_dining",
+      "from_port": "kitchen_and_dining_00",
+      "to_node": "handle_kitchen_and_dining",
+      "to_port": "default"
+    },
+    {
+      "id": "e76",
+      "from_node": "intent_kitchen_and_dining",
+      "from_port": "kitchen_and_dining_01",
+      "to_node": "handle_kitchen_and_dining",
+      "to_port": "default"
+    },
+    {
+      "id": "e77",
+      "from_node": "intent_kitchen_and_dining",
+      "from_port": "kitchen_and_dining_02",
+      "to_node": "handle_kitchen_and_dining",
+      "to_port": "default"
+    },
+    {
+      "id": "e78",
+      "from_node": "intent_kitchen_and_dining",
+      "from_port": "kitchen_and_dining_03",
+      "to_node": "handle_kitchen_and_dining",
+      "to_port": "default"
+    },
+    {
+      "id": "e79",
+      "from_node": "intent_kitchen_and_dining",
+      "from_port": "kitchen_and_dining_04",
+      "to_node": "handle_kitchen_and_dining",
+      "to_port": "default"
+    },
+    {
+      "id": "e80",
+      "from_node": "intent_kitchen_and_dining",
+      "from_port": "kitchen_and_dining_05",
+      "to_node": "handle_kitchen_and_dining",
+      "to_port": "default"
+    },
+    {
+      "id": "e81",
+      "from_node": "intent_kitchen_and_dining",
+      "from_port": "kitchen_and_dining_06",
+      "to_node": "handle_kitchen_and_dining",
+      "to_port": "default"
+    },
+    {
+      "id": "e82",
+      "from_node": "intent_kitchen_and_dining",
+      "from_port": "kitchen_and_dining_07",
+      "to_node": "handle_kitchen_and_dining",
+      "to_port": "default"
+    },
+    {
+      "id": "e83",
+      "from_node": "intent_kitchen_and_dining",
+      "from_port": "kitchen_and_dining_08",
+      "to_node": "handle_kitchen_and_dining",
+      "to_port": "default"
+    },
+    {
+      "id": "e84",
+      "from_node": "intent_kitchen_and_dining",
+      "from_port": "kitchen_and_dining_09",
+      "to_node": "handle_kitchen_and_dining",
+      "to_port": "default"
+    },
+    {
+      "id": "e85",
+      "from_node": "intent_kitchen_and_dining",
+      "from_port": "kitchen_and_dining_10",
+      "to_node": "handle_kitchen_and_dining",
+      "to_port": "default"
+    },
+    {
+      "id": "e86",
+      "from_node": "intent_kitchen_and_dining",
+      "from_port": "kitchen_and_dining_11",
+      "to_node": "handle_kitchen_and_dining",
+      "to_port": "default"
+    },
+    {
+      "id": "e87",
+      "from_node": "intent_kitchen_and_dining",
+      "from_port": "kitchen_and_dining_12",
+      "to_node": "handle_kitchen_and_dining",
+      "to_port": "default"
+    },
+    {
+      "id": "e88",
+      "from_node": "intent_kitchen_and_dining",
+      "from_port": "kitchen_and_dining_13",
+      "to_node": "handle_kitchen_and_dining",
+      "to_port": "default"
+    },
+    {
+      "id": "e89",
+      "from_node": "intent_kitchen_and_dining",
+      "from_port": "kitchen_and_dining_14",
+      "to_node": "handle_kitchen_and_dining",
+      "to_port": "default"
+    },
+    {
+      "id": "e90",
+      "from_node": "intent_kitchen_and_dining",
+      "from_port": "uncertain",
+      "to_node": "human_review",
+      "to_port": "default"
+    },
+    {
+      "id": "e91",
+      "from_node": "domain",
+      "from_port": "meta",
+      "to_node": "intent_meta",
+      "to_port": "default"
+    },
+    {
+      "id": "e92",
+      "from_node": "intent_meta",
+      "from_port": "meta_00",
+      "to_node": "handle_meta",
+      "to_port": "default"
+    },
+    {
+      "id": "e93",
+      "from_node": "intent_meta",
+      "from_port": "meta_01",
+      "to_node": "handle_meta",
+      "to_port": "default"
+    },
+    {
+      "id": "e94",
+      "from_node": "intent_meta",
+      "from_port": "meta_02",
+      "to_node": "handle_meta",
+      "to_port": "default"
+    },
+    {
+      "id": "e95",
+      "from_node": "intent_meta",
+      "from_port": "meta_03",
+      "to_node": "handle_meta",
+      "to_port": "default"
+    },
+    {
+      "id": "e96",
+      "from_node": "intent_meta",
+      "from_port": "meta_04",
+      "to_node": "handle_meta",
+      "to_port": "default"
+    },
+    {
+      "id": "e97",
+      "from_node": "intent_meta",
+      "from_port": "meta_05",
+      "to_node": "handle_meta",
+      "to_port": "default"
+    },
+    {
+      "id": "e98",
+      "from_node": "intent_meta",
+      "from_port": "meta_06",
+      "to_node": "handle_meta",
+      "to_port": "default"
+    },
+    {
+      "id": "e99",
+      "from_node": "intent_meta",
+      "from_port": "meta_07",
+      "to_node": "handle_meta",
+      "to_port": "default"
+    },
+    {
+      "id": "e100",
+      "from_node": "intent_meta",
+      "from_port": "meta_08",
+      "to_node": "handle_meta",
+      "to_port": "default"
+    },
+    {
+      "id": "e101",
+      "from_node": "intent_meta",
+      "from_port": "meta_09",
+      "to_node": "handle_meta",
+      "to_port": "default"
+    },
+    {
+      "id": "e102",
+      "from_node": "intent_meta",
+      "from_port": "meta_10",
+      "to_node": "handle_meta",
+      "to_port": "default"
+    },
+    {
+      "id": "e103",
+      "from_node": "intent_meta",
+      "from_port": "meta_11",
+      "to_node": "handle_meta",
+      "to_port": "default"
+    },
+    {
+      "id": "e104",
+      "from_node": "intent_meta",
+      "from_port": "meta_12",
+      "to_node": "handle_meta",
+      "to_port": "default"
+    },
+    {
+      "id": "e105",
+      "from_node": "intent_meta",
+      "from_port": "meta_13",
+      "to_node": "handle_meta",
+      "to_port": "default"
+    },
+    {
+      "id": "e106",
+      "from_node": "intent_meta",
+      "from_port": "meta_14",
+      "to_node": "handle_meta",
+      "to_port": "default"
+    },
+    {
+      "id": "e107",
+      "from_node": "intent_meta",
+      "from_port": "uncertain",
+      "to_node": "human_review",
+      "to_port": "default"
+    },
+    {
+      "id": "e108",
+      "from_node": "domain",
+      "from_port": "small_talk",
+      "to_node": "intent_small_talk",
+      "to_port": "default"
+    },
+    {
+      "id": "e109",
+      "from_node": "intent_small_talk",
+      "from_port": "small_talk_00",
+      "to_node": "handle_small_talk",
+      "to_port": "default"
+    },
+    {
+      "id": "e110",
+      "from_node": "intent_small_talk",
+      "from_port": "small_talk_01",
+      "to_node": "handle_small_talk",
+      "to_port": "default"
+    },
+    {
+      "id": "e111",
+      "from_node": "intent_small_talk",
+      "from_port": "small_talk_02",
+      "to_node": "handle_small_talk",
+      "to_port": "default"
+    },
+    {
+      "id": "e112",
+      "from_node": "intent_small_talk",
+      "from_port": "small_talk_03",
+      "to_node": "handle_small_talk",
+      "to_port": "default"
+    },
+    {
+      "id": "e113",
+      "from_node": "intent_small_talk",
+      "from_port": "small_talk_04",
+      "to_node": "handle_small_talk",
+      "to_port": "default"
+    },
+    {
+      "id": "e114",
+      "from_node": "intent_small_talk",
+      "from_port": "small_talk_05",
+      "to_node": "handle_small_talk",
+      "to_port": "default"
+    },
+    {
+      "id": "e115",
+      "from_node": "intent_small_talk",
+      "from_port": "small_talk_06",
+      "to_node": "handle_small_talk",
+      "to_port": "default"
+    },
+    {
+      "id": "e116",
+      "from_node": "intent_small_talk",
+      "from_port": "small_talk_07",
+      "to_node": "handle_small_talk",
+      "to_port": "default"
+    },
+    {
+      "id": "e117",
+      "from_node": "intent_small_talk",
+      "from_port": "small_talk_08",
+      "to_node": "handle_small_talk",
+      "to_port": "default"
+    },
+    {
+      "id": "e118",
+      "from_node": "intent_small_talk",
+      "from_port": "small_talk_09",
+      "to_node": "handle_small_talk",
+      "to_port": "default"
+    },
+    {
+      "id": "e119",
+      "from_node": "intent_small_talk",
+      "from_port": "small_talk_10",
+      "to_node": "handle_small_talk",
+      "to_port": "default"
+    },
+    {
+      "id": "e120",
+      "from_node": "intent_small_talk",
+      "from_port": "small_talk_11",
+      "to_node": "handle_small_talk",
+      "to_port": "default"
+    },
+    {
+      "id": "e121",
+      "from_node": "intent_small_talk",
+      "from_port": "small_talk_12",
+      "to_node": "handle_small_talk",
+      "to_port": "default"
+    },
+    {
+      "id": "e122",
+      "from_node": "intent_small_talk",
+      "from_port": "small_talk_13",
+      "to_node": "handle_small_talk",
+      "to_port": "default"
+    },
+    {
+      "id": "e123",
+      "from_node": "intent_small_talk",
+      "from_port": "small_talk_14",
+      "to_node": "handle_small_talk",
+      "to_port": "default"
+    },
+    {
+      "id": "e124",
+      "from_node": "intent_small_talk",
+      "from_port": "uncertain",
+      "to_node": "human_review",
+      "to_port": "default"
+    },
+    {
+      "id": "e125",
+      "from_node": "domain",
+      "from_port": "travel",
+      "to_node": "intent_travel",
+      "to_port": "default"
+    },
+    {
+      "id": "e126",
+      "from_node": "intent_travel",
+      "from_port": "travel_00",
+      "to_node": "handle_travel",
+      "to_port": "default"
+    },
+    {
+      "id": "e127",
+      "from_node": "intent_travel",
+      "from_port": "travel_01",
+      "to_node": "handle_travel",
+      "to_port": "default"
+    },
+    {
+      "id": "e128",
+      "from_node": "intent_travel",
+      "from_port": "travel_02",
+      "to_node": "handle_travel",
+      "to_port": "default"
+    },
+    {
+      "id": "e129",
+      "from_node": "intent_travel",
+      "from_port": "travel_03",
+      "to_node": "handle_travel",
+      "to_port": "default"
+    },
+    {
+      "id": "e130",
+      "from_node": "intent_travel",
+      "from_port": "travel_04",
+      "to_node": "handle_travel",
+      "to_port": "default"
+    },
+    {
+      "id": "e131",
+      "from_node": "intent_travel",
+      "from_port": "travel_05",
+      "to_node": "handle_travel",
+      "to_port": "default"
+    },
+    {
+      "id": "e132",
+      "from_node": "intent_travel",
+      "from_port": "travel_06",
+      "to_node": "handle_travel",
+      "to_port": "default"
+    },
+    {
+      "id": "e133",
+      "from_node": "intent_travel",
+      "from_port": "travel_07",
+      "to_node": "handle_travel",
+      "to_port": "default"
+    },
+    {
+      "id": "e134",
+      "from_node": "intent_travel",
+      "from_port": "travel_08",
+      "to_node": "handle_travel",
+      "to_port": "default"
+    },
+    {
+      "id": "e135",
+      "from_node": "intent_travel",
+      "from_port": "travel_09",
+      "to_node": "handle_travel",
+      "to_port": "default"
+    },
+    {
+      "id": "e136",
+      "from_node": "intent_travel",
+      "from_port": "travel_10",
+      "to_node": "handle_travel",
+      "to_port": "default"
+    },
+    {
+      "id": "e137",
+      "from_node": "intent_travel",
+      "from_port": "travel_11",
+      "to_node": "handle_travel",
+      "to_port": "default"
+    },
+    {
+      "id": "e138",
+      "from_node": "intent_travel",
+      "from_port": "travel_12",
+      "to_node": "handle_travel",
+      "to_port": "default"
+    },
+    {
+      "id": "e139",
+      "from_node": "intent_travel",
+      "from_port": "travel_13",
+      "to_node": "handle_travel",
+      "to_port": "default"
+    },
+    {
+      "id": "e140",
+      "from_node": "intent_travel",
+      "from_port": "travel_14",
+      "to_node": "handle_travel",
+      "to_port": "default"
+    },
+    {
+      "id": "e141",
+      "from_node": "intent_travel",
+      "from_port": "uncertain",
+      "to_node": "human_review",
+      "to_port": "default"
+    },
+    {
+      "id": "e142",
+      "from_node": "domain",
+      "from_port": "utility",
+      "to_node": "intent_utility",
+      "to_port": "default"
+    },
+    {
+      "id": "e143",
+      "from_node": "intent_utility",
+      "from_port": "utility_00",
+      "to_node": "handle_utility",
+      "to_port": "default"
+    },
+    {
+      "id": "e144",
+      "from_node": "intent_utility",
+      "from_port": "utility_01",
+      "to_node": "handle_utility",
+      "to_port": "default"
+    },
+    {
+      "id": "e145",
+      "from_node": "intent_utility",
+      "from_port": "utility_02",
+      "to_node": "handle_utility",
+      "to_port": "default"
+    },
+    {
+      "id": "e146",
+      "from_node": "intent_utility",
+      "from_port": "utility_03",
+      "to_node": "handle_utility",
+      "to_port": "default"
+    },
+    {
+      "id": "e147",
+      "from_node": "intent_utility",
+      "from_port": "utility_04",
+      "to_node": "handle_utility",
+      "to_port": "default"
+    },
+    {
+      "id": "e148",
+      "from_node": "intent_utility",
+      "from_port": "utility_05",
+      "to_node": "handle_utility",
+      "to_port": "default"
+    },
+    {
+      "id": "e149",
+      "from_node": "intent_utility",
+      "from_port": "utility_06",
+      "to_node": "handle_utility",
+      "to_port": "default"
+    },
+    {
+      "id": "e150",
+      "from_node": "intent_utility",
+      "from_port": "utility_07",
+      "to_node": "handle_utility",
+      "to_port": "default"
+    },
+    {
+      "id": "e151",
+      "from_node": "intent_utility",
+      "from_port": "utility_08",
+      "to_node": "handle_utility",
+      "to_port": "default"
+    },
+    {
+      "id": "e152",
+      "from_node": "intent_utility",
+      "from_port": "utility_09",
+      "to_node": "handle_utility",
+      "to_port": "default"
+    },
+    {
+      "id": "e153",
+      "from_node": "intent_utility",
+      "from_port": "utility_10",
+      "to_node": "handle_utility",
+      "to_port": "default"
+    },
+    {
+      "id": "e154",
+      "from_node": "intent_utility",
+      "from_port": "utility_11",
+      "to_node": "handle_utility",
+      "to_port": "default"
+    },
+    {
+      "id": "e155",
+      "from_node": "intent_utility",
+      "from_port": "utility_12",
+      "to_node": "handle_utility",
+      "to_port": "default"
+    },
+    {
+      "id": "e156",
+      "from_node": "intent_utility",
+      "from_port": "utility_13",
+      "to_node": "handle_utility",
+      "to_port": "default"
+    },
+    {
+      "id": "e157",
+      "from_node": "intent_utility",
+      "from_port": "utility_14",
+      "to_node": "handle_utility",
+      "to_port": "default"
+    },
+    {
+      "id": "e158",
+      "from_node": "intent_utility",
+      "from_port": "uncertain",
+      "to_node": "human_review",
+      "to_port": "default"
+    },
+    {
+      "id": "e159",
+      "from_node": "domain",
+      "from_port": "work",
+      "to_node": "intent_work",
+      "to_port": "default"
+    },
+    {
+      "id": "e160",
+      "from_node": "intent_work",
+      "from_port": "work_00",
+      "to_node": "handle_work",
+      "to_port": "default"
+    },
+    {
+      "id": "e161",
+      "from_node": "intent_work",
+      "from_port": "work_01",
+      "to_node": "handle_work",
+      "to_port": "default"
+    },
+    {
+      "id": "e162",
+      "from_node": "intent_work",
+      "from_port": "work_02",
+      "to_node": "handle_work",
+      "to_port": "default"
+    },
+    {
+      "id": "e163",
+      "from_node": "intent_work",
+      "from_port": "work_03",
+      "to_node": "handle_work",
+      "to_port": "default"
+    },
+    {
+      "id": "e164",
+      "from_node": "intent_work",
+      "from_port": "work_04",
+      "to_node": "handle_work",
+      "to_port": "default"
+    },
+    {
+      "id": "e165",
+      "from_node": "intent_work",
+      "from_port": "work_05",
+      "to_node": "handle_work",
+      "to_port": "default"
+    },
+    {
+      "id": "e166",
+      "from_node": "intent_work",
+      "from_port": "work_06",
+      "to_node": "handle_work",
+      "to_port": "default"
+    },
+    {
+      "id": "e167",
+      "from_node": "intent_work",
+      "from_port": "work_07",
+      "to_node": "handle_work",
+      "to_port": "default"
+    },
+    {
+      "id": "e168",
+      "from_node": "intent_work",
+      "from_port": "work_08",
+      "to_node": "handle_work",
+      "to_port": "default"
+    },
+    {
+      "id": "e169",
+      "from_node": "intent_work",
+      "from_port": "work_09",
+      "to_node": "handle_work",
+      "to_port": "default"
+    },
+    {
+      "id": "e170",
+      "from_node": "intent_work",
+      "from_port": "work_10",
+      "to_node": "handle_work",
+      "to_port": "default"
+    },
+    {
+      "id": "e171",
+      "from_node": "intent_work",
+      "from_port": "work_11",
+      "to_node": "handle_work",
+      "to_port": "default"
+    },
+    {
+      "id": "e172",
+      "from_node": "intent_work",
+      "from_port": "work_12",
+      "to_node": "handle_work",
+      "to_port": "default"
+    },
+    {
+      "id": "e173",
+      "from_node": "intent_work",
+      "from_port": "work_13",
+      "to_node": "handle_work",
+      "to_port": "default"
+    },
+    {
+      "id": "e174",
+      "from_node": "intent_work",
+      "from_port": "work_14",
+      "to_node": "handle_work",
+      "to_port": "default"
+    },
+    {
+      "id": "e175",
+      "from_node": "intent_work",
+      "from_port": "uncertain",
+      "to_node": "human_review",
+      "to_port": "default"
+    }
+  ]
+}

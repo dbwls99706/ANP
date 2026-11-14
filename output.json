@@ -1,0 +1,27 @@
+[
+  {
+    "contact": "alice@example.com",
+    "full_name": "Alice",
+    "rating": 95
+  },
+  {
+    "contact": "bob@example.com",
+    "full_name": "Bob",
+    "rating": 72
+  },
+  {
+    "contact": "charlie@example.com",
+    "full_name": "Charlie",
+    "rating": 88
+  },
+  {
+    "contact": "diana@example.com",
+    "full_name": "Diana",
+    "rating": 64
+  },
+  {
+    "contact": "eve@example.com",
+    "full_name": "Eve",
+    "rating": 91
+  }
+]

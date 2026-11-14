@@ -19,6 +19,7 @@ pub mod cron_node;
 pub mod csv_node;
 pub mod database;
 pub mod debounce_node;
+pub mod decision_node;
 pub mod deduplicate_node;
 pub mod diff_node;
 pub mod email_node;
@@ -462,6 +463,47 @@ pub fn register_all(registry: &mut NodeRegistry) {
                 "properties": {
                     "strategy": { "type": "string", "enum": ["shallow", "deep", "array"], "default": "shallow" }
                 }
+            }),
+        },
+    });
+
+    // Decision (Processor) — typed probabilistic branch with an explicit uncertain path
+    registry.register(NodeInfo {
+        factory: || Box::new(decision_node::DecisionNode::new()),
+        schema: NodeSchema {
+            node_type: "decision".to_string(),
+            kind: NodeKind::Processor,
+            description: "Typed probabilistic decision — answers one question over a closed set of choices, routes the input to the port named after the winning choice, or to the uncertain port when confidence is below the threshold. Declare one output port per choice plus the uncertain port. Attaches `_decision` (choice, confidence, probabilities) to the payload.".to_string(),
+            inputs: vec![PortSpec::new("default")],
+            outputs: vec![PortSpec::new("uncertain")],
+            config_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "question": { "type": "string", "description": "The question being decided" },
+                    "choices": {
+                        "type": "array",
+                        "minItems": 2,
+                        "description": "Closed set of answers; each name is also an output port",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": { "type": "string", "description": "Choice/port name" },
+                                "description": { "type": "string", "description": "When this choice applies" }
+                            },
+                            "required": ["name"]
+                        }
+                    },
+                    "threshold": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.7, "description": "Minimum probability required to commit to a choice" },
+                    "uncertain_port": { "type": "string", "default": "uncertain", "description": "Port for decisions below the threshold" },
+                    "never_commit": { "type": "boolean", "default": false, "description": "Escalate every input to the uncertain port" },
+                    "field": { "type": "string", "description": "Dot-path to the text to decide on (default: whole input)" },
+                    "provider": { "type": "string", "enum": ["openai", "anthropic", "rules", "input"], "description": "Where probabilities come from; auto-detected when omitted" },
+                    "model": { "type": "string", "description": "Model name for openai/anthropic" },
+                    "keywords": { "type": "object", "description": "Provider 'rules': choice name → keyword list" },
+                    "scores_field": { "type": "string", "default": "scores", "description": "Provider 'input': dot-path to an object of choice name → score" },
+                    "timeout_secs": { "type": "integer", "default": 30 }
+                },
+                "required": ["question", "choices"]
             }),
         },
     });

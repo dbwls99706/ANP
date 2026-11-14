@@ -1,0 +1,83 @@
+{
+  "version": "0.1",
+  "metadata": {
+    "name": "Support Triage",
+    "description": "Routes a support ticket with a typed probabilistic decision — confident tickets go to a queue, low-confidence tickets go to human review"
+  },
+  "nodes": [
+    {
+      "id": "ticket",
+      "node_type": "file_read",
+      "kind": "source",
+      "config": { "path": "examples/triage_ticket.txt" },
+      "inputs": [],
+      "outputs": [{ "name": "default" }]
+    },
+    {
+      "id": "triage",
+      "node_type": "decision",
+      "kind": "processor",
+      "config": {
+        "question": "What does the customer need?",
+        "choices": [
+          { "name": "refund", "description": "Wants money back or disputes a charge" },
+          { "name": "support", "description": "Reports a bug or needs help using the product" },
+          { "name": "sales", "description": "Asks about pricing, plans or upgrades" }
+        ],
+        "threshold": 0.7,
+        "provider": "rules",
+        "keywords": {
+          "refund": ["refund", "money back", "charged"],
+          "support": ["error", "broken", "crash", "help"],
+          "sales": ["pricing", "upgrade", "plan"]
+        }
+      },
+      "inputs": [{ "name": "default" }],
+      "outputs": [
+        { "name": "refund" },
+        { "name": "support" },
+        { "name": "sales" },
+        { "name": "uncertain" }
+      ]
+    },
+    {
+      "id": "refund_queue",
+      "node_type": "console",
+      "kind": "sink",
+      "config": { "prefix": "[refund] " },
+      "inputs": [{ "name": "default" }],
+      "outputs": []
+    },
+    {
+      "id": "support_queue",
+      "node_type": "console",
+      "kind": "sink",
+      "config": { "prefix": "[support] " },
+      "inputs": [{ "name": "default" }],
+      "outputs": []
+    },
+    {
+      "id": "sales_queue",
+      "node_type": "console",
+      "kind": "sink",
+      "config": { "prefix": "[sales] " },
+      "inputs": [{ "name": "default" }],
+      "outputs": []
+    },
+    {
+      "id": "human_review",
+      "node_type": "console",
+      "kind": "sink",
+      "config": { "prefix": "[human review] " },
+      "inputs": [{ "name": "default" }],
+      "outputs": []
+    }
+  ],
+  "edges": [
+    { "id": "e1", "from_node": "ticket", "from_port": "default", "to_node": "triage", "to_port": "default" },
+    { "id": "e2", "from_node": "triage", "from_port": "refund", "to_node": "refund_queue", "to_port": "default" },
+    { "id": "e3", "from_node": "triage", "from_port": "support", "to_node": "support_queue", "to_port": "default" },
+    { "id": "e4", "from_node": "triage", "from_port": "sales", "to_node": "sales_queue", "to_port": "default" },
+    { "id": "e5", "from_node": "triage", "from_port": "uncertain", "to_node": "human_review", "to_port": "default" }
+  ]
+}

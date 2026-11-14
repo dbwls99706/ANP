@@ -1,0 +1,24 @@
+\begin{tabular}{llrrrrrrrrr}
+\toprule
+ & & \multicolumn{3}{c}{$\varepsilon=2\%$} & \multicolumn{3}{c}{$\varepsilon=5\%$} & \multicolumn{3}{c}{$\varepsilon=10\%$} \\
+\cmidrule(lr){3-5}\cmidrule(lr){6-8}\cmidrule(lr){9-11}
+Method & Guarantee & viol. & risk & review & viol. & risk & review & viol. & risk & review \\
+\midrule
+Fixed threshold 0.7 & none & 100 & 21.6 & 8.3 & 100 & 21.6 & 8.3 & 100 & 21.6 & 8.3 \\
+Per-node selective risk & none & 0 & 0.0 & 100.0 & 0 & 0.0 & 100.0 & 0 & 0.0 & 100.0 \\
+Plug-in (no confidence bound) & none & 0 & 0.0 & 100.0 & 0 & 0.0 & 100.0 & 43 & 10.0 & 34.1 \\
+\midrule
+Shared threshold, end-to-end LTT & fixed & 0 & 0.0 & 100.0 & 0 & 0.0 & 100.0 & 4 & 6.7 & 54.8 \\
+End-to-end Pareto testing & fixed & 0 & 0.0 & 100.0 & 0 & 0.0 & 100.0 & 2 & 8.1 & 74.2 \\
+End-to-end, uniform over grid & uniform & 0 & 0.0 & 100.0 & 0 & 0.0 & 100.0 & 0 & 0.0 & 100.0 \\
+\midrule
+Teacher-forced, per node & uniform & 0 & 0.0 & 100.0 & 0 & 0.0 & 100.0 & 0 & 0.0 & 100.0 \\
+First-error, per node & uniform & 0 & 0.0 & 100.0 & 0 & 0.0 & 100.0 & 0 & 0.0 & 100.0 \\
+First-error, per level & uniform & 0 & 0.0 & 100.0 & 0 & 0.0 & 100.0 & 0 & 0.0 & 100.0 \\
+\midrule
+Least-confident, per node & uniform & 0 & 0.0 & 100.0 & 0 & 0.0 & 100.0 & 0 & 0.0 & 100.0 \\
+Least-confident, per level & uniform & 0 & 0.0 & 100.0 & 0 & 0.0 & 100.0 & 0 & 0.1 & 99.8 \\
+Least-confident, shared & uniform & 0 & 0.0 & 100.0 & 0 & 0.0 & 100.0 & 0 & 2.1 & 86.1 \\
+Anchored, per level & uniform & 0 & 0.0 & 100.0 & 0 & 0.0 & 100.0 & 0 & 0.0 & 100.0 \\
+\bottomrule
+\end{tabular}

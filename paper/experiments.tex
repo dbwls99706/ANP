@@ -1,0 +1,444 @@
+\section{Experiments}\label{sec:exp}
+
+\paragraph{Setup.} We build two workflows from public intent-classification datasets; details
+are in Appendix~\ref{app:details}. In \textbf{CLINC150}~\citep{larson2019clinc}, a
+\texttt{scope} node separates in-scope from out-of-scope requests, a \texttt{domain} node
+picks one of 10 product areas, and one \texttt{intent} node per area picks among its 15
+intents: 12 decisions on a tree of depth 3 (Figure~\ref{fig:workflow}).
+In \textbf{MASSIVE}~\citep{fitzgerald2022massive} with four languages there is a
+\texttt{language} node, a
+\texttt{scenario} node per language (18 scenarios), and an \texttt{intent} node per scenario
+that is shared by all languages: 21 decisions on a DAG with joins. Every node is a logistic
+regression on frozen sentence embeddings~\citep{reimers2019sbert}, trained on the training
+split; its confidence is the top class probability. Without abstention the workflows err on
+\FreeErrClinc\% and \FreeErrMassive\% of inputs.
+
+To measure validity without test-set noise we treat the pooled held-out data (8{,}600 and
+20{,}028 inputs) as the population: a calibration set is $n$ i.i.d.\ draws from it, and each
+selected threshold vector is scored by its exact risk and review rate on the population. We
+report means over repeated draws and the \emph{violation rate}, the fraction of draws whose
+population risk exceeds $\eps$; a method with a $(1-\delta)$ guarantee must keep it below
+$\delta=0.1$. With \Trials\ draws the standard error of every mean review rate in
+Tables~\ref{tab:main} and~\ref{tab:main-massive} is at most \MaxSeReview\ points, and a
+violation rate observed as zero has a 95\% upper confidence limit of 1\%.
+Appendix~\ref{app:more} checks the two theorems directly, for all threshold assignments at
+once rather than for the selected one.
+
+\paragraph{Methods.} Without guarantee: a fixed threshold of 0.7; \emph{per-node selective
+risk}, which tunes each node separately so that its own error rate among committed inputs is
+certified below $\eps$; and a \emph{plug-in} version of our certificate without confidence
+bounds. End to end, valid for one pre-specified target: a single \emph{shared threshold}
+calibrated by fixed-sequence testing on the exact risk~\citep{angelopoulos2021ltt}, the
+selective-risk counterpart of joint-score calibration~\citep{ren2023knowno,kotte2026pasc}; and
+\emph{Pareto testing}~\citep{laufer2022pareto} over per-node thresholds, with half of the
+data proposing candidates and half testing them. Uniform over the grid: an \emph{end-to-end
+uniform} bound on the exact error count with the same union as Theorem~\ref{thm:cert}, which
+is the uniform-bound route of \citet[\S2.5]{angelopoulos2021ltt} on the product grid; and
+our certificates with TF, FE and LC charging, with modules per node, per level, or shared.
+
+\subsection{Validity and efficiency}\label{sec:exp-main}
+
+\begin{table}[t]
+\centering\footnotesize
+\setlength{\tabcolsep}{3.5pt}
+\input{tables/main_clinc}
+\caption{CLINC150, $n=4{,}000$, $\delta=0.1$, \Trials\ calibration draws. \emph{viol.}:
+percentage of draws with population risk above $\eps$ (bold: above $\delta$ for a method
+that claims a guarantee); \emph{risk}, \emph{review}: mean population risk and human review
+rate in percent. ``fixed'': valid for the single target it was run for; ``uniform'': valid
+for all thresholds on the grid at once.}\label{tab:main}
+\end{table}
+
+Table~\ref{tab:main} gives the results for CLINC150 and Table~\ref{tab:main-massive} in the
+appendix for MASSIVE.
+
+\paragraph{Uncertified practice is erratic.} A fixed threshold of 0.7 yields a risk of
+\RiskCFixedFive\% on CLINC150 and \RiskMFixedFive\% on MASSIVE whatever the target. Per-node
+selective calibration controls each node's own error rate among the inputs it commits and
+ignores how errors accumulate along a route. On CLINC150 it exceeds $\eps=10\%$ in
+\ViolCPerNodeTen\% of draws (mean risk \RiskCPerNodeTen\%), while at $\eps=5\%$ it is far too
+cautious (\RevCPerNodeFive\% review, three times what a certified method needs). On MASSIVE
+it happens to stay below the targets, again at a much higher review rate at small $\eps$;
+nothing in its construction ties the per-node targets to the end-to-end one. The plug-in
+certificate, which uses frequencies in place of confidence bounds, violates in
+\ViolCPlugFive\% and \ViolMPlugFive\% of draws at $\eps=5\%$. Every method with a guarantee
+stays within $\delta$: the largest violation rate among them, over both workflows and all
+targets, is \MaxViolCertified\%.
+
+\paragraph{The rescue effect.} FE and TF certificates are valid but loose. On CLINC150 at
+$\eps=5\%$ they escalate \RevCFEnodeFive\% and \RevCTFnodeFive\% of inputs, against
+\RevCLCnodeFive\% for LC with the same per-node modules and the same union bound. The reason is
+visible in the population. At the thresholds chosen by the shared end-to-end method for
+$\eps=5\%$, the mass of deviating runs whose first wrong node commits is \FdMassC\%, while the
+actual risk is \RiskCSharedFive\%: \RescuedShareC\% of the first-error mass is escalated
+further along the route. The \texttt{scope} node passes out-of-scope requests with high
+confidence, and the \texttt{domain} and \texttt{intent} nodes, facing inputs unlike anything
+they were trained on, hesitate (Figure~\ref{fig:workflow}). On MASSIVE the effect is
+milder---the first-error mass overstates the risk by a factor of \FdRatioM\ (\RescuedShareM\%
+rescued)---and FE per node needs \RevMFEnodeFive\% review where LC needs \RevMLCnodeFive\%.
+Attributing each error to the stage that caused it is exact for a cascade of interchangeable
+solvers; under routing it ignores that much of what goes wrong upstream is caught downstream,
+and by how much depends on the workflow.
+
+\paragraph{The price of uniformity.} At a fixed target and with this much calibration data
+the end-to-end methods escalate least: at $\eps=5\%$, Pareto testing needs \RevCParetoFive\% review on CLINC150 and \RevMParetoFive\%
+on MASSIVE, and a single shared threshold calibrated end to end needs \RevCSharedFive\% and
+\RevMSharedFive\%. They test a short pre-ordered list of configurations and pay no union over
+the grid. Certificates that stay valid under retuning pay for it, and how much depends on the
+number of modules: LC with a shared module needs \RevCLCsharedFive\% and \RevMLCsharedFive\%,
+LC per level \RevCLClevelFive\% and \RevMLClevelFive\%, LC per node \RevCLCnodeFive\% and
+\RevMLCnodeFive\%. The separable bound itself is not the bottleneck. The end-to-end uniform
+bound, which uses exact error counts and the same union as LC per node, needs
+\RevCUnifFive\% and \RevMUnifFive\%, slightly more, because its feasible set can only be
+searched heuristically whereas the separable surrogate is minimised exactly. With a single shared
+module the LC certificate uses exactly the end-to-end error counts
+(Proposition~\ref{prop:exact}), and its distance to the shared-threshold baseline is the
+union over the grid alone.
+
+\paragraph{Granularity.} Fine-grained thresholds buy less than one might expect on these
+workflows. With thresholds optimised directly on the population (by coordinate descent for
+the per-node ones), per-node thresholds reach
+$\eps=5\%$ at \OracleNodeCFive\% review against \OracleSharedCFive\% for the best shared
+threshold on CLINC150 (\OracleNodeCTwo\% against \OracleSharedCTwo\% at $\eps=2\%$), and
+\OracleNodeMFive\% against \OracleSharedMFive\% on MASSIVE; in line with this, Pareto testing
+over per-node thresholds barely improves on the shared threshold (by three points at
+$\eps=2\%$ on CLINC150, and by less than half a point elsewhere). Among uniform
+certificates, tying thresholds by level is the best choice at the strictest target on
+CLINC150 (\RevCLClevelTwo\% review at $\eps=2\%$, against \RevCLCsharedTwo\% shared and
+\RevCLCnodeTwo\% per node), where the levels differ most, and is within about one point of
+the shared module elsewhere. Anchoring the charging rule on a tuning split did not pay for the data it
+consumes (\RevCAnchFive\% against \RevCLClevelFive\% per level on CLINC150 at $\eps=5\%$).
+
+\subsection{Calibration size, number of decisions and design choices}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/nsweep.pdf}
+\caption{Human review needed to certify $\eps=5\%$ as a function of the calibration size
+(\NsweepTrials\ draws per point, $\delta=0.1$).}\label{fig:nsweep}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/synth.pdf}
+\caption{Synthetic chains of $K$ decisions with 20\% erroneous runs before abstention:
+review needed to certify $\eps=5\%$ (\SynthTrials\ draws per point). The per-node certificate
+pays a union over $K$ thresholds; a shared module does not. Review falls with $K$ because
+the nodes become more accurate at a fixed total error rate.}\label{fig:synth}
+\end{figure}
+
+Figure~\ref{fig:nsweep} varies $n$. The gap between uniform and fixed-target methods is a
+statistical margin and closes as $n$ grows: with the largest samples the per-level LC
+certificate needs \NCLargeLClevel\% review on CLINC150 against \NCLargePareto\% for Pareto
+testing, and \NMLargeLClevel\% against \NMLargePareto\% on MASSIVE. Small samples separate the
+methods sharply. With $n=500$ on CLINC150 and $n=1{,}000$ on MASSIVE the per-node uniform
+certificates cannot certify at all (\NCSmallLCnode\% review), and Pareto testing, which
+splits its data in two, needs \NCSmallPareto\% and \NMSmallPareto\%. The per-level certificate
+needs \NCSmallLClevel\% and \NMSmallLClevel\%, and the shared end-to-end threshold
+\NCSmallShared\% and \NMSmallShared\%. Coarse modules are therefore the robust choice when
+labels are scarce, whichever way they are certified.
+
+Figure~\ref{fig:synth} isolates the dependence on the number of decisions with synthetic
+chains in which every run visits all $K$ nodes, node errors are correlated through a shared
+difficulty, and confidences are overconfident. The total error rate before abstention is held
+at 20\%, so individual nodes become more accurate as $K$ grows and all methods need less
+review; what matters is the distance between the per-node certificate and the shared module.
+For $K=32$ the per-node certificate cannot certify $5\%$ from $n=1{,}000$ runs
+(\SynthThirtyTwoSmallLCnode\% review): its margin of roughly $K\ln G/n\approx10\%$ exceeds the
+target. At $n=4{,}000$ it needs \SynthThirtyTwoMidLCnode\% against \SynthThirtyTwoMidLCshared\%
+for the shared module, and at $n=16{,}000$ \SynthThirtyTwoLargeLCnode\% against
+\SynthThirtyTwoLargeLCshared\%. FE charging needs at least \SynthFEmin\% review in every
+setting, because the chains have rescue by construction.
+
+Table~\ref{tab:ablation} in the appendix varies the design choices of the certificate at
+$\eps=5\%$. Pooling the charges into one binomial count (remark~(ii) of
+\S\ref{sec:sep}) matters most for fine-grained modules: with one confidence band per node
+the review rate rises from \AbCNodePooled\% to \AbCNodeSeparate\% on CLINC150 and from
+\AbMNodePooled\% to \AbMNodeSeparate\% on MASSIVE. The grid trades resolution against the
+union bound. Per level the trade is flat (\AbCLevelGridCoarse\%, \AbCLevelGridDefault\% and
+\AbCLevelGridFine\% review on CLINC150 with 13, 26 and 103 grid values); per node, where the
+union is over twelve thresholds, the coarse grid is the better one (\AbCNodeGridCoarse\%
+against \AbCNodeGridFine\% for the fine grid). A confidence of 0.99 instead of 0.90 costs
+less than a point (\AbCLevelDeltaStrict\% against \AbCLevelGridDefault\% per level), since
+$\delta$ enters the margin only through $\ln(1/\delta)$. The local search after the knapsack
+did not improve on the knapsack solution in any of these settings; it remains useful for
+certificates with several parts, where the selection is not solved exactly.
+
+\subsection{Post hoc retuning}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/posthoc.pdf}
+\caption{One calibration set, five targets. The LC certificates are issued once and
+re-optimised for each $\eps$; the end-to-end procedures are re-run for each $\eps$ on the same
+data. In parentheses: percentage of calibration draws in which at least one of the five
+selected configurations violates its target (\PosthocTrials\ draws).}\label{fig:posthoc}
+\end{figure}
+
+Operators rarely keep one target. Figure~\ref{fig:posthoc} issues a certificate once and then
+selects thresholds for five targets from 2\% to 10\%. For the LC certificates this is covered
+by Corollary~\ref{cor:posthoc}: in \AnyViolCLClevel\% (CLINC150) and \AnyViolMLClevel\%
+(MASSIVE) of draws at least one of the five configurations violates its target. Re-running
+an end-to-end procedure for each target on the same data is not covered by its guarantee.
+For Pareto testing the simultaneous violation rates are \AnyViolCPareto\% and
+\AnyViolMPareto\%, two to three times its per-target rates and, on CLINC150, already at about
+the nominal $\delta$ with only five targets. For the shared threshold, whose candidates are nested, they
+stay at \AnyViolCShared\% and \AnyViolMShared\%. The uniform certificates pay for their
+coverage with the review gap of \S\ref{sec:exp-main} at every target.
+
+\subsection{Edits}\label{sec:exp-edits}
+
+\begin{figure}[tp]
+\centering
+\includegraphics[width=\linewidth]{figures/edits.pdf}
+\caption{Review needed to certify $\eps=5\%$ after replacing the model of one node (in
+parentheses: its share of the traffic), as a
+function of the number $m$ of fresh labelled runs (\EditTrials\ draws per point). \emph{From
+scratch} labels $m$ runs of all traffic and recalibrates with them alone. \emph{Edit-local}
+(Theorem~\ref{thm:recert}) keeps the old certificate for the routes that avoid the node and
+labels $m$ runs of the traffic through it. The dotted line recalibrates on all stored inputs
+re-run through the edited workflow, which assumes they were kept. Bottom row: the
+language-model workflow of \S\ref{sec:exp-llm}.}\label{fig:edits}
+\end{figure}
+
+We replace the model of one node by a model from a different family and ask how many fresh
+labels are needed to certify the edited workflow at $\eps=5\%$ (Figure~\ref{fig:edits}). The
+old certificate was issued from $n$ runs of the unedited workflow. We first confirmed
+Proposition~\ref{prop:local} on the populations: for each edit, the runs that avoid the
+edited node have identical routes, confidences and deviation status before and after
+(MASSIVE has no alternative language model, so its root is not edited).
+
+For a leaf (\EditShareCLeaf\% of the traffic on CLINC150, \EditShareMLeaf\% on MASSIVE) the
+edit-local certificate needs \EditCLeafLocalHundred\% and \EditMLeafLocalHundred\% review with
+$m=100$ fresh labels, and \EditCLeafLocalThousand\% and \EditMLeafLocalThousand\% with
+$m=1{,}000$; recalibrating on all stored inputs gives \EditCLeafRerunThousand\% and
+\EditMLeafRerunThousand\%. From scratch, 100 labels certify next to nothing: Pareto testing
+escalates \EditCLeafScratchHundred\% and \EditMLeafScratchHundred\% of inputs and the LC
+certificate everything. With $m=1{,}000$ the from-scratch methods reach
+\EditCLeafScratchLCThousand\% and \EditMLeafScratchLCThousand\% (LC per level) and
+\EditCLeafScratchThousand\% and \EditMLeafScratchThousand\% (Pareto testing), still short of
+the edit-local certificate at the same $m$; on CLINC150 that is about what the edit-local
+certificate achieves with a tenth of the labels.
+
+For a middle node the picture depends on its traffic share. A \texttt{scenario} node of
+MASSIVE (\EditShareMMiddle\% of the traffic) is repaired locally with 100 labels at
+\EditMMiddleLocalHundred\% review, and with 1{,}000 at \EditMMiddleLocalThousand\% against
+\EditMMiddleScratchLCThousand\% from scratch. The \texttt{domain} node of CLINC150 carries
+\EditShareCMiddle\% of the traffic, which leaves little to reuse: the edit-local certificate
+is then slightly worse than recalibration from scratch (\EditCMiddleLocalThousand\% against
+\EditCMiddleScratchLCThousand\% at $m=1{,}000$), because it splits $\delta$ three ways.
+Editing the root touches every run and locality buys nothing (\EditCRootLocalThousand\% against
+\EditCRootScratchLCThousand\%). The benefit of locality is thus proportional to the traffic
+the edit leaves alone. Across all edits and sample sizes no edit-local certificate violated
+its target (largest violation rate \EditMaxViolLocal\%).
+
+If all calibration inputs and labels were retained, re-running them through the edited
+workflow and recalibrating is at least as good (dotted line); that option requires storing
+raw inputs, and each such recalibration is a new certificate for a single configuration. The
+edit-local certificate needs only the stored counts.
+
+\subsection{A hosted language model}\label{sec:exp-llm}
+
+The workflows so far use trained classifiers. To see what changes when the decisions are
+taken by a hosted language model, we rebuild the CLINC150 workflow with
+\texttt{\LlmModel} at every node. Each node's question is asked zero-shot as a
+multiple-choice question over the node's choices, and the confidence is the probability the
+model assigns to the letter it answers with, read from its token log-probabilities
+(Appendix~\ref{app:llm}). We consider the full three-level workflow (\textbf{LLM-3}) and the
+two-level workflow \texttt{domain}\,$\to$\,\texttt{intent} on the in-scope traffic
+(\textbf{LLM-2}; \LlmSizeL\ inputs, 11 decisions). Token probabilities saturate:
+\LlmSaturatedT\% (LLM-3) and \LlmSaturatedL\% (LLM-2) of the confidences along free runs are
+at least $1-10^{-6}$. For these workflows the grid therefore gets three more values,
+$1-10^{-4}$, $1-10^{-5}$ and $1-10^{-6}$ ($G=29$). Saturation also makes ties between the
+confidences of a run common, which is why LC charging breaks ties towards the first wrong
+node; the trained workflows have no ties.
+
+\paragraph{When no threshold is safe.} In LLM-3 the zero-shot \texttt{scope} decision is
+right on \LlmRootAccT\% of inputs and, on \LlmRootWrongSatT\% of all inputs, wrong with a
+confidence of at least $1-10^{-6}$. Rewording the question, tried on training-split requests
+only, did not change this (Appendix~\ref{app:llm}); in-context examples do, as shown below. The
+runtime's default threshold of 0.7 escalates \LlmDefaultReviewT\% of runs and lets an error
+rate of \LlmDefaultRiskT\% through. Even the strictest finite shared threshold leaves
+\LlmTopRiskT\% errors at \LlmTopReviewT\% review. Separate thresholds do not help. If only
+\texttt{scope} commits, at its strictest finite threshold, and every other node escalates,
+the workflow still declines \LlmRootOnlyRiskT\% of all inputs wrongly, and committing anywhere
+else can only add errors. Targets of 2\% and 5\% are therefore reached by one assignment
+only, the one that escalates every run ($\tau=\infty$), and every certified method returns
+it. At $\eps=10\%$ a
+shared threshold calibrated end to end certifies with \RevTSharedTen\% review and Pareto
+testing with \RevTParetoTen\%; the uniform certificates, whose margins exceed the little
+room that is left, escalate \RevTLCsharedTen\% with a shared module and practically
+everything otherwise. The value of a certificate in this workflow is that it says no.
+
+\paragraph{Where certification is possible.} Without abstention LLM-2 errs on
+\FreeErrLlm\% of inputs, and on \LlmDefaultRiskL\% at the default threshold
+(Table~\ref{tab:main-llm} in the appendix). A 2\% target is again out of reach for a shared threshold---the
+strictest finite one leaves \LlmTopRiskL\%---and the certified methods escalate at least
+99\% of inputs. At
+$\eps=5\%$ the picture matches the trained workflows. The end-to-end methods need
+\RevLSharedFive\% (shared threshold) and \RevLParetoFive\% (Pareto testing) review. LC
+certificates need \RevLLClevelFive\% per level and \RevLLCnodeFive\% per node, FE per node
+\RevLFEnodeFive\% and TF \RevLTFnodeFive\%; the first-error mass overstates the risk by a
+factor of \FdRatioL. Per-node selective calibration needs \RevLPerNodeFive\% review, and the
+plug-in certificate violates in \ViolLPlugFive\% of draws. The end-to-end uniform bound
+needs \RevLUnifFive\% review against \RevLLCnodeFive\% for LC per node under the same
+union; we attribute the gap to its coordinate-descent search stalling on the plateaus that
+saturated confidences create, whereas the knapsack over the separable surrogate is still
+solved exactly.
+
+\paragraph{In-context examples.} Giving every node labelled examples from the training split
+(40 for \texttt{scope} and for \texttt{domain}, 75 for each \texttt{intent} node;
+Appendix~\ref{app:llm}) changes the workflow, not the method. The \texttt{scope} decision is
+now right on \LlmRootAccG\% of inputs, and the error rate without abstention falls from
+\FreeErrLlmThree\% to \FreeErrLlmThreeFs\% on all traffic (\textbf{LLM-3-FS}) and from
+\FreeErrLlm\% to \FreeErrLlmFs\% on the in-scope traffic (\textbf{LLM-2-FS}). The confidences
+are even more saturated (\LlmSaturatedG\% and \LlmSaturatedF\% at least $1-10^{-6}$). The
+three-level workflow, which zero-shot reached 5\% only by escalating every run, can now be
+certified
+(Table~\ref{tab:main-llm-fs}): it needs \RevGSharedFive\% review with the shared end-to-end
+threshold, \RevGParetoFive\% with Pareto testing, \RevGLClevelFive\% with LC per level and
+\RevGLCnodeFive\% per node; FE per node needs \RevGFEnodeFive\%. On LLM-2-FS a 5\%
+certificate costs \RevFLClevelFive\% review per level, and a 2\% certificate, out of reach
+zero-shot, \RevFLCsharedTwo\% with a shared module and \RevFLClevelTwo\% per level, against
+\RevFSharedTwo\% for the end-to-end shared threshold. Per-node selective calibration fails
+here as it did on CLINC150: on LLM-3-FS it exceeds $\eps=5\%$ in \ViolGPerNodeFive\% of
+draws and $\eps=10\%$ in \ViolGPerNodeTen\%. Over the four language-model workflows and all
+targets the largest violation rate of a certified method is \MaxViolCertifiedLlm\%, and
+\MaxViolUniformLlm\% for the uniform certificates.
+
+\paragraph{Edits.} We edit LLM-2 in two ways that are routine in practice
+(Figure~\ref{fig:edits}, bottom row). The model of one leaf is upgraded to a newer language
+model (\texttt{\LlmUpgrade}; \EditShareLUpgrade\% of the traffic), and the least accurate leaf
+is replaced by the trained classifier of \S\ref{sec:exp-main} (\EditShareLClassifier\% of the
+traffic). With $m=100$ fresh labels the edit-local certificate restores the 5\% certificate
+at \EditLUpgradeLocalHundred\% and \EditLClassifierLocalHundred\% review. Recalibrating from
+scratch with 100 labels escalates \EditLUpgradeScratchHundred\% and
+\EditLClassifierScratchHundred\% of inputs with Pareto testing and everything with the LC
+certificate; with 1{,}000 labels it still needs \EditLUpgradeScratchLCThousand\% and
+\EditLClassifierScratchLCThousand\%, against \EditLUpgradeLocalThousand\% and
+\EditLClassifierLocalThousand\% edit-local. The second edit also shows when per-node
+thresholds matter. The classifier's confidences are not saturated, so a threshold shared
+with the language-model leaves is too strict for it, and per-node modules
+(\EditLClassifierLocalNodeThousand\% at $m=1{,}000$) overtake per-level ones.
+
+\subsection{A tool-using agent}\label{sec:exp-agent}
+
+The workflows so far route a request once. An agent takes a variable number of steps, acts
+on what its tools return, and after a bad step it may recover or wander. We build a
+knowledge-graph agent in the style of Think-on-Graph~\citep{sun2024tog}, an environment that
+is also part of AgentBench~\citep{liu2024agentbench}, on WebQSP~\citep{yih2016webqsp} and
+CWQ~\citep{talmor2018cwq} with the Freebase subgraphs of \citet{luo2024rog}. The language
+model (\texttt{\AgentModel}) only decides: which entity of the question to start from, which
+of the ten relations proposed by an embedding retriever to follow, whether the entities
+reached answer the question, and which of them to return. The program executes the walk
+(Appendix~\ref{app:details}). The loop is unrolled to at most \AgentBudgetW\ relations on
+WebQSP and \AgentBudgetQ\ on CWQ, which gives \AgentNodesW\ and \AgentNodesQ\ decision nodes;
+the copies of a decision share a threshold, so there is one module per role (start, relation,
+stop, answer). A run takes \AgentDecisionsW\ (\AgentDecisionsQ) decisions on average, up to
+\AgentDecisionsMaxW\ (\AgentDecisionsMaxQ), along one of \AgentRoutesW\ (\AgentRoutesQ)
+routes.
+
+A run is an error when the entity it returns is not a gold answer. This is outcome
+labelling (\S\ref{sec:setting}): the graph offers several walks to an answer, so there is no
+oracle route, and teacher forcing and per-node selective calibration are not defined. LC
+charging needs nothing else. To have FE as a comparison we mark a decision wrong when it
+puts every gold answer out of reach. Without abstention the agent fails on \AgentErrW\% of
+the \AgentSizeW\ WebQSP questions and on \AgentErrQ\% of the \AgentSizeQ\ CWQ questions; the
+targets are therefore 5\%, 10\% and 20\%.
+
+\begin{table}[t]
+\centering\footnotesize
+\setlength{\tabcolsep}{3.5pt}
+\input{tables/main_kg_webqsp}
+\caption{The knowledge-graph agent on WebQSP (\AgentNodesW\ decisions, four roles),
+$n=4{,}000$, $\delta=0.1$, \AgentTrials\ draws, grid with the extended tail. Columns as in
+Table~\ref{tab:main}.}\label{tab:agent}
+\end{table}
+
+\paragraph{Results.} Table~\ref{tab:agent} gives the results for WebQSP and
+Table~\ref{tab:agent-cwq} in the appendix for CWQ. The runtime's default threshold of 0.7
+lets \AgentDefaultRiskW\% errors through on WebQSP while escalating \AgentDefaultReviewW\% of
+the runs, and \AgentDefaultRiskQ\% on CWQ. At $\eps=10\%$ on WebQSP the end-to-end methods
+need \RevWSharedTen\% (shared threshold) and \RevWParetoTen\% (Pareto testing) review; the LC
+certificate needs \RevWLClevelTen\% with one module per role, \RevWLCnodeTen\% per node and
+\RevWLCsharedTen\% shared. At $\eps=20\%$ the certificate per role costs nothing
+(\RevWLClevelTwenty\% against \RevWSharedTwenty\% and \RevWParetoTwenty\%), and at
+$\eps=5\%$ it costs three points (\RevWLClevelFive\% against \RevWParetoFive\%). The roles
+differ in kind: stop decisions are almost always saturated, relation choices are not. With
+thresholds optimised on the population, separate thresholds reach $\eps=10\%$ at
+\OracleNodeWTen\% review against \OracleSharedWTen\% for a shared one, a wider gap than in
+the routing workflows, and among the uniform certificates one module per role is the best
+choice at every target on WebQSP. CWQ is the hard case. Its questions combine several conditions, which a single walk
+cannot satisfy, and the agent fails on \AgentErrQ\% of them. A 20\% target then costs
+\RevQParetoTwenty\% review end to end and \RevQLClevelTwenty\% with the LC certificate per
+role, and a 5\% target more than nine runs in ten with any method. The certificate does not
+make the agent better; it states what its confidences support. Over both benchmarks and all
+targets the largest violation rate of a method with a guarantee is \MaxViolCertifiedAgent\%;
+the plug-in certificate violates in up to \ViolWPlugFive\% of draws.
+
+\paragraph{Rescue is stronger in an agent.} An agent that has taken a wrong turn keeps
+deciding: \AgentGoesOnW\% of the failed runs on WebQSP and \AgentGoesOnQ\% on CWQ take
+further decisions after the first wrong one. It is then offered relations that do not fit
+the question, and it hesitates. Decisions taken after the first wrong one have a confidence
+of at least 0.95 in \AgentConfidentAfterW\% of the cases on WebQSP, against
+\AgentConfidentSoundW\% for decisions on a walk that is still sound, and in
+\AgentLeastLaterW\% (\AgentLeastLaterQ\% on CWQ) of the failed runs the least confident
+decision comes after the first wrong one. At the shared threshold certified for $\eps=10\%$ on WebQSP, the failed
+runs whose first wrong decision commits have mass \FdMassWTen\%, which is \FdRatioWTen\ times
+the risk of \RiskWSharedTen\%; on CWQ at $\eps=20\%$ the factor is \FdRatioQTwenty. The FE
+certificate pays for this in full. On WebQSP it needs \RevWFEnodeTen\% review at
+$\eps=10\%$ where LC needs \RevWLCnodeTen\% with the same modules, and it certifies nothing at
+$\eps=5\%$; on CWQ, per node, it certifies nothing at any of the three targets. FE also needed a label
+for every decision, which for an agent had to be constructed, whereas LC used the outcome of
+the run and the logged confidences.
+
+\paragraph{Retuning and edits.} Selecting thresholds for five targets from 5\% to 25\% on one
+calibration set leaves the LC certificates without a violation in any draw on either
+benchmark; re-running the end-to-end procedures for each target gives simultaneous violation
+rates of \AnyViolWShared\% (shared threshold) and \AnyViolWPareto\% (Pareto testing) on WebQSP.
+
+For the edits we move one decision to a newer model (\texttt{\LlmUpgrade}) and certify
+$\eps=\AgentEditEps\%$ (Figure~\ref{fig:edits-agent}). On WebQSP the last relation decision is
+reached by \EditShareWLate\% of the runs. After editing it, the edit-local certificate needs
+\EditWLateLocalHundred\% review with $m=100$ fresh labels and \EditWLateLocalTwoFifty\% with
+250, where recalibration from scratch escalates \EditWLateScratchHundred\% and
+\EditWLateScratchTwoFifty\% of the runs with Pareto testing and more with the LC certificate;
+with 1{,}000 labels edit-local and Pareto testing meet (\EditWLateLocalThousand\% and
+\EditWLateScratchThousand\%). The answer decision is reached by \EditShareWAnswer\% of the
+runs, and there locality does not pay: with 100 labels nothing is certified, and from 250
+labels on Pareto testing from scratch is as good or better (\EditWAnswerScratchFiveHundred\%
+against \EditWAnswerLocalFiveHundred\% at $m=500$). On CWQ the two decisions carry
+\EditShareQLate\% and \EditShareQAnswer\% of the runs and the target is close to what the
+agent supports at all; the edit-local certificate and Pareto testing from scratch are within
+three points of each other from 250 labels on. No edit-local certificate violated its target.
+This is the picture of \S\ref{sec:exp-edits}: locality is worth the traffic an edit leaves
+alone. An agent leaves less alone than a router does. Its late steps are reached by a large
+share of the runs, and an edit to a role, such as a new prompt for every relation decision,
+touches all of them.
+
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/edits_agent.pdf}
+\caption{The agent after one decision is moved to a newer model: review needed to certify
+$\eps=\AgentEditEps\%$ as a function of the number $m$ of fresh labelled runs. Lines as in
+Figure~\ref{fig:edits}.}\label{fig:edits-agent}
+\end{figure}
+
+\subsection{Which certificate when}\label{sec:exp-summary}
+
+The experiments suggest a simple division of labour. For a workflow that is frozen and has
+one target, a shared threshold calibrated end to end is the baseline to beat: it is simple
+and, with a few thousand calibration runs, needs the least review. A certificate that must
+stay valid while thresholds and targets are retuned should be a charged certificate with
+least-confident charging and coarse modules, per level or shared; it costs a few points of
+review at a few thousand runs, and less than the end-to-end alternatives when calibration
+data are scarce. A workflow that is edited should keep its counts per route, so that an edit
+costs labels in proportion to the traffic it touches. Per-node thresholds are worth their
+larger union bound only when nodes differ in kind, as when a trained classifier sits next
+to language-model nodes. For an agent, whose steps have no labels of their own, the
+certificate to use is least-confident charging with one module per role: it needs the
+outcome of each run and nothing else, and it stayed within three points of end-to-end
+calibration. In all cases the certificate should be allowed to refuse: on LLM-3
+the correct answer to ``which thresholds give 5\% error?'' is that none do, short of escalating
+every run.
