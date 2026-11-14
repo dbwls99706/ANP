@@ -14,6 +14,7 @@ TAB = os.path.join(HERE, "..", "tables")
 os.makedirs(FIG, exist_ok=True)
 os.makedirs(TAB, exist_ok=True)
 
+NO_DATE = {"CreationDate": None}   # so that regenerating a figure reproduces the same file
 plt.rcParams.update({"font.size": 8, "axes.spines.top": False, "axes.spines.right": False,
                      "legend.frameon": False, "figure.dpi": 150, "pdf.fonttype": 42})
 TITLE = {"clinc": "CLINC150 (12 decisions)", "massive": "MASSIVE (21 decisions)",
@@ -109,7 +110,7 @@ def fig_nsweep(res):
     axes[0].set_ylabel("human review (%)")
     fig.legend(*axes[0].get_legend_handles_labels(), fontsize=6.5, loc="lower center", ncol=4)
     fig.tight_layout(rect=(0, 0.13, 1, 1))
-    fig.savefig(os.path.join(FIG, "nsweep.pdf"))
+    fig.savefig(os.path.join(FIG, "nsweep.pdf"), metadata=NO_DATE)
 
 
 def fig_posthoc(res):
@@ -127,7 +128,7 @@ def fig_posthoc(res):
                   loc="upper right")
     axes[0].set_ylabel("human review (%)")
     fig.tight_layout()
-    fig.savefig(os.path.join(FIG, "posthoc.pdf"))
+    fig.savefig(os.path.join(FIG, "posthoc.pdf"), metadata=NO_DATE)
 
 
 def fig_edits(res, out="edits.pdf"):
@@ -168,7 +169,7 @@ def fig_edits(res, out="edits.pdf"):
             if j == 0:
                 ax.set_ylabel("human review (%)")
     fig.tight_layout()
-    fig.savefig(os.path.join(FIG, out))
+    fig.savefig(os.path.join(FIG, out), metadata=NO_DATE)
     if out != "edits.pdf":
         return
 
@@ -202,7 +203,7 @@ def fig_synth(res):
     axes[0].set_ylabel("human review (%)")
     fig.legend(*axes[0].get_legend_handles_labels(), fontsize=6.5, loc="lower center", ncol=3)
     fig.tight_layout(rect=(0, 0.14, 1, 1))
-    fig.savefig(os.path.join(FIG, "synth.pdf"))
+    fig.savefig(os.path.join(FIG, "synth.pdf"), metadata=NO_DATE)
 
 
 def table_ablation(res):
