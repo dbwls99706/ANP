@@ -1,0 +1,51 @@
+{
+ "data": {
+  "clinc_llm": {
+   "N": 8600,
+   "K": 12,
+   "model": "gpt-4.1-mini",
+   "upgrade": "gpt-5.4-mini",
+   "free_run_error": 0.24220930232558138,
+   "root_accuracy": 0.8309302325581396,
+   "saturated_share": 0.8113054281345565,
+   "root_wrong_saturated": 0.08,
+   "at_default": {
+    "risk": 0.21558139534883722,
+    "review": 0.08348837209302329
+   },
+   "at_top": {
+    "risk": 0.09104651162790697,
+    "review": 0.3859302325581395
+   },
+   "conf_when_wrong": 0.9486278391742679,
+   "model_requests": 24045,
+   "model_unparsed": 113,
+   "upgrade_requests": 830,
+   "upgrade_unparsed": 0
+  },
+  "clinc_llm_inscope": {
+   "N": 7500,
+   "K": 11,
+   "model": "gpt-4.1-mini",
+   "upgrade": "gpt-5.4-mini",
+   "free_run_error": 0.1208,
+   "root_accuracy": 0.9564,
+   "saturated_share": 0.8529333333333333,
+   "root_wrong_saturated": 0.012533333333333334,
+   "at_default": {
+    "risk": 0.102,
+    "review": 0.025599999999999956
+   },
+   "at_top": {
+    "risk": 0.024,
+    "review": 0.25226666666666664
+   },
+   "conf_when_wrong": 0.9336656710816778
+  }
+ },
+ "grid_tail": [
+  0.9999,
+  0.99999,
+  0.999999
+ ]
+}

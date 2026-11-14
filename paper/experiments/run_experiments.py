@@ -22,7 +22,9 @@ HERE = os.path.dirname(__file__)
 CACHE = os.environ.get("ANP_CACHE", os.path.join(HERE, "cache"))
 RESULTS = os.path.join(HERE, "..", "results")
 DELTA = 0.1
-DEFAULT_N = {"clinc": 4000, "massive": 8000, "clinc_llm": 4000}
+DEFAULT_N = {"clinc": 4000, "massive": 8000, "clinc_llm": 4000, "clinc_llm_inscope": 4000}
+# Token probabilities of the language model saturate, so its workflows get a longer grid tail.
+LLM_TAIL = (0.9999, 0.99999, 0.999999)
 
 
 def load(name, swap=None):
@@ -251,17 +253,17 @@ def _edit_trial(args):
     return res
 
 
-LLM_EDITS = dict(eps=0.05, nodes={"leaf": (3, "alt2"), "middle": (1, "alt")})
+LLM_EDITS = dict(eps=0.05, nodes={"upgrade": (2, "alt2"), "classifier": (1, "alt")})
 
 
 def exp_edits(trials, only=None, names=("clinc", "massive")):
     out = {}
     # MASSIVE has no alternative language model, so its root is not edited. In the language-
-    # model workflow the leaf is upgraded to a newer language model and the middle node is
+    # model workflow one leaf is upgraded to a newer language model and another leaf is
     # replaced by the trained classifier.
     plans = {"clinc": dict(eps=0.05, nodes={"leaf": 3, "middle": 1, "root": 0}),
              "massive": dict(eps=0.05, nodes={"leaf": 7, "middle": 2}),
-             "clinc_llm": LLM_EDITS}
+             "clinc_llm_inscope": LLM_EDITS}
     plans = {k: v for k, v in plans.items() if k in names}
     if only:
         name, label = only.split(":")
@@ -295,6 +297,37 @@ def exp_edits(trials, only=None, names=("clinc", "massive")):
                 info["sizes"][str(m_new)] = {m: summarise([r[m] for r in res], plan["eps"]) for m in res[0]}
             out[name]["edits"][label] = info
             print(name, label, "edit done", flush=True)
+    return out
+
+
+# -- description of the language-model workflows ----------------------------
+
+
+def exp_llmstats(_trials=None):
+    """Population facts about the language-model workflows (no sampling involved)."""
+    out = {}
+    top = LLM_TAIL[-1]
+    for name in ["clinc_llm", "clinc_llm_inscope"]:
+        d = np.load(os.path.join(CACHE, f"{name}.npz"))
+        pop, _ = population(name)
+        k = pop.n_nodes
+        conf = pop.path_conf[pop.path_node >= 0]
+        on = d["truth"][:, 0] >= 0
+        root_ok = d["pred"][on, 0] == d["truth"][on, 0]
+        root_first = pop.deviated & (pop.dev_node == 0)
+        shared = lambda t: dict(risk=pop.risk(np.full(k, t)), review=pop.review(np.full(k, t)))
+        out[name] = dict(N=len(pop), K=k, model=str(d["model"]), upgrade=str(d["upgrade"]),
+                         free_run_error=pop.risk(np.zeros(k)), root_accuracy=float(root_ok.mean()),
+                         saturated_share=float((conf >= top).mean()),
+                         root_wrong_saturated=float((root_first & (pop.dev_conf >= top)).mean()),
+                         at_default=shared(0.7), at_top=shared(top),
+                         conf_when_wrong=float(pop.dev_conf[pop.deviated].mean()))
+    for key in ("model", "upgrade"):  # number of requests answered by each model
+        raw = os.path.join(CACHE, f"llm_raw_{out['clinc_llm'][key]}.jsonl")
+        if os.path.exists(raw):
+            rows = [json.loads(line) for line in open(raw)]
+            out["clinc_llm"][f"{key}_requests"] = len(rows)
+            out["clinc_llm"][f"{key}_unparsed"] = sum(1 for r in rows if max(r["probs"]) == 0)
     return out
 
 
@@ -359,7 +392,7 @@ def exp_synth(trials):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("experiment", choices=["main", "nsweep", "posthoc", "edits", "synth"])
+    ap.add_argument("experiment", choices=["main", "nsweep", "posthoc", "edits", "synth", "llmstats"])
     ap.add_argument("--trials", type=int, default=200)
     ap.add_argument("--only", help="edits: re-run a single edit, e.g. clinc:root, and merge it")
     ap.add_argument("--llm", action="store_true", help="main / edits on the language-model workflow")
@@ -367,9 +400,15 @@ if __name__ == "__main__":
     t0 = time.time()
     os.makedirs(RESULTS, exist_ok=True)
     path = os.path.join(RESULTS, f"{a.experiment}{'_llm' if a.llm else ''}.json")
-    if a.llm:
-        fn = {"main": exp_main, "edits": exp_edits}[a.experiment]
-        result = {"delta": DELTA, "trials": a.trials, "data": fn(a.trials, names=("clinc_llm",))}
+    if a.experiment == "llmstats":
+        result = {"data": exp_llmstats(), "grid_tail": list(LLM_TAIL)}
+    elif a.llm:
+        rc.set_grid_tail(LLM_TAIL)
+        if a.experiment == "main":
+            data = exp_main(a.trials, names=("clinc_llm", "clinc_llm_inscope"))
+        else:
+            data = exp_edits(a.trials, names=("clinc_llm_inscope",))
+        result = {"delta": DELTA, "trials": a.trials, "data": data, "grid_tail": list(LLM_TAIL)}
     elif a.experiment == "edits" and a.only:
         result = json.load(open(path))
         name, label = a.only.split(":")

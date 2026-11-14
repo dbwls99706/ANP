@@ -17,7 +17,9 @@ os.makedirs(TAB, exist_ok=True)
 plt.rcParams.update({"font.size": 8, "axes.spines.top": False, "axes.spines.right": False,
                      "legend.frameon": False, "figure.dpi": 150, "pdf.fonttype": 42})
 TITLE = {"clinc": "CLINC150 (12 decisions)", "massive": "MASSIVE (21 decisions)",
-         "clinc_llm": "CLINC150-LLM (12 decisions)"}
+         "clinc_llm": "LLM-3 (12 decisions)", "clinc_llm_inscope": "LLM-2 (11 decisions)"}
+KIND = {"leaf": "leaf edit", "middle": "middle edit", "root": "root edit", "upgrade": "leaf, newer LLM",
+        "classifier": "leaf, trained classifier"}
 STYLE = {  # label, colour, linestyle, marker
     "global-e2e": ("Shared threshold, end-to-end", "#7f7f7f", "--", "s"),
     "e2e-pareto": ("End-to-end Pareto testing", "#000000", "-", "o"),
@@ -122,15 +124,16 @@ def fig_posthoc(res):
 
 def fig_edits(res):
     names = list(res["data"])
-    kinds = ["leaf", "middle", "root"]
     fig, axes = plt.subplots(len(names), 3, figsize=(6.8, 1.95 * len(names)), sharey=True, squeeze=False)
     legend_done = False
     lines = {"scratch: e2e-pareto": ("From scratch: Pareto testing", "#000000", "-", "o"),
              "scratch: min-level": ("From scratch: least-confident, level", "#2ca02c", "--", "D"),
              "local: min-level": ("Edit-local (ours)", "#d62728", "-", "^")}
     for i, name in enumerate(names):
-        for j, kind in enumerate(kinds):
+        kinds = list(res["data"][name]["edits"])
+        for j in range(3):
             ax = axes[i][j]
+            kind = kinds[j] if j < len(kinds) else None
             info = res["data"][name]["edits"].get(kind)
             if info is None:
                 ax.axis("off")
@@ -148,7 +151,7 @@ def fig_edits(res):
             ax.set_xticks([int(s) for s in sizes])
             ax.set_xticklabels(sizes, fontsize=6.5)
             ax.minorticks_off()
-            ax.set_title(f"{TITLE[name].split(' ')[0]}: {kind} ({pct(info['traffic_share'], 0)}% of traffic)",
+            ax.set_title(f"{TITLE[name].split(' ')[0]}: {KIND[kind]} ({pct(info['traffic_share'], 0)}%)",
                          fontsize=7.5)
             if i == len(names) - 1:
                 ax.set_xlabel("fresh labelled runs $m$")
@@ -159,11 +162,8 @@ def fig_edits(res):
 
     rows = []
     for name in names:
-        for kind in kinds:
-            info = res["data"][name]["edits"].get(kind)
-            if info is None:
-                continue
-            rows.append(f"{TITLE[name].split(' ')[0]} & {kind} & {pct(info['traffic_share'], 0)} & "
+        for kind, info in res["data"][name]["edits"].items():
+            rows.append(f"{TITLE[name].split(' ')[0]} & {KIND[kind]} & {pct(info['traffic_share'], 0)} & "
                         f"{len(info['tf_changed'])} & {len(info['fd_changed'])} ({len(info['fd_predicted'])}) & "
                         f"{len(info['min_changed'])} \\\\")
     open(os.path.join(TAB, "footprints.tex"), "w").write(
@@ -196,7 +196,7 @@ def fig_synth(res):
 def numbers():
     """numbers.tex: every figure quoted in the prose, as a LaTeX macro."""
     out = {}
-    ds = {"clinc": "C", "massive": "M", "clinc_llm": "L"}
+    ds = {"clinc": "C", "massive": "M", "clinc_llm": "T", "clinc_llm_inscope": "L"}
     meth = {"fixed-0.7": "Fixed", "per-node-selective": "PerNode", "plug-in": "Plug", "global-e2e": "Shared",
             "e2e-pareto": "Pareto", "e2e-uniform": "Unif", "tf-node": "TFnode", "fd-node": "FEnode",
             "fd-level": "FElevel", "min-node": "LCnode", "min-level": "LClevel", "min-global": "LCshared",
@@ -208,7 +208,8 @@ def numbers():
         ratios = []
         for name, d in main["data"].items():
             tag = ds[name]
-            out["FreeErr" + {"C": "Clinc", "M": "Massive", "L": "Llm"}[tag]] = pct(d["free_run_error"])
+            out["FreeErr" + {"C": "Clinc", "M": "Massive", "L": "Llm", "T": "LlmThree"}[tag]] = pct(
+                d["free_run_error"])
             for e, en in eps_name.items():
                 out[f"OracleNode{tag}{en}"] = pct(d["oracle"][e if e != "0.1" else "0.1"]["node"])
                 out[f"OracleShared{tag}{en}"] = pct(d["oracle"][e if e != "0.1" else "0.1"]["shared"])
@@ -218,16 +219,24 @@ def numbers():
                     out[f"Risk{tag}{mn}{en}"] = pct(r["risk_mean"])
                     out[f"Viol{tag}{mn}{en}"] = pct(r["violation"], 0)
             r = d["results"]["0.05|global-e2e"]
-            ratio = r["fd_mass_mean"] / r["risk_mean"]
-            if tag != "L":
-                ratios.append(ratio)
-            out[f"FdRatio{tag}"] = f"{ratio:.1f}"
-            out[f"FdMass{tag}"] = pct(r["fd_mass_mean"])
-            out[f"RescuedShare{tag}"] = pct(1 - r["risk_mean"] / r["fd_mass_mean"], 0)
+            if r["risk_mean"] > 0:  # undefined when nothing is committed
+                ratio = r["fd_mass_mean"] / r["risk_mean"]
+                if tag in "CM":
+                    ratios.append(ratio)
+                out[f"FdRatio{tag}"] = f"{ratio:.1f}"
+                out[f"FdMass{tag}"] = pct(r["fd_mass_mean"])
+                out[f"RescuedShare{tag}"] = pct(1 - r["risk_mean"] / r["fd_mass_mean"], 0)
         out["FdOverstateMin"], out["FdOverstateMax"] = f"{min(ratios):.1f}", f"{max(ratios):.1f}"
         certified = [m for m in meth if m not in ("fixed-0.7", "per-node-selective", "plug-in")]
-        out["MaxViolCertified"] = pct(max(d["results"][f"{e}|{m}"]["violation"] for d in main["data"].values()
-                                          for e in eps_name for m in certified), 0)
+        worst = lambda names: pct(max(main["data"][n]["results"][f"{e}|{m}"]["violation"]
+                                      for n in names for e in eps_name for m in certified), 0)
+        out["MaxViolCertified"] = worst(["clinc", "massive"])
+        llm = [n for n in main["data"] if n.startswith("clinc_llm")]
+        if llm:
+            out["MaxViolCertifiedLlm"] = worst(llm)
+            uniform = [m for m in certified if m not in ("global-e2e", "e2e-pareto")]
+            out["MaxViolUniformLlm"] = pct(max(main["data"][n]["results"][f"{e}|{m}"]["violation"]
+                                               for n in llm for e in eps_name for m in uniform), 0)
     post = load("posthoc")
     if post:
         for name, d in post["data"].items():

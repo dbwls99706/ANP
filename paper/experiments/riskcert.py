@@ -155,10 +155,20 @@ def charge(tr, rule="fd", anchor=None):
     raise ValueError(rule)
 
 
+_EXTRA_TAIL = ()
+
+
+def set_grid_tail(extra):
+    """Add thresholds above 0.999 to the default grid, for models whose confidences
+    saturate (token probabilities of language models). Must be fixed before calibration."""
+    global _EXTRA_TAIL
+    _EXTRA_TAIL = tuple(extra)
+
+
 def default_grid():
     """Threshold grid: steps of 0.05 up to 0.95, a finer tail where confident models
     concentrate, and +inf (never commit)."""
-    return np.r_[np.arange(20) * 0.05, 0.97, 0.98, 0.99, 0.995, 0.999, INF]
+    return np.r_[np.arange(20) * 0.05, 0.97, 0.98, 0.99, 0.995, 0.999, _EXTRA_TAIL, INF]
 
 
 def error_counts(tr, grid, mode="fd", anchor=None, mask=None):

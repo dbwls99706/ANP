@@ -4,9 +4,11 @@ Each node is a zero-shot multiple-choice question; the confidence is the probabi
 model assigns to the option letter it answers with, read from the token log-probabilities.
 Raw responses are cached so the run can be resumed.
 
-Writes cache/clinc_llm.npz in the format of prep_data.py. Two alternatives are stored for
-the edit experiments: the trained embedding classifier of cache/clinc.npz for every node
-(pred_alt / conf_alt), and a newer language model for one leaf (pred_alt2 / conf_alt2).
+Writes, in the format of prep_data.py, cache/clinc_llm.npz (scope -> domain -> intent on
+all traffic) and cache/clinc_llm_inscope.npz (domain -> intent on the in-scope traffic).
+Two alternatives are stored for the edit experiments: the trained embedding classifier of
+cache/clinc.npz for every node (pred_alt / conf_alt), and a newer language model for one
+leaf (pred_alt2 / conf_alt2).
 
 Usage: OPENAI_API_KEY=... python llm_nodes.py [--model gpt-4.1-mini] [--upgrade gpt-5.4-mini]
 """
@@ -108,7 +110,9 @@ class Client:
             tok = cand["token"].strip().upper()
             if len(tok) == 1 and tok in LETTERS[:n_options]:
                 probs[LETTERS.index(tok)] += math.exp(cand["logprob"])
-        probs = [min(p, 1.0) for p in probs]  # raw mass per option; all zero if no letter came back
+        # Raw mass per option, all zero if no letter came back. Six decimals are kept, in
+        # memory as in the cache file, so that a resumed run reproduces the same numbers.
+        probs = [round(min(p, 1.0), 6) for p in probs]
         usage = data.get("usage", {})
         with self.lock:
             self.tokens[0] += usage.get("prompt_tokens", 0)
@@ -116,7 +120,7 @@ class Client:
             self.tokens[2] += usage.get("completion_tokens", 0)
             self.done[key] = probs
             with open(self.raw_path, "a") as f:
-                f.write(json.dumps({"node": node, "i": int(i), "probs": [round(p, 6) for p in probs]}) + "\n")
+                f.write(json.dumps({"node": node, "i": int(i), "probs": probs}) + "\n")
         return probs
 
     def run(self, jobs):
@@ -130,7 +134,6 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="gpt-4.1-mini")
     ap.add_argument("--upgrade", default="gpt-5.4-mini", help="newer model for the edited leaf")
-    ap.add_argument("--limit", type=int, default=0, help="only the first N inputs of a fixed shuffle (pilot)")
     ap.add_argument("--workers", type=int, default=32)
     a = ap.parse_args()
 
@@ -138,17 +141,18 @@ def main():
     base = np.load(os.path.join(CACHE, "clinc.npz"))
     truth, nxt = base["truth"].astype(int), base["nxt"].astype(int)
     n, k = truth.shape
-    order = np.random.default_rng(0).permutation(n)
-    idx = np.sort(order[: a.limit]) if a.limit else np.arange(n)
+    idx = np.arange(n)
+    in_scope = truth[:, 0] == 0
     qs = questions(dom_names, intents)
     texts = pool.text.values
     client = Client(a.model, os.path.join(CACHE, f"llm_raw_{a.model}.jsonl"), a.workers)
+    newer = Client(a.upgrade, os.path.join(CACHE, f"llm_raw_{a.upgrade}.jsonl"), a.workers)
 
-    pred = np.zeros((n, k), dtype=int)
-    conf = np.zeros((n, k))
-    have = np.zeros((n, k), dtype=bool)
+    def table():
+        return np.zeros((n, k), dtype=int), np.zeros((n, k)), np.zeros((n, k), dtype=bool)
 
-    def collect(node, rows, client=client, pred=pred, conf=conf, have=have):
+    def collect(node, rows, client, out):
+        pred, conf, have = out
         rows = [i for i in rows if not have[i, node]]
         system, n_opt = qs[node]
         client.run([(node, i, system, n_opt, texts[i]) for i in rows])
@@ -156,41 +160,56 @@ def main():
             p = client.done[(node, i)]
             pred[i, node], conf[i, node], have[i, node] = int(np.argmax(p)), float(max(p)), True
 
-    # A node is evaluated on the inputs whose free run or oracle route visits it.
-    t0 = time.time()
-    collect(0, idx)
-    collect(1, [i for i in idx if pred[i, 0] == 0 or truth[i, 1] >= 0])
+    # A node is evaluated on the inputs whose free run or oracle route can visit it, in the
+    # three-level workflow (scope -> domain -> intent) and in the two-level one without scope.
+    main_out = table()
+    pred, conf, have = main_out
+    collect(0, idx, client, main_out)
+    collect(1, [i for i in idx if pred[i, 0] == 0 or in_scope[i]], client, main_out)
     for d in range(len(dom_names)):
-        rows = [i for i in idx if truth[i, 2 + d] >= 0 or (pred[i, 0] == 0 and pred[i, 1] == d)]
-        collect(2 + d, rows)
-    print(f"{int(have.sum())} answers, {time.time() - t0:.0f}s, tokens prompt={client.tokens[0]} "
-          f"(cached {client.tokens[1]}) completion={client.tokens[2]}")
+        rows = [i for i in idx if truth[i, 2 + d] >= 0 or (have[i, 1] and pred[i, 1] == d
+                                                           and (pred[i, 0] == 0 or in_scope[i]))]
+        collect(2 + d, rows, client, main_out)
+    print(f"{a.model}: {int(have.sum())} answers, tokens prompt={client.tokens[0]} completion={client.tokens[2]}")
 
-    def report(pred, conf, have, nodes):
+    def report(out, nodes):
+        pred, conf, have = out
         for v in nodes:
             on = have[:, v] & (truth[:, v] >= 0)
             if on.any():
                 ok = pred[on, v] == truth[on, v]
                 wrong = conf[on, v][~ok].mean() if (~ok).any() else 0
-                print(f"  {str(base['names'][v]):28s} n={on.sum():5d} acc={ok.mean():.3f} "
-                      f"conf right={conf[on, v][ok].mean():.3f} wrong={wrong:.3f}")
+                print(f"  {str(base['names'][v]):28s} n={on.sum():5d} acc={ok.mean():.3f} conf right="
+                      f"{conf[on, v][ok].mean():.3f} wrong={wrong:.3f} saturated={(conf[on, v] >= 0.999999).mean():.2f}")
 
-    report(pred, conf, have, range(k))
+    report(main_out, range(k))
 
     # The same leaf answered by a newer model, on every input that can reach it.
     leaf = 3
-    newer = Client(a.upgrade, os.path.join(CACHE, f"llm_raw_{a.upgrade}.jsonl"), a.workers)
-    pred2, conf2, have2 = pred.copy(), conf.copy(), np.zeros((n, k), dtype=bool)
-    collect(leaf, [i for i in idx if have[i, leaf]], newer, pred2, conf2, have2)
+    new_out = table()
+    collect(leaf, [i for i in idx if have[i, leaf]], newer, new_out)
     print(f"{a.upgrade}: tokens prompt={newer.tokens[0]} completion={newer.tokens[2]}")
-    report(pred2, conf2, have2, [leaf])
-    if a.limit:
-        return
-    np.savez_compressed(os.path.join(CACHE, "clinc_llm.npz"), pred=pred.astype(np.int16),
-                        conf=conf.astype(np.float32), truth=base["truth"], nxt=base["nxt"], names=base["names"],
-                        pred_alt=base["pred"], conf_alt=base["conf"], pred_alt2=pred2.astype(np.int16),
-                        conf_alt2=conf2.astype(np.float32), model=np.array(a.model), upgrade=np.array(a.upgrade))
-    print("saved clinc_llm.npz")
+    report(new_out, [leaf])
+    pred2, conf2 = pred.copy(), conf.copy()
+    pred2[:, leaf], conf2[:, leaf] = new_out[0][:, leaf], new_out[1][:, leaf]
+
+    common = dict(model=np.array(a.model), upgrade=np.array(a.upgrade))
+    np.savez_compressed(os.path.join(CACHE, "clinc_llm.npz"), pred=pred.astype(np.int16), conf=conf,
+                        truth=base["truth"], nxt=base["nxt"], names=base["names"],
+                        pred_alt=base["pred"], conf_alt=base["conf"].astype(float),
+                        pred_alt2=pred2.astype(np.int16), conf_alt2=conf2, **common)
+
+    # Two-level workflow on the in-scope traffic: drop the scope node and re-index.
+    rows = np.where(in_scope)[0]
+    shift = lambda a: a[rows][:, 1:]
+    nxt2 = nxt[1:].copy()
+    nxt2[nxt2 >= 0] -= 1
+    np.savez_compressed(os.path.join(CACHE, "clinc_llm_inscope.npz"), pred=shift(pred).astype(np.int16),
+                        conf=shift(conf), truth=shift(truth).astype(np.int16), nxt=nxt2.astype(np.int16),
+                        names=base["names"][1:], pred_alt=shift(base["pred"].astype(int)).astype(np.int16),
+                        conf_alt=shift(base["conf"].astype(float)), pred_alt2=shift(pred2).astype(np.int16),
+                        conf_alt2=shift(conf2), **common)
+    print("saved clinc_llm.npz and clinc_llm_inscope.npz")
 
 
 if __name__ == "__main__":
