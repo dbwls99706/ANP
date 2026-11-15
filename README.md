@@ -213,6 +213,9 @@ the certificate to add the thresholds 0.9999, 0.99999 and 0.999999.
 A trace line lists the decisions of one run with every node committing, in order:
 `{"steps": [{"node": "scope", "confidence": 0.93, "correct": true}, ...]}`. `correct` says
 whether the decision matches the ground truth; only the first `false` of a run matters.
+For runs that are only labelled by their outcome, as with an agent that can reach its goal in
+several ways, mark the last decision of a failed run `"correct": false` and keep the default
+`--rule min`, which charges the least confident decision and needs no label per step.
 The example traces are real model outputs on CLINC150. The method and its evaluation are
 described in [`paper/`](paper/).
 
@@ -352,6 +355,12 @@ Path traversal prevention, SSRF protection (scheme-restricted URLs), XSS-safe HT
 ---
 
 ## Research Value
+
+**Paper.** *Risk Certificates That Survive Edits: Separable, Route-Indexed Calibration for
+Decision Workflows* (Yujin Hong). The manuscript is [`paper/main.pdf`](paper/main.pdf); the
+experiment code, data and the script that regenerates every number are in
+[`paper/`](paper/README.md), and the method is implemented in `anp certify` and
+`anp verify --risk` (see [Certify a Decision Workflow](#certify-a-decision-workflow)).
 
 ANP introduces three novel contributions to the graph-based programming literature:
 

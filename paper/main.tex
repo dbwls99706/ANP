@@ -470,7 +470,8 @@ those. Its bound is multiplied by the traffic share, so a node that handles 9\% 
 needs roughly one eleventh of the labels for the same contribution to the bound. The theorem
 iterates. After a second edit the remaining routes of every earlier part are kept, and the
 share of the new edit is bounded from the original sample by counting every run whose
-recorded route meets the new edit or an earlier one.
+recorded route meets the new edit or an earlier one (Appendix~\ref{app:more} checks this
+numerically).
 
 \subsection{Node-level footprints}\label{sec:footprint}
 
@@ -491,7 +492,8 @@ ancestor of $v$. The LC event of $v$ depends on the confidences along the run.
 
 So the rules trade tightness for stability at node granularity. Route indexing sidesteps the
 trade: locality is a property of the traffic, not of the rule, and holds for the tight LC rule
-(Table~\ref{tab:footprints} verifies both statements on data).
+(Table~\ref{tab:footprints} verifies both statements on data, and
+Appendix~\ref{app:more} on random workflows).
 
 \subsection{A static check}\label{sec:impl}
 

@@ -6,6 +6,8 @@ statement as it is implemented, on the populations of the paper:
 
   certificate   (Theorem 4)  U(g) >= R(tau_g) for all g, in at least 1 - delta of the draws
   recertified   (Theorem 7)  the same for the bound issued after an edit
+  two_edits     the same after two successive edits, with the evidence kept as described
+                below Theorem 7
   single        the Clopper-Pearson bound of one fixed assignment, without the union over
                 the grid, fails in at most delta of the draws and not much less often
 
@@ -147,6 +149,50 @@ def check_recertified(name, edit, modules, m_new, draws, grid):
                                       traffic_share=float(len(hit) / len(pop1))))
 
 
+def check_two_edits(name, first, second, modules, m_new, draws, grid):
+    """The bound after two successive edits (the iteration described below Theorem 7).
+
+    Runs fall into three groups: those that avoid both edited nodes (old sample), those
+    that meet the first edit and then avoid the second (fresh sample of the first repair,
+    restricted to its routes that avoid the second node), and those that meet the second
+    edit (fresh sample of the second repair). The share of the last group is bounded from
+    the old sample by the runs whose recorded route meets either node."""
+    pop0, _ = rx.population(name)
+    pop1, _ = rx.population(name, (first,))
+    pop2, _ = rx.population(name, (first, second))
+    risk = all_risks(pop2, modules, grid)
+    hit1 = np.where(pop1.through([first]))[0]
+    hit2 = np.where(pop2.through([second]))[0]
+    assert np.array_equal(pop1.through([second]), pop2.through([second]))
+    stack = lambda k: np.stack([k[list(m)].sum(0) for m in modules])
+    touched = lambda pop, hit: max(1, sum(1 for m in modules if set(np.unique(pop.path_node[hit])) & set(m)))
+    n, parts_delta = rx.DEFAULT_N[name], DELTA / 5
+    commits = some_commit(len(grid), len(modules))
+    fails, slack = [], []
+    for s in range(draws):
+        rng = np.random.default_rng(80_000 + s)
+        old = pop0.subset(rng.integers(0, len(pop0), n))
+        fresh1 = pop1.subset(hit1[rng.integers(0, len(hit1), m_new)])
+        fresh2 = pop2.subset(hit2[rng.integers(0, len(hit2), m_new)])
+        met1, met2 = old.through([first]), old.through([second])
+        share1 = float(rc.cp_upper(int(met1.sum()), n, parts_delta)[0])
+        share2 = float(rc.cp_upper(int((met1 | met2).sum()), n, parts_delta)[0])
+        parts = [rc.Part(stack(rc.error_counts(old, grid, "min", mask=~(met1 | met2))), n, parts_delta, len(modules)),
+                 rc.Part(stack(rc.error_counts(fresh1, grid, "min", mask=~fresh1.through([second]))), m_new,
+                         parts_delta, touched(pop1, hit1), scale=share1),
+                 rc.Part(stack(rc.error_counts(fresh2, grid, "min")), m_new, parts_delta, touched(pop2, hit2),
+                         scale=share2)]
+        cert = rc.Certificate(grid, modules, None, parts)
+        bounds = all_bounds(cert)
+        if s == 0:
+            same_as_library(cert, bounds, rng)
+        fails.append(bool((risk > bounds + 1e-12).any()))
+        slack.append(float((bounds - risk)[commits].min()))
+    return summary(fails, slack, dict(assignments=int(risk.size), modules=len(modules), n=n, m=m_new,
+                                      share_first=float(len(hit1) / len(pop1)),
+                                      share_second=float(len(hit2) / len(pop2))))
+
+
 def check_single(name, draws, grid):
     """One fixed shared threshold at a time, at level delta without a union bound."""
     pop, _ = rx.population(name)
@@ -176,6 +222,9 @@ def job(args):
         return kind, f"{name}|{rest}", check_certificate(name, modules, rest, draws, grid)
     if kind == "single":
         return kind, name, check_single(name, 5 * draws, grid)
+    if kind == "two_edits":
+        first, second = rest
+        return kind, f"{name}|{first}|{second}", check_two_edits(name, first, second, modules, 500, draws, grid)
     label, edit, m_new = rest
     return kind, f"{name}|{label}|{m_new}", check_recertified(name, edit, modules, m_new, draws, grid)
 
@@ -195,7 +244,10 @@ def main():
             edits = CLASSIC_EDITS[name]
         jobs += [("recertified", name, a.draws, (label, edit, m_new))
                  for label, edit in edits.items() for m_new in (100, 1000)]
-    out = {"delta": DELTA, "draws": a.draws, "certificate": {}, "recertified": {}, "single": {}}
+    # Two successive edits: a leaf then the node above it, the reverse, and two leaves.
+    jobs += [("two_edits", "clinc", a.draws, pair) for pair in [(3, 1), (1, 3), (3, 4)]]
+    jobs += [("two_edits", "massive", a.draws, pair) for pair in [(7, 2), (2, 7)]]
+    out = {"delta": DELTA, "draws": a.draws, "certificate": {}, "recertified": {}, "single": {}, "two_edits": {}}
     with Pool(4) as pool:
         for kind, key, result in pool.imap(job, jobs, chunksize=1):
             out[kind][key] = result

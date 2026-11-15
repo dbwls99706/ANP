@@ -1,0 +1,12 @@
+{
+ "workflows": 2000,
+ "checks": 236000,
+ "with_joins": 1653,
+ "with_tied_confidences": 1021,
+ "failures": 0,
+ "false_variants_refuted": {
+  "fe_beyond_w": 974,
+  "lc_beyond_descendants": 1140,
+  "fe_inexact": 1957
+ }
+}
